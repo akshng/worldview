@@ -1,0 +1,436 @@
+/**
+ * Data layers rendered on the globe (all WebGL — no DOM markers).
+ *
+ * Visualisation modes are layer groups toggled by visibility. To add a mode
+ * (density, aviation tracks, …) add its layers here and register it in
+ * MODE_LAYERS.
+ */
+import type { ExpressionSpecification, LayerSpecification } from "maplibre-gl";
+import { CATEGORY_LIST } from "@/lib/categories";
+import type { MapMode } from "@/lib/store/ui";
+import type { EventSummary } from "@/types/events";
+import { FONT_BOLD, FONT_REGULAR } from "./style";
+
+export const EVENTS_SOURCE = "events";
+/** Same events without clustering, for magnitude/intensity styled modes */
+export const FLAT_SOURCE = "events-flat";
+export const DENSITY_SOURCE = "density";
+export const AIRCRAFT_SOURCE = "aircraft";
+export const VESSELS_SOURCE = "vessels";
+export const COUNTRIES_SOURCE = "countries";
+export const NIGHT_SOURCE = "night";
+
+export const categoryColor: ExpressionSpecification = [
+  "match",
+  ["get", "type"],
+  ...CATEGORY_LIST.flatMap((c) => [c.id, c.color]),
+  "#868e96",
+] as unknown as ExpressionSpecification;
+
+const tierColor = (prop: ExpressionSpecification): ExpressionSpecification => [
+  "step",
+  prop,
+  "#8a94a3",
+  41,
+  "#e0b341",
+  61,
+  "#ff8a3d",
+  81,
+  "#ff3b4e",
+];
+
+const CLUSTERED = ["ev-cluster", "ev-cluster-count", "ev-halo", "ev-point"];
+
+/** Layers visible in each mode (everything else in ALL_MODE_LAYERS is hidden). */
+export const MODE_LAYERS: Record<MapMode, string[]> = {
+  events: CLUSTERED,
+  heatmap: ["ev-heat"],
+  density: ["density-fill", "density-line"],
+  weather: CLUSTERED, // + radar rasters managed by the Globe
+  fires: ["fire-glow", "fire-point"],
+  earthquakes: ["eq-point"],
+  conflict: CLUSTERED,
+  aviation: [...CLUSTERED, "aircraft"],
+  maritime: [...CLUSTERED, "vessels"],
+};
+
+export const ALL_MODE_LAYERS = [...new Set(Object.values(MODE_LAYERS).flat())];
+
+/** Layers whose features are events (hover preview + click to open). */
+export const EVENT_POINT_LAYERS = ["ev-point", "eq-point", "fire-point"];
+
+/** Depth colours used by the earthquake mode and its legend. */
+export const DEPTH_STOPS: Array<[number, string]> = [
+  [0, "#ff4d4d"],
+  [35, "#ff9f43"],
+  [70, "#ffd43b"],
+  [150, "#69db7c"],
+  [300, "#4dabf7"],
+  [500, "#9775fa"],
+];
+
+export const ALTITUDE_STOPS: Array<[number, string]> = [
+  [0, "#ffd43b"],
+  [3000, "#69db7c"],
+  [8000, "#4dabf7"],
+  [11000, "#b197fc"],
+];
+
+export const DENSITY_STOPS: Array<[number, string]> = [
+  [1, "#2b5d85"],
+  [3, "#3b8bc4"],
+  [8, "#4fc3e8"],
+  [20, "#e0b341"],
+  [50, "#ff6b3d"],
+];
+
+const stepColor = (prop: ExpressionSpecification, stops: Array<[number, string]>): ExpressionSpecification =>
+  ["step", prop, stops[0][1], ...stops.slice(1).flatMap(([v, c]) => [v, c])] as unknown as ExpressionSpecification;
+
+const interpColor = (prop: ExpressionSpecification, stops: Array<[number, string]>): ExpressionSpecification =>
+  ["interpolate", ["linear"], prop, ...stops.flatMap(([v, c]) => [v, c])] as unknown as ExpressionSpecification;
+
+/** Mode-specific layers (added below the clustered event layers). */
+export function modeLayers(): LayerSpecification[] {
+  return [
+    {
+      id: "density-fill",
+      type: "fill",
+      source: DENSITY_SOURCE,
+      layout: { visibility: "none" },
+      paint: { "fill-color": stepColor(["get", "count"], DENSITY_STOPS), "fill-opacity": 0.72 },
+    },
+    {
+      id: "density-line",
+      type: "line",
+      source: DENSITY_SOURCE,
+      layout: { visibility: "none" },
+      paint: { "line-color": "rgba(5,7,10,0.6)", "line-width": 0.5 },
+    },
+    {
+      id: "fire-glow",
+      type: "circle",
+      source: FLAT_SOURCE,
+      layout: { visibility: "none" },
+      filter: ["==", ["get", "type"], "FIRE"],
+      paint: {
+        "circle-color": "#ff6b2c",
+        "circle-radius": ["interpolate", ["linear"], ["coalesce", ["get", "frp"], 50], 50, 8, 1000, 16, 10000, 28],
+        "circle-opacity": 0.18,
+        "circle-blur": 0.8,
+      },
+    },
+    {
+      id: "fire-point",
+      type: "circle",
+      source: FLAT_SOURCE,
+      layout: { visibility: "none" },
+      filter: ["==", ["get", "type"], "FIRE"],
+      paint: {
+        "circle-color": interpColor(["coalesce", ["get", "frp"], 50], [[50, "#ffd43b"], [500, "#ff922b"], [3000, "#ff4d1a"], [15000, "#d6001c"]]),
+        "circle-radius": ["interpolate", ["linear"], ["coalesce", ["get", "frp"], 50], 50, 3, 1000, 5, 10000, 9],
+        "circle-stroke-color": "rgba(5,7,10,0.8)",
+        "circle-stroke-width": 0.6,
+      },
+    },
+    {
+      id: "eq-point",
+      type: "circle",
+      source: FLAT_SOURCE,
+      layout: { visibility: "none", "circle-sort-key": ["coalesce", ["get", "mag"], 0] },
+      filter: ["==", ["get", "type"], "EARTHQUAKE"],
+      paint: {
+        // Area roughly proportional to energy class: radius grows exponentially with magnitude.
+        "circle-radius": ["interpolate", ["exponential", 1.8], ["coalesce", ["get", "mag"], 2.5], 2.5, 3, 5, 8, 7, 22, 9, 46],
+        "circle-color": stepColor(["coalesce", ["get", "depth"], 0], DEPTH_STOPS),
+        "circle-opacity": 0.55,
+        "circle-stroke-color": stepColor(["coalesce", ["get", "depth"], 0], DEPTH_STOPS),
+        "circle-stroke-width": 1.2,
+      },
+    },
+  ];
+}
+
+/** Live-layer symbol layers (arrows rotated by heading). */
+export function liveLayers(): LayerSpecification[] {
+  return [
+    {
+      id: "aircraft",
+      type: "symbol",
+      source: AIRCRAFT_SOURCE,
+      layout: {
+        visibility: "none",
+        "icon-image": "arrow",
+        "icon-size": ["interpolate", ["linear"], ["zoom"], 1, 0.32, 6, 0.6],
+        "icon-rotate": ["coalesce", ["get", "track"], 0],
+        "icon-rotation-alignment": "map",
+        "icon-allow-overlap": true,
+        "icon-ignore-placement": true,
+      },
+      paint: {
+        "icon-color": interpColor(["coalesce", ["get", "alt"], 0], ALTITUDE_STOPS),
+        "icon-opacity": 0.85,
+      },
+    },
+    {
+      id: "vessels",
+      type: "symbol",
+      source: VESSELS_SOURCE,
+      layout: {
+        visibility: "none",
+        "icon-image": "arrow",
+        "icon-size": ["interpolate", ["linear"], ["zoom"], 1, 0.26, 7, 0.55],
+        "icon-rotate": ["coalesce", ["get", "heading"], 0],
+        "icon-rotation-alignment": "map",
+        "icon-allow-overlap": true,
+        "icon-ignore-placement": true,
+      },
+      paint: {
+        "icon-color": ["case", [">", ["coalesce", ["get", "sog"], 0], 0.5], "#4dd4ff", "#6c7a89"],
+        "icon-opacity": 0.85,
+      },
+    },
+  ];
+}
+
+/** Aggregate events into a lat/lon grid for the density mode. */
+export function densityGrid(events: EventSummary[], cellDeg = 2): GeoJSON.FeatureCollection<GeoJSON.Polygon> {
+  const cells = new Map<string, { count: number; maxImp: number; la: number; lo: number }>();
+  for (const e of events) {
+    const la = Math.floor(e.latitude / cellDeg), lo = Math.floor(e.longitude / cellDeg);
+    const k = `${la}:${lo}`;
+    const c = cells.get(k);
+    if (c) {
+      c.count++;
+      c.maxImp = Math.max(c.maxImp, e.importanceScore);
+    } else cells.set(k, { count: 1, maxImp: e.importanceScore, la, lo });
+  }
+  return {
+    type: "FeatureCollection",
+    features: [...cells.values()].map((c) => {
+      const s = Math.max(-85, c.la * cellDeg), n = Math.min(85, (c.la + 1) * cellDeg);
+      const w = c.lo * cellDeg, e = (c.lo + 1) * cellDeg;
+      return {
+        type: "Feature",
+        properties: { count: c.count, maxImp: c.maxImp },
+        geometry: { type: "Polygon", coordinates: [[[w, s], [e, s], [e, n], [w, n], [w, s]]] },
+      };
+    }),
+  };
+}
+
+/** Draws the arrow used for aircraft and vessels (SDF so it can be recoloured). */
+export function arrowImage(size = 40): { width: number; height: number; data: Uint8Array } {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "#fff";
+  ctx.beginPath();
+  ctx.moveTo(size / 2, 2);
+  ctx.lineTo(size - 7, size - 4);
+  ctx.lineTo(size / 2, size - 12);
+  ctx.lineTo(7, size - 4);
+  ctx.closePath();
+  ctx.fill();
+  const img = ctx.getImageData(0, 0, size, size);
+  return { width: size, height: size, data: new Uint8Array(img.data.buffer) };
+}
+
+export function eventLayers(): LayerSpecification[] {
+  return [
+    {
+      id: "ev-heat",
+      type: "heatmap",
+      source: EVENTS_SOURCE,
+      layout: { visibility: "none" },
+      paint: {
+        "heatmap-weight": ["interpolate", ["linear"], ["get", "imp"], 0, 0.15, 100, 1],
+        "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 0.6, 6, 1.6],
+        "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 0, 10, 6, 28],
+        "heatmap-opacity": 0.75,
+        "heatmap-color": [
+          "interpolate",
+          ["linear"],
+          ["heatmap-density"],
+          0, "rgba(0,0,0,0)",
+          0.15, "rgba(40,90,140,0.45)",
+          0.4, "rgba(80,170,220,0.7)",
+          0.7, "rgba(240,200,90,0.85)",
+          1, "rgba(255,80,90,0.95)",
+        ],
+      },
+    },
+    {
+      id: "ev-cluster",
+      type: "circle",
+      source: EVENTS_SOURCE,
+      filter: ["has", "point_count"],
+      paint: {
+        "circle-color": tierColor(["get", "maxImp"]),
+        "circle-opacity": 0.16,
+        "circle-stroke-color": tierColor(["get", "maxImp"]),
+        "circle-stroke-width": 1.2,
+        "circle-stroke-opacity": 0.85,
+        "circle-radius": ["step", ["get", "point_count"], 11, 10, 14, 50, 18, 200, 23, 1000, 28],
+        "circle-pitch-alignment": "map",
+      },
+    },
+    {
+      id: "ev-cluster-count",
+      type: "symbol",
+      source: EVENTS_SOURCE,
+      filter: ["has", "point_count"],
+      layout: {
+        "text-field": ["get", "point_count_abbreviated"],
+        "text-font": FONT_BOLD,
+        "text-size": 10.5,
+        "text-allow-overlap": true,
+      },
+      paint: { "text-color": "#eef1f5" },
+    },
+    {
+      id: "ev-halo",
+      type: "circle",
+      source: EVENTS_SOURCE,
+      filter: ["all", ["!", ["has", "point_count"]], [">", ["get", "imp"], 60]],
+      paint: {
+        "circle-color": categoryColor,
+        "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, 9, 8, 18],
+        "circle-opacity": 0.14,
+        "circle-blur": 0.6,
+      },
+    },
+    {
+      id: "ev-point",
+      type: "circle",
+      source: EVENTS_SOURCE,
+      filter: ["!", ["has", "point_count"]],
+      paint: {
+        "circle-color": categoryColor,
+        "circle-opacity": ["get", "op"],
+        "circle-radius": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          1,
+          ["interpolate", ["linear"], ["get", "imp"], 0, 2.5, 100, 6],
+          8,
+          ["interpolate", ["linear"], ["get", "imp"], 0, 4.5, 100, 11],
+        ],
+        "circle-stroke-color": "rgba(5,7,10,0.85)",
+        "circle-stroke-width": 0.8,
+      },
+    },
+    {
+      id: "ev-hover",
+      type: "circle",
+      source: EVENTS_SOURCE,
+      filter: ["==", ["get", "id"], "__none__"],
+      paint: {
+        "circle-color": "rgba(0,0,0,0)",
+        "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, 9, 8, 15],
+        "circle-stroke-color": "rgba(255,255,255,0.75)",
+        "circle-stroke-width": 1.2,
+      },
+    },
+    {
+      id: "ev-selected",
+      type: "circle",
+      source: EVENTS_SOURCE,
+      filter: ["==", ["get", "id"], "__none__"],
+      paint: {
+        "circle-color": "rgba(0,0,0,0)",
+        "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, 11, 8, 18],
+        "circle-stroke-color": "#ffffff",
+        "circle-stroke-width": 2,
+      },
+    },
+    {
+      id: "ev-label",
+      type: "symbol",
+      source: EVENTS_SOURCE,
+      minzoom: 3.5,
+      filter: ["!", ["has", "point_count"]],
+      layout: {
+        visibility: "none",
+        "text-field": ["get", "title"],
+        "text-font": FONT_REGULAR,
+        "text-size": 10.5,
+        "text-offset": [0, 1.1],
+        "text-anchor": "top",
+        "text-max-width": 14,
+        "symbol-sort-key": ["-", 100, ["get", "imp"]],
+      },
+      paint: { "text-color": "#cfd6e0", "text-halo-color": "rgba(5,7,10,0.9)", "text-halo-width": 1.2 },
+    },
+  ];
+}
+
+export function countryLayers(): LayerSpecification[] {
+  return [
+    {
+      id: "country-fill",
+      type: "fill",
+      source: COUNTRIES_SOURCE,
+      paint: {
+        "fill-color": "#9cc9ff",
+        "fill-opacity": [
+          "case",
+          ["boolean", ["feature-state", "selected"], false],
+          0.08,
+          ["boolean", ["feature-state", "hover"], false],
+          0.045,
+          0,
+        ],
+      },
+    },
+    {
+      id: "country-outline",
+      type: "line",
+      source: COUNTRIES_SOURCE,
+      paint: {
+        "line-color": "#9cc9ff",
+        "line-width": 1.2,
+        "line-opacity": ["case", ["boolean", ["feature-state", "selected"], false], 0.7, 0],
+      },
+    },
+  ];
+}
+
+export function nightLayer(): LayerSpecification {
+  return {
+    id: "night",
+    type: "fill",
+    source: NIGHT_SOURCE,
+    paint: { "fill-color": "#000208", "fill-opacity": 0.16, "fill-antialias": false },
+  };
+}
+
+/** Convert events to GeoJSON. `op` fades older events within the visible window. */
+export function toFeatureCollection(
+  events: EventSummary[],
+  window: { from: number; to: number },
+): GeoJSON.FeatureCollection<GeoJSON.Point> {
+  const span = Math.max(window.to - window.from, 1);
+  return {
+    type: "FeatureCollection",
+    features: events.map((e) => {
+      const t = Math.min(Date.parse(e.timestamp), window.to);
+      const fresh = Math.max(0, Math.min(1, (t - window.from) / span));
+      return {
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [e.longitude, e.latitude] },
+        properties: {
+          id: e.id,
+          type: e.type,
+          imp: e.importanceScore,
+          mag: typeof e.metrics.magnitude === "number" ? e.metrics.magnitude : null,
+          depth: typeof e.metrics.depth_km === "number" ? e.metrics.depth_km : null,
+          frp: typeof e.metrics.frp_total_mw === "number" ? e.metrics.frp_total_mw : null,
+          title: e.title.length > 60 ? `${e.title.slice(0, 57)}…` : e.title,
+          op: 0.5 + 0.5 * fresh,
+        },
+      };
+    }),
+  };
+}

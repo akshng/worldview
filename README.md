@@ -1,36 +1,146 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# WorldView
 
-## Getting Started
+**See what is happening in the world right now.**
 
-First, run the development server:
+WorldView is a local-first global intelligence dashboard: an interactive 3D globe of real-world events — earthquakes, disasters, severe weather, satellite fire detections, conflict/protest reporting, rocket launches — ingested from legitimate public feeds, normalised into one event model, deduplicated, scored, and traceable to their sources.
+
+> The working name lives in one place: `NEXT_PUBLIC_APP_NAME` (default `WorldView`, see `src/lib/config/app.ts`).
+
+## Principles
+
+1. **Accuracy and traceability first.** Every event links to the records that support it. Nothing is invented.
+2. **Facts and AI are separate.** `summary` holds facts derived from source data; `aiInterpretation` is a separate, clearly labelled field and is never shown as fact.
+3. **Honest status.** An event is only `CONFIRMED` when an authoritative source publishes a final record (e.g. a USGS-reviewed solution).
+4. **No fake data in live mode.** Demo mode exists for offline development, is unmistakably labelled, and uses a separate store.
+
+## Quick start
+
+Requirements: Node.js 20.9+ (tested on Node 24), npm.
+
+```bash
+npm install
+```
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000. No API keys are required: all V1 sources are keyless public feeds. The first ingestion runs within a few seconds; the globe fills in as sources report.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Optional configuration:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+cp .env.example .env.local
+```
 
-## Learn More
+## Environment variables
 
-To learn more about Next.js, take a look at the following resources:
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `NEXT_PUBLIC_APP_NAME` | `WorldView` | Product name in the UI |
+| `WORLDVIEW_DATA_MODE` | `live` | `live` = real public data; `demo` = clearly-labelled simulated events only |
+| `INGESTION_ENABLED` | `true` | Disable upstream polling (serve stored data only) |
+| `DATA_DIR` | `.data` | Local store location (`live-store.json` / `demo-store.json`) |
+| `RETENTION_DAYS` | `8` | How long events are kept |
+| `WORLDVIEW_CONTACT` | — | Contact appended to the User-Agent (api.weather.gov requests one) |
+| `ADMIN_TOKEN` | — | If set, `POST /api/ingest/:source` requires `Authorization: Bearer <token>`; otherwise only localhost may trigger |
+| `NASA_FIRMS_MAP_KEY` | — | Optional FIRMS API key; without it the public 24 h VIIRS file is used |
+| `OPENSKY_CLIENT_ID` / `OPENSKY_CLIENT_SECRET` | — | Optional OpenSky API client (raises the anonymous aviation quota) |
+| `AISSTREAM_API_KEY` | — | Free key from aisstream.io — required for the Maritime map mode |
+| `AI_PROVIDER` | `none` | `anthropic` to enable optional AI interpretation |
+| `AI_API_KEY` | — | Key for the AI provider (server-side only) |
+| `AI_MODEL` | `claude-opus-5-5` | Model override |
+| `DATABASE_URL` | — | Storage: unset = in-memory + JSON snapshot; `pglite` = embedded Postgres (no install); `postgres://…` = PostgreSQL server |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Secrets are read only on the server (`src/lib/env.ts`, guarded by `server-only`) and never sent to the browser.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Data sources (V1)
 
-## Deploy on Vercel
+| Source | Categories | Refresh | Key |
+| --- | --- | --- | --- |
+| USGS earthquake feed (M2.5+, 7 days) | Earthquake | 2 min | none |
+| GDACS (UN/EC disaster alerts) | Earthquake, cyclone, flood, volcano, drought, wildfire | 10 min | none |
+| NWS active alerts (severe/extreme, US) | Weather, flood | 5 min | none |
+| NASA EONET open events | Storms, wildfires, volcanoes, ice, … | 20 min | none |
+| NASA FIRMS VIIRS (24 h) | Fire (clustered satellite detections) | 30 min | optional |
+| GDELT 2.0 event export | Conflict, protest, politics, crime/public safety | 15 min | none |
+| Launch Library 2 | Space launches (±7 days) | 30 min | none |
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Live layers (shown in map modes, not stored as events, fetched only while in use):
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Layer | Map mode | Source | Key |
+| --- | --- | --- | --- |
+| Precipitation radar (past 2 h, animated) | Weather | RainViewer | none |
+| Aircraft positions | Aviation | OpenSky Network | none (optional client) |
+| Vessel positions (AIS) | Maritime | AISStream.io | `AISSTREAM_API_KEY` |
+
+Details, terms and caveats: [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md).
+
+## Features
+
+- 3D globe with clustering, day/night terminator, three basemaps (dark vector, NASA Blue Marble, night lights)
+- **Map modes**: Events, Heatmap, Density grid, Weather (radar loop), Fires (radiative power), Earthquakes (magnitude × depth), Conflict, Aviation (live aircraft), Maritime (live vessels)
+- Live feed, event details (facts · sources · timeline · score explanation · related events · separate AI box), country overviews, timeline replay, ⌘K search with intent parsing
+- **Daily briefing** (top-bar "Briefing"): new / developing / ongoing / resolved, today vs yesterday, regional sections, what to watch — every line links to an event; optional AI summary written only from those events
+- Source health and live-layer status in Settings → Data sources
+- Demo mode with clearly labelled simulated data
+
+## How ingestion works
+
+```
+connector.fetch()  →  connector.parse()  →  validate (zod)  →  normalise  →  reverse-geocode
+   →  upsert by source record  |  deduplicate against nearby events  |  create
+   →  status + confidence + importance  →  link related  →  store  →  notify clients (SSE)
+```
+
+Each connector runs on its own schedule (respecting upstream limits, with exponential backoff on failure). A failing source never affects the others; its status shows in **Settings → Data sources**. Every run is logged (received/created/updated/deduplicated/errors).
+
+## Adding a data source
+
+1. Create `src/data-sources/<id>/` with `types.ts` (raw upstream types), `client.ts` (fetch), `parser.ts` (pure raw → `EventCandidate[]`) and `index.ts` (the `DataSourceConnector`).
+2. Register it in `src/data-sources/registry.ts`.
+3. Add a parser test with a small fixture in `tests/connectors.test.ts`.
+
+The full walkthrough is in [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md#adding-a-new-data-source).
+
+## Scripts
+
+| Command | What it does |
+| --- | --- |
+| `npm run dev` | Dev server on http://localhost:3000 (starts ingestion) |
+| `npm run build` / `npm start` | Production build / server |
+| `npm test` | Unit tests (vitest) |
+| `npm run typecheck` | TypeScript check |
+| `npm run lint` | ESLint |
+| `npm run geo:build` | Rebuild bundled Natural Earth geography |
+
+## API
+
+| Endpoint | Description |
+| --- | --- |
+| `GET /api/events` | Filter with `from`, `to`, `type` (comma list), `country`, `importance`, `bbox=w,s,e,n`, `q`, `status`, `sort=recent\|importance`, `limit`, `offset` |
+| `GET /api/events/live` | Last 60 minutes |
+| `GET /api/events/:id` | Full event (sources, timeline, related). `?raw=1` adds upstream records |
+| `POST /api/events/:id/interpret` | Generate AI interpretation (if configured) |
+| `GET /api/countries/:code` | Country overview (ISO alpha-2/3) |
+| `GET /api/search?q=` | Locations, events, topics + parsed intent. `&ai=1` lets the AI interpret the question into filters |
+| `GET /api/stats` | Aggregates for the same filters as `/api/events` |
+| `GET /api/sources` | Source health + recent ingestion runs |
+| `POST /api/ingest/:source` | Trigger a run (localhost or `ADMIN_TOKEN`) |
+| `GET /api/stream` | Server-Sent Events change notifications |
+| `GET /api/briefing` | Daily briefing structure (+ cached AI summary) |
+| `POST /api/briefing/narrative` | Generate the AI briefing summary (if configured) |
+| `GET /api/layers` | Live layer status |
+| `GET /api/layers/:id` | Cached live layer snapshot (`weather-radar`, `aviation`, `maritime`) |
+| `GET /api/meta` | Mode and AI availability (no secrets) |
+
+## Documentation
+
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — system design, layers, extension points
+- [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md) — every connector, caveats, how to add one
+- [docs/EVENT_MODEL.md](docs/EVENT_MODEL.md) — schema, status rules, importance scoring, deduplication
+- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) — local workflow, testing, demo mode, troubleshooting
+
+## Attribution
+
+Basemap © [OpenFreeMap](https://openfreemap.org), [OpenMapTiles](https://openmaptiles.org), [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors. Imagery: NASA GIBS. Reference geography: Natural Earth (public domain). Event data © its respective publishers, linked from every event.

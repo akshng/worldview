@@ -1,0 +1,136 @@
+/** Typed client for WorldView's internal API. */
+import type { AIInterpretation, EventSummary, WorldEvent } from "@/types/events";
+import type { IngestionRun } from "@/lib/db/types";
+
+export interface EventsResponse {
+  mode: "live" | "demo";
+  total: number;
+  version: number;
+  generatedAt: string;
+  events: EventSummary[];
+}
+
+export interface RelatedEvent {
+  event: EventSummary;
+  relation: string;
+  basis: string;
+}
+
+export interface EventDetailResponse {
+  event: WorldEvent;
+  related: RelatedEvent[];
+}
+
+export interface CountryResponse {
+  country: {
+    code: string;
+    name: string;
+    nameLong: string | null;
+    region: string | null;
+    subregion: string | null;
+    population: number | null;
+    bbox: [number, number, number, number] | null;
+    label: [number, number] | null;
+  };
+  totalEvents: number;
+  highImportance: number;
+  last24h: number;
+  byCategory24h: Record<string, number>;
+  topEvents: EventSummary[];
+  recentEvents: EventSummary[];
+}
+
+export interface SourceHealth {
+  id: string;
+  name: string;
+  description: string;
+  homepage: string;
+  attribution: string;
+  categories: string[];
+  status: "ONLINE" | "ERROR" | "DEGRADED" | "PENDING" | "DISABLED" | "RUNNING";
+  disabledReason: string | null;
+  refreshIntervalMs: number;
+  lastAttemptAt: string | null;
+  lastSuccessAt: string | null;
+  nextRunAt: string | null;
+  lastRun: IngestionRun | null;
+  consecutiveFailures: number;
+}
+
+export interface SourcesResponse {
+  mode: "live" | "demo";
+  repository: string;
+  eventCount: number;
+  sources: SourceHealth[];
+  runs: IngestionRun[];
+}
+
+export interface MetaResponse {
+  mode: "live" | "demo";
+  ai: { enabled: boolean; provider: string | null; model: string | null; reason: string | null };
+  repository: string;
+  version: number;
+}
+
+export interface SearchResponse {
+  query: string;
+  intent: SearchIntent | null;
+  locations: Array<{ kind: "country" | "state" | "city" | "region"; code: string | null; name: string; detail: string; lat: number; lon: number; zoom: number; bbox: [number, number, number, number] | null }>;
+  events: EventSummary[];
+  topics: Array<{ id: string; label: string; detail: string; categories: string[] }>;
+}
+
+export interface SearchIntent {
+  source: "rules" | "ai";
+  explanation: string | null;
+  categories: string[];
+  range: string | null;
+  minMagnitude: number | null;
+  place: { name: string; lat: number; lon: number; zoom: number; country: string | null } | null;
+  description: string;
+}
+
+export type { DailyBriefing, BriefingItem } from "@/lib/briefing";
+
+async function getJSON<T>(url: string, signal?: AbortSignal): Promise<T> {
+  const res = await fetch(url, { signal, cache: "no-store" });
+  if (!res.ok) {
+    let msg = `Request failed (${res.status})`;
+    try {
+      const body = await res.json();
+      if (body?.error) msg = body.error;
+    } catch {}
+    throw new Error(msg);
+  }
+  return res.json() as Promise<T>;
+}
+
+export const api = {
+  events: (params: Record<string, string>, signal?: AbortSignal) =>
+    getJSON<EventsResponse>(`/api/events?${new URLSearchParams(params)}`, signal),
+  event: (id: string, signal?: AbortSignal) => getJSON<EventDetailResponse>(`/api/events/${encodeURIComponent(id)}`, signal),
+  country: (code: string, signal?: AbortSignal) => getJSON<CountryResponse>(`/api/countries/${encodeURIComponent(code)}`, signal),
+  briefing: (signal?: AbortSignal) => getJSON<import("@/lib/briefing").DailyBriefing>("/api/briefing", signal),
+  async briefingNarrative(): Promise<NonNullable<import("@/lib/briefing").DailyBriefing["aiNarrative"]>> {
+    const res = await fetch("/api/briefing/narrative", { method: "POST" });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body?.error ?? `Request failed (${res.status})`);
+    return body.aiNarrative;
+  },
+  sources: (signal?: AbortSignal) => getJSON<SourcesResponse>("/api/sources", signal),
+  meta: (signal?: AbortSignal) => getJSON<MetaResponse>("/api/meta", signal),
+  search: (q: string, signal?: AbortSignal, ai = false) =>
+    getJSON<SearchResponse>(`/api/search?q=${encodeURIComponent(q)}${ai ? "&ai=1" : ""}`, signal),
+  async interpret(id: string): Promise<AIInterpretation> {
+    const res = await fetch(`/api/events/${encodeURIComponent(id)}/interpret`, { method: "POST" });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body?.error ?? `Request failed (${res.status})`);
+    return body.aiInterpretation as AIInterpretation;
+  },
+  async ingest(source: string) {
+    const res = await fetch(`/api/ingest/${encodeURIComponent(source)}`, { method: "POST" });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok && !body?.run) throw new Error(body?.error ?? `Request failed (${res.status})`);
+    return body.run as IngestionRun;
+  },
+};

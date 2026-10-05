@@ -1,0 +1,444 @@
+"use client";
+/**
+ * Interactive 3D globe (MapLibre GL globe projection).
+ * Rendering is fully WebGL: clustering, points, heatmap and country hit-testing
+ * happen in map layers — never as DOM markers.
+ */
+import { useEffect, useRef, useState } from "react";
+import type { GeoJSONSource, Map as MlMap, MapGeoJSONFeature, PointLike, Popup } from "maplibre-gl";
+import { getMaplibre } from "./maplibre";
+import { buildStyle, labelLayers, variantVisibility } from "./style";
+import {
+  AIRCRAFT_SOURCE,
+  ALL_MODE_LAYERS,
+  COUNTRIES_SOURCE,
+  DENSITY_SOURCE,
+  EVENT_POINT_LAYERS,
+  EVENTS_SOURCE,
+  FLAT_SOURCE,
+  MODE_LAYERS,
+  NIGHT_SOURCE,
+  VESSELS_SOURCE,
+  arrowImage,
+  countryLayers,
+  densityGrid,
+  eventLayers,
+  liveLayers,
+  modeLayers,
+  nightLayer,
+  toFeatureCollection,
+} from "./layers";
+import type { LiveLayerResponse } from "@/lib/client/use-live-layer";
+import type { AviationData } from "@/layers/aviation/types";
+import type { MaritimeData } from "@/layers/maritime/types";
+import type { RadarData } from "@/layers/weather-radar";
+import { nightCollection } from "./terminator";
+import { useUI } from "@/lib/store/ui";
+import { useData } from "@/lib/client/data-store";
+import { CATEGORIES } from "@/lib/categories";
+import { relativeTime } from "@/lib/time";
+import type { EventCategory } from "@/types/events";
+
+export const HOME_VIEW = { center: [-30, 26] as [number, number], zoom: 2.05 };
+
+const EMPTY_FC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
+
+interface GlobeProps {
+  window: { from: number; to: number };
+  /** Snapshot of the live layer for the current mode, if any */
+  live: LiveLayerResponse<unknown> | null;
+}
+
+export default function Globe({ window: win, live }: GlobeProps) {
+  const container = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<MlMap | null>(null);
+  const popupRef = useRef<Popup | null>(null);
+  const hoveredCountry = useRef<number | null>(null);
+  const selectedCountryFid = useRef<number | null>(null);
+  const countryIds = useRef(new Map<string, number>());
+  const [ready, setReady] = useState(false);
+  /** The map instance whose style finished loading (guards StrictMode/HMR remounts). */
+  const loadedMap = useRef<MlMap | null>(null);
+  const liveMap = () => (mapRef.current && loadedMap.current === mapRef.current ? mapRef.current : null);
+  const [mapError, setMapError] = useState<string | null>(null);
+
+  const visible = useData((s) => s.visible);
+  const mapStyle = useUI((s) => s.settings.mapStyle);
+  const showLabels = useUI((s) => s.settings.showEventLabels);
+  const showDayNight = useUI((s) => s.settings.showDayNight);
+  const mapMode = useUI((s) => s.mapMode);
+  const selectedEventId = useUI((s) => s.selectedEventId);
+  const selectedCountry = useUI((s) => s.selectedCountry);
+  const hoveredEventId = useUI((s) => s.hoveredEventId);
+  const flyTo = useUI((s) => s.flyTo);
+  const radarFrame = useUI((s) => s.radarFrame);
+  const radarPlaying = useUI((s) => s.radarPlaying);
+
+  // ---- init -------------------------------------------------------------
+  useEffect(() => {
+    if (!container.current) return;
+    const maplibregl = getMaplibre();
+    let map: MlMap;
+    try {
+      map = new maplibregl.Map({
+        container: container.current,
+        style: buildStyle(useUI.getState().settings.mapStyle),
+        center: HOME_VIEW.center,
+        zoom: HOME_VIEW.zoom,
+        minZoom: 0.6,
+        maxZoom: 14,
+        attributionControl: { compact: true },
+        renderWorldCopies: false,
+        maxPitch: 60,
+      });
+    } catch (err) {
+      // Reporting a failure of the external WebGL system is a legitimate effect-driven update.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setMapError(err instanceof Error ? err.message : "WebGL is not available");
+      return;
+    }
+    mapRef.current = map;
+    popupRef.current = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 12, maxWidth: "280px" });
+
+    map.on("error", (e) => {
+      // Tile/network errors are non-fatal; log once for developers.
+      if (e?.error?.message) console.debug("[globe]", e.error.message);
+    });
+
+    map.on("load", () => {
+      map.addSource(NIGHT_SOURCE, { type: "geojson", data: nightCollection(new Date()) });
+      map.addLayer(nightLayer());
+
+      map.addSource(COUNTRIES_SOURCE, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      for (const l of countryLayers()) map.addLayer(l);
+
+      map.addSource(EVENTS_SOURCE, {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+        cluster: true,
+        clusterRadius: 42,
+        clusterMaxZoom: 6,
+        clusterProperties: { maxImp: ["max", ["get", "imp"]] },
+      });
+      map.addSource(FLAT_SOURCE, { type: "geojson", data: EMPTY_FC });
+      map.addSource(DENSITY_SOURCE, { type: "geojson", data: EMPTY_FC });
+      map.addSource(AIRCRAFT_SOURCE, { type: "geojson", data: EMPTY_FC });
+      map.addSource(VESSELS_SOURCE, { type: "geojson", data: EMPTY_FC });
+      if (!map.hasImage("arrow")) map.addImage("arrow", arrowImage(), { sdf: true });
+      for (const l of modeLayers()) map.addLayer(l);
+      for (const l of eventLayers()) map.addLayer(l);
+      for (const l of liveLayers()) map.addLayer(l);
+      for (const l of labelLayers()) map.addLayer(l);
+
+      // Country polygons are large; load after first paint.
+      fetch("/geo/countries.geojson")
+        .then((r) => r.json())
+        .then((fc: GeoJSON.FeatureCollection) => {
+          for (const f of fc.features) countryIds.current.set(String(f.properties?.code), Number(f.id));
+          (map.getSource(COUNTRIES_SOURCE) as GeoJSONSource | undefined)?.setData(fc);
+        })
+        .catch(() => {});
+
+      loadedMap.current = map;
+      setReady(true);
+    });
+
+    // ---- interactions ---------------------------------------------------
+    const popupLines = (coords: [number, number], head: { text: string; color: string }, title: string, sub?: string) => {
+      const el = document.createElement("div");
+      const h = document.createElement("div");
+      h.className = "meta";
+      h.style.color = head.color;
+      h.textContent = head.text;
+      const t = document.createElement("div");
+      t.style.cssText = "font-size:12.5px;font-weight:500;line-height:1.35;margin-top:3px";
+      t.textContent = title;
+      el.append(h, t);
+      if (sub) {
+        const d = document.createElement("div");
+        d.className = "meta";
+        d.style.cssText = "color:var(--text-muted);margin-top:5px;text-transform:none;letter-spacing:0.02em";
+        d.textContent = sub;
+        el.append(d);
+      }
+      popupRef.current?.setLngLat(coords).setDOMContent(el).addTo(map);
+    };
+
+    const showPopup = (f: MapGeoJSONFeature) => {
+      const coords = (f.geometry.type === "Point" ? f.geometry.coordinates : [0, 0]) as [number, number];
+      const p = f.properties as Record<string, unknown>;
+      if (f.layer.id === "aircraft") {
+        const alt = typeof p.alt === "number" ? `${Math.round(p.alt).toLocaleString("en-US")} m` : "altitude n/a";
+        const spd = typeof p.speed === "number" ? `${Math.round(p.speed * 1.944)} kt` : "speed n/a";
+        return popupLines(coords, { text: "Aircraft", color: "#4dabf7" }, String(p.callsign || p.icao24), [p.country, p.onGround ? "on ground" : alt, spd].filter(Boolean).join(" · "));
+      }
+      if (f.layer.id === "vessels") {
+        const sog = typeof p.sog === "number" ? `${p.sog} kn` : "speed n/a";
+        return popupLines(coords, { text: "Vessel", color: "#4dd4ff" }, String(p.name || `MMSI ${p.mmsi}`), [`MMSI ${p.mmsi}`, sog].join(" · "));
+      }
+      if (f.layer.id === "density-fill") {
+        // Polygon cell: caller re-anchors the popup at the cursor.
+        return popupLines(coords, { text: "Density", color: "#2f9bbf" }, `${p.count} event${p.count === 1 ? "" : "s"} in this cell`, `Highest importance ${p.maxImp}`);
+      }
+      const ev = useData.getState().visible.find((e) => e.id === p.id);
+      const cat = CATEGORIES[p.type as EventCategory];
+      popupLines(
+        coords,
+        { text: cat?.label ?? String(p.type), color: cat?.color ?? "#aaa" },
+        ev?.title ?? String(p.title),
+        ev
+          ? [ev.countryName ?? ev.locationName, relativeTime(ev.timestamp), `${ev.sourceCount} source${ev.sourceCount === 1 ? "" : "s"}`].filter(Boolean).join(" · ")
+          : undefined,
+      );
+    };
+
+    const INTERACTIVE = [...EVENT_POINT_LAYERS, "ev-cluster", "aircraft", "vessels", "density-fill"];
+    const hitAt = (pt: PointLike) =>
+      map.queryRenderedFeatures(pt, { layers: INTERACTIVE.filter((l) => map.getLayer(l)) })[0];
+
+    map.on("mousemove", (e) => {
+      const top = hitAt(e.point);
+      map.getCanvas().style.cursor = top ? "pointer" : "";
+      if (top && top.layer.id !== "ev-cluster") {
+        showPopup(top);
+        if (top.layer.id === "density-fill") popupRef.current?.setLngLat(e.lngLat);
+      } else {
+        popupRef.current?.remove();
+      }
+      const hoveredEvent = top && EVENT_POINT_LAYERS.includes(top.layer.id) ? String(top.properties.id) : null;
+      if (useUI.getState().hoveredEventId !== hoveredEvent) useUI.getState().setHovered(hoveredEvent);
+      // Country hover
+      const country = top ? undefined : map.queryRenderedFeatures(e.point, { layers: map.getLayer("country-fill") ? ["country-fill"] : [] })[0];
+      const fid = country?.id !== undefined ? Number(country.id) : null;
+      if (fid !== hoveredCountry.current) {
+        if (hoveredCountry.current !== null) map.setFeatureState({ source: COUNTRIES_SOURCE, id: hoveredCountry.current }, { hover: false });
+        if (fid !== null) map.setFeatureState({ source: COUNTRIES_SOURCE, id: fid }, { hover: true });
+        hoveredCountry.current = fid;
+      }
+    });
+    map.on("mouseout", () => {
+      popupRef.current?.remove();
+      if (hoveredCountry.current !== null) map.setFeatureState({ source: COUNTRIES_SOURCE, id: hoveredCountry.current }, { hover: false });
+      hoveredCountry.current = null;
+    });
+
+    map.on("click", async (e) => {
+      const hit = hitAt(e.point);
+      const ui = useUI.getState();
+      if (hit && EVENT_POINT_LAYERS.includes(hit.layer.id)) {
+        ui.selectEvent(String(hit.properties.id));
+        return;
+      }
+      if (hit?.layer.id === "ev-cluster") {
+        const src = map.getSource(EVENTS_SOURCE) as GeoJSONSource;
+        const zoom = await src.getClusterExpansionZoom(Number(hit.properties.cluster_id));
+        map.easeTo({ center: (hit.geometry as GeoJSON.Point).coordinates as [number, number], zoom: Math.min(zoom + 0.3, 12), duration: 700 });
+        return;
+      }
+      if (hit?.layer.id === "density-fill") {
+        map.easeTo({ center: e.lngLat, zoom: Math.max(map.getZoom() + 1.5, 4), duration: 700 });
+        return;
+      }
+      if (hit) return; // aircraft / vessels: popup only
+      const country = map.getLayer("country-fill") ? map.queryRenderedFeatures(e.point, { layers: ["country-fill"] })[0] : undefined;
+      if (country?.properties?.code) ui.selectCountry(String(country.properties.code));
+    });
+
+    const ro = new ResizeObserver(() => map.resize());
+    ro.observe(container.current);
+
+    return () => {
+      ro.disconnect();
+      popupRef.current?.remove();
+      map.remove();
+      mapRef.current = null;
+      loadedMap.current = null;
+      setReady(false);
+    };
+  }, []);
+
+  // ---- data -------------------------------------------------------------
+  useEffect(() => {
+    const map = liveMap();
+    if (!ready || !map) return;
+    const fc = toFeatureCollection(visible, win);
+    (map.getSource(EVENTS_SOURCE) as GeoJSONSource | undefined)?.setData(fc);
+    (map.getSource(FLAT_SOURCE) as GeoJSONSource | undefined)?.setData(fc);
+    (map.getSource(DENSITY_SOURCE) as GeoJSONSource | undefined)?.setData(densityGrid(visible));
+  }, [visible, win, ready]);
+
+  // ---- live layers (aircraft / vessels) ------------------------------------
+  useEffect(() => {
+    const map = liveMap();
+    if (!ready || !map) return;
+    const aircraft = live?.layerId === "aviation" ? (live.data as AviationData) : null;
+    const vessels = live?.layerId === "maritime" ? (live.data as MaritimeData) : null;
+    (map.getSource(AIRCRAFT_SOURCE) as GeoJSONSource | undefined)?.setData(
+      aircraft
+        ? {
+            type: "FeatureCollection",
+            features: aircraft.rows.map(([icao24, callsign, country, lon, lat, alt, speed, track, onGround]) => ({
+              type: "Feature",
+              geometry: { type: "Point", coordinates: [lon, lat] },
+              properties: { icao24, callsign, country, alt, speed, track, onGround },
+            })),
+          }
+        : EMPTY_FC,
+    );
+    (map.getSource(VESSELS_SOURCE) as GeoJSONSource | undefined)?.setData(
+      vessels
+        ? {
+            type: "FeatureCollection",
+            features: vessels.rows.map(([mmsi, name, lon, lat, sog, cog, heading]) => ({
+              type: "Feature",
+              geometry: { type: "Point", coordinates: [lon, lat] },
+              properties: { mmsi, name, sog, heading: heading ?? cog },
+            })),
+          }
+        : EMPTY_FC,
+    );
+  }, [live, ready]);
+
+  // ---- weather radar --------------------------------------------------------
+  const radar = live?.layerId === "weather-radar" ? (live.data as RadarData) : null;
+  const radarPast = radar ? radar.frames.filter((f) => f.kind === "past") : [];
+  const currentFrame = radarPast.length ? radarPast[Math.min(radarFrame ?? radarPast.length - 1, radarPast.length - 1)] : null;
+
+  useEffect(() => {
+    const map = liveMap();
+    if (!ready || !map) return;
+    const wanted = mapMode === "weather" && radar ? (radarPlaying ? radarPast : currentFrame ? [currentFrame] : []) : [];
+    const wantedIds = new Set(wanted.map((f) => `radar-${f.time}`));
+    // Remove layers no longer needed
+    for (const l of map.getStyle().layers ?? []) {
+      if (l.id.startsWith("radar-") && !wantedIds.has(l.id)) {
+        map.removeLayer(l.id);
+        if (map.getSource(l.id)) map.removeSource(l.id);
+      }
+    }
+    for (const f of wanted) {
+      const id = `radar-${f.time}`;
+      if (!map.getSource(id)) {
+        map.addSource(id, { type: "raster", tiles: [f.tiles], tileSize: 256, maxzoom: radar!.maxZoom, attribution: "Radar © RainViewer" });
+        map.addLayer({ id, type: "raster", source: id, paint: { "raster-opacity": 0, "raster-fade-duration": 0 } }, "density-fill");
+      }
+      map.setPaintProperty(id, "raster-opacity", currentFrame && f.time === currentFrame.time ? 0.72 : 0);
+    }
+  }, [mapMode, radar, radarPlaying, currentFrame?.time, ready]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!radarPlaying || radarPast.length < 2) return;
+    const id = setInterval(() => {
+      const ui = useUI.getState();
+      const cur = ui.radarFrame ?? radarPast.length - 1;
+      ui.setRadarFrame((cur + 1) % radarPast.length);
+    }, 700);
+    return () => clearInterval(id);
+  }, [radarPlaying, radarPast.length]);
+
+  // ---- basemap variant ---------------------------------------------------
+  useEffect(() => {
+    const map = liveMap();
+    if (!ready || !map) return;
+    for (const [layer, v] of Object.entries(variantVisibility(mapStyle))) {
+      if (map.getLayer(layer)) map.setLayoutProperty(layer, "visibility", v);
+    }
+    map.setPaintProperty("night", "fill-opacity", mapStyle === "dark" ? 0.16 : mapStyle === "satellite" ? 0.24 : 0.08);
+  }, [mapStyle, ready]);
+
+  // ---- day / night --------------------------------------------------------
+  useEffect(() => {
+    const map = liveMap();
+    if (!ready || !map) return;
+    map.setLayoutProperty("night", "visibility", showDayNight ? "visible" : "none");
+    if (!showDayNight) return;
+    const update = () => (map.getSource(NIGHT_SOURCE) as GeoJSONSource | undefined)?.setData(nightCollection(new Date()));
+    update();
+    const id = setInterval(update, 60_000);
+    return () => clearInterval(id);
+  }, [showDayNight, ready]);
+
+  // ---- labels / modes -----------------------------------------------------
+  useEffect(() => {
+    const map = liveMap();
+    if (!ready || !map) return;
+    const visibleLayers = new Set(MODE_LAYERS[mapMode] ?? MODE_LAYERS.events);
+    map.setLayoutProperty("ev-label", "visibility", showLabels && visibleLayers.has("ev-point") ? "visible" : "none");
+    for (const l of ALL_MODE_LAYERS) if (map.getLayer(l)) map.setLayoutProperty(l, "visibility", visibleLayers.has(l) ? "visible" : "none");
+  }, [showLabels, mapMode, ready]);
+
+  // ---- selection highlight ------------------------------------------------
+  useEffect(() => {
+    const map = liveMap();
+    if (!ready || !map) return;
+    map.setFilter("ev-selected", ["==", ["get", "id"], selectedEventId ?? "__none__"]);
+  }, [selectedEventId, ready]);
+
+  useEffect(() => {
+    const map = liveMap();
+    if (!ready || !map) return;
+    map.setFilter("ev-hover", ["==", ["get", "id"], hoveredEventId ?? "__none__"]);
+  }, [hoveredEventId, ready]);
+
+  useEffect(() => {
+    const map = liveMap();
+    if (!ready || !map) return;
+    if (selectedCountryFid.current !== null) map.setFeatureState({ source: COUNTRIES_SOURCE, id: selectedCountryFid.current }, { selected: false });
+    const fid = selectedCountry ? countryIds.current.get(selectedCountry) : undefined;
+    if (fid !== undefined) map.setFeatureState({ source: COUNTRIES_SOURCE, id: fid }, { selected: true });
+    selectedCountryFid.current = fid ?? null;
+  }, [selectedCountry, ready]);
+
+  // ---- camera -------------------------------------------------------------
+  useEffect(() => {
+    const map = liveMap();
+    if (!ready || !map || !flyTo) return;
+    // Keep the target visible beside an open detail panel.
+    const ui = useUI.getState();
+    const panelOpen = !!(ui.selectedEventId || ui.selectedCountry);
+    const padding = { top: 90, bottom: 110, left: 40, right: panelOpen ? 460 : 40 };
+    if (flyTo.bbox) {
+      const [w, s, e, n] = flyTo.bbox;
+      // Very wide boxes (e.g. Russia, antimeridian crossings) → fly to centre instead.
+      if (e - w < 160 && e > w) {
+        map.fitBounds([[w, s], [e, n]], { padding, duration: 1400, maxZoom: flyTo.zoom ?? 6 });
+        return;
+      }
+    }
+    map.flyTo({ center: [flyTo.lon, flyTo.lat], zoom: flyTo.zoom ?? Math.max(map.getZoom(), 4), padding, duration: 1400, essential: true });
+  }, [flyTo, ready]);
+
+  return (
+    <div className="absolute inset-0">
+      <div ref={container} className="h-full w-full" aria-label="Interactive globe of world events" />
+      {mapError && (
+        <div className="absolute inset-0 grid place-items-center text-sm text-muted">
+          Map could not be initialised: {mapError}
+        </div>
+      )}
+      <div className="absolute right-3 bottom-[118px] flex flex-col overflow-hidden rounded-md glass">
+        <MapButton title="Zoom in" onClick={() => mapRef.current?.easeTo({ zoom: mapRef.current.getZoom() + 1, duration: 300 })}>+</MapButton>
+        <MapButton title="Zoom out" onClick={() => mapRef.current?.easeTo({ zoom: mapRef.current.getZoom() - 1, duration: 300 })}>−</MapButton>
+        <MapButton
+          title="Reset view"
+          onClick={() => mapRef.current?.flyTo({ center: HOME_VIEW.center, zoom: HOME_VIEW.zoom, pitch: 0, bearing: 0, duration: 1200 })}
+        >
+          ⌂
+        </MapButton>
+      </div>
+    </div>
+  );
+}
+
+function MapButton({ title, onClick, children }: { title: string; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      title={title}
+      aria-label={title}
+      onClick={onClick}
+      className="h-8 w-8 border-b border-line text-[15px] text-muted last:border-b-0 hover:bg-panel-hover hover:text-fg"
+    >
+      {children}
+    </button>
+  );
+}

@@ -1,0 +1,184 @@
+"use client";
+/**
+ * Client UI state. Settings are persisted to localStorage (per-browser
+ * convenience only — nothing here is authoritative data).
+ */
+import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
+import { EVENT_CATEGORIES, type EventCategory } from "@/types/events";
+import type { ImportanceFilterId } from "@/lib/categories";
+import type { PresetRangeId, TimeRangeId } from "@/lib/time";
+import { MAP_MODE_IDS } from "@/lib/map-modes";
+
+export type MapStyleId = "dark" | "satellite" | "night";
+export type MapMode = import("@/lib/map-modes").MapModeId;
+export type FeedSort = "recent" | "importance";
+
+export interface Settings {
+  mapStyle: MapStyleId;
+  showEventLabels: boolean;
+  showDayNight: boolean;
+  autoRefresh: boolean;
+  defaultRange: PresetRangeId;
+  defaultCategories: EventCategory[];
+  showAI: boolean;
+  developerMode: boolean;
+}
+
+export interface FlyToRequest {
+  lon: number;
+  lat: number;
+  zoom?: number;
+  bbox?: [number, number, number, number];
+  nonce: number;
+}
+
+interface UIState {
+  // filters
+  categories: EventCategory[];
+  range: TimeRangeId;
+  customRange: { from: number; to: number } | null;
+  importance: ImportanceFilterId;
+  timelineSpan: "24h" | "7d";
+  /** null = following "now" (live). A number = replay cursor (ms epoch). */
+  timelineCursor: number | null;
+  mapMode: MapMode;
+  feedSort: FeedSort;
+  /** Weather radar playback: index into frames (null = latest) */
+  radarFrame: number | null;
+  radarPlaying: boolean;
+
+  // selection / panels
+  selectedEventId: string | null;
+  selectedCountry: string | null;
+  hoveredEventId: string | null;
+  flyTo: FlyToRequest | null;
+
+  // chrome
+  sidebarCollapsed: boolean;
+  searchOpen: boolean;
+  briefingOpen: boolean;
+  settingsOpen: boolean;
+  settingsTab: "general" | "map" | "sources" | "about";
+
+  settings: Settings;
+
+  // actions
+  toggleCategory: (c: EventCategory) => void;
+  setCategories: (c: EventCategory[]) => void;
+  setRange: (r: TimeRangeId) => void;
+  setCustomRange: (r: { from: number; to: number } | null) => void;
+  setImportance: (i: ImportanceFilterId) => void;
+  setTimelineSpan: (s: "24h" | "7d") => void;
+  setTimelineCursor: (t: number | null) => void;
+  setMapMode: (m: MapMode) => void;
+  setFeedSort: (s: FeedSort) => void;
+  setRadarFrame: (i: number | null) => void;
+  setRadarPlaying: (v: boolean) => void;
+  selectEvent: (id: string | null) => void;
+  selectCountry: (code: string | null) => void;
+  setHovered: (id: string | null) => void;
+  requestFlyTo: (r: Omit<FlyToRequest, "nonce">) => void;
+  setSidebarCollapsed: (v: boolean) => void;
+  setSearchOpen: (v: boolean) => void;
+  setBriefingOpen: (v: boolean) => void;
+  openSettings: (tab?: UIState["settingsTab"]) => void;
+  closeSettings: () => void;
+  updateSettings: (patch: Partial<Settings>) => void;
+}
+
+const DEFAULT_SETTINGS: Settings = {
+  mapStyle: "dark",
+  showEventLabels: false,
+  showDayNight: true,
+  autoRefresh: true,
+  defaultRange: "24h",
+  defaultCategories: [...EVENT_CATEGORIES],
+  showAI: true,
+  developerMode: false,
+};
+
+export const useUI = create<UIState>()(
+  persist(
+    (set) => ({
+      categories: [...EVENT_CATEGORIES],
+      range: "24h",
+      customRange: null,
+      importance: "all",
+      timelineSpan: "24h",
+      timelineCursor: null,
+      mapMode: "events",
+      feedSort: "recent",
+      radarFrame: null,
+      radarPlaying: false,
+      selectedEventId: null,
+      selectedCountry: null,
+      hoveredEventId: null,
+      flyTo: null,
+      sidebarCollapsed: false,
+      searchOpen: false,
+      briefingOpen: false,
+      settingsOpen: false,
+      settingsTab: "general",
+      settings: DEFAULT_SETTINGS,
+
+      toggleCategory: (c) =>
+        set((s) => ({ categories: s.categories.includes(c) ? s.categories.filter((x) => x !== c) : [...s.categories, c] })),
+      setCategories: (categories) => set({ categories }),
+      setRange: (range) =>
+        set(() => ({
+          range,
+          timelineCursor: null,
+          ...(range === "7d" ? { timelineSpan: "7d" as const } : {}),
+        })),
+      setCustomRange: (customRange) => set({ customRange, range: customRange ? "custom" : "24h", timelineCursor: null }),
+      setImportance: (importance) => set({ importance }),
+      setTimelineSpan: (timelineSpan) =>
+        set((s) => ({ timelineSpan, timelineCursor: null, range: timelineSpan === "24h" && s.range === "7d" ? "24h" : s.range })),
+      setTimelineCursor: (timelineCursor) => set({ timelineCursor }),
+      setMapMode: (mapMode) => set({ mapMode, radarPlaying: false, radarFrame: null }),
+      setFeedSort: (feedSort) => set({ feedSort }),
+      setRadarFrame: (radarFrame) => set({ radarFrame }),
+      setRadarPlaying: (radarPlaying) => set({ radarPlaying }),
+      selectEvent: (selectedEventId) => set({ selectedEventId, ...(selectedEventId ? { selectedCountry: null } : {}) }),
+      selectCountry: (selectedCountry) => set({ selectedCountry, ...(selectedCountry ? { selectedEventId: null } : {}) }),
+      setHovered: (hoveredEventId) => set({ hoveredEventId }),
+      requestFlyTo: (r) => set({ flyTo: { ...r, nonce: Date.now() + Math.random() } }),
+      setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
+      setSearchOpen: (searchOpen) => set({ searchOpen }),
+      setBriefingOpen: (briefingOpen) => set({ briefingOpen }),
+      openSettings: (tab) => set((s) => ({ settingsOpen: true, settingsTab: tab ?? s.settingsTab })),
+      closeSettings: () => set({ settingsOpen: false }),
+      updateSettings: (patch) => set((s) => ({ settings: { ...s.settings, ...patch } })),
+    }),
+    {
+      name: "worldview-ui",
+      version: 1,
+      storage: createJSONStorage(() => {
+        try {
+          return localStorage;
+        } catch {
+          return { getItem: () => null, setItem: () => {}, removeItem: () => {} };
+        }
+      }),
+      // Only persist preferences, not transient selection state.
+      partialize: (s) => ({ settings: s.settings, sidebarCollapsed: s.sidebarCollapsed, feedSort: s.feedSort, mapMode: s.mapMode }),
+      // Apply default layers/range from saved settings on load.
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<UIState>;
+        const settings = { ...DEFAULT_SETTINGS, ...(p.settings ?? {}) };
+        const valid = settings.defaultCategories.filter((c) => (EVENT_CATEGORIES as readonly string[]).includes(c));
+        const mapMode = (MAP_MODE_IDS as readonly string[]).includes(String(p.mapMode)) ? p.mapMode! : "events";
+        return {
+          ...current,
+          ...p,
+          mapMode,
+          settings,
+          categories: valid.length ? valid : [...EVENT_CATEGORIES],
+          range: settings.defaultRange,
+          timelineSpan: settings.defaultRange === "7d" ? "7d" : current.timelineSpan,
+        };
+      },
+    },
+  ),
+);
