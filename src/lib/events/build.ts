@@ -103,7 +103,12 @@ export function mergeCandidate(event: WorldEvent, c: EventCandidate, now = Date.
   let kind: "updated" | "corroborated" | "unchanged" = "unchanged";
 
   const primary = event.sources[0];
-  const incomingIsPrimary = idx === 0 || !primary || authorityOf(c.source) > authorityOf(primary);
+  const incomingIsPrimary =
+    idx === 0 ||
+    !primary ||
+    authorityOf(c.source) > authorityOf(primary) ||
+    // A published headline beats a title derived from a URL slug.
+    (authorityOf(c.source) === authorityOf(primary) && primary.titleIsDerived && !c.source.titleIsDerived && !!c.source.title);
 
   if (idx >= 0) {
     const prev = event.sources[idx];

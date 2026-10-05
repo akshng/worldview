@@ -7,6 +7,7 @@
  *   src/data/geo/countries.json   – compact country polygons + metadata (server: reverse geocoding, search)
  *   src/data/geo/cities.json      – populated places (server: nearest-place labels, search)
  *   src/data/geo/airports.json    – large/medium scheduled airports with IATA codes (OurAirports, public domain)
+ *   src/data/geo/regions.json     – admin-1 states/provinces: names, alternate names, label points
  *   public/geo/countries.geojson  – same polygons for the globe's country hover/click layer
  */
 import { writeFileSync, mkdirSync } from "node:fs";
@@ -17,6 +18,8 @@ const COUNTRIES_URL = `${NE}/ne_50m_admin_0_countries.geojson`;
 const PLACES_URL = `${NE}/ne_50m_populated_places_simple.geojson`;
 /** OurAirports (public domain) — large & medium airports with IATA codes. */
 const AIRPORTS_URL = "https://davidmegginson.github.io/ourairports-data/airports.csv";
+/** Natural Earth admin-1 (states/provinces) — label points and names only. */
+const ADMIN1_URL = `${NE}/ne_10m_admin_1_states_provinces.geojson`;
 
 function parseCsvLine(line: string): string[] {
   const out: string[] = [];
@@ -87,11 +90,22 @@ function macroRegion(iso2: string, continent: string, subregion: string): string
 
 async function main() {
   const root = process.cwd();
-  const [countriesRaw, placesRaw, airportsCsv] = await Promise.all([
+  const [countriesRaw, placesRaw, airportsCsv, admin1Raw] = await Promise.all([
     fetch(COUNTRIES_URL).then((r) => r.json()),
     fetch(PLACES_URL).then((r) => r.json()),
     fetch(AIRPORTS_URL).then((r) => r.text()),
+    fetch(ADMIN1_URL).then((r) => r.json()),
   ]);
+
+  const regions = [];
+  for (const f of admin1Raw.features) {
+    const p = f.properties;
+    const iso2 = p.iso_a2;
+    if (!iso2 || iso2 === "-99" || typeof p.latitude !== "number") continue;
+    const primary = [...new Set([p.name, p.name_en, p.woe_name, p.gn_name, p.name_local].filter((x: unknown) => typeof x === "string" && x.length >= 3))];
+    const alt = [...new Set([...(p.name_alt ? String(p.name_alt).split("|") : []), p.region].filter((x: unknown) => typeof x === "string" && x.length >= 3))];
+    regions.push({ n: primary, a: alt, c: iso2, lat: round(p.latitude, 3), lon: round(p.longitude, 3), t: p.type_en ?? null });
+  }
 
   const countries = [];
   const publicFeatures = [];
@@ -162,6 +176,7 @@ async function main() {
 
   mkdirSync(join(root, "src/data/geo"), { recursive: true });
   writeFileSync(join(root, "src/data/geo/airports.json"), JSON.stringify(airports));
+  writeFileSync(join(root, "src/data/geo/regions.json"), JSON.stringify(regions));
   mkdirSync(join(root, "public/geo"), { recursive: true });
   writeFileSync(join(root, "src/data/geo/countries.json"), JSON.stringify(countries));
   writeFileSync(join(root, "src/data/geo/cities.json"), JSON.stringify(cities));
@@ -169,7 +184,7 @@ async function main() {
     join(root, "public/geo/countries.geojson"),
     JSON.stringify({ type: "FeatureCollection", features: publicFeatures }),
   );
-  console.log(`countries: ${countries.length}, cities: ${cities.length}, airports: ${airports.length}`);
+  console.log(`countries: ${countries.length}, cities: ${cities.length}, airports: ${airports.length}, regions: ${regions.length}`);
 }
 
 main().catch((e) => {

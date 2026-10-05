@@ -32,7 +32,8 @@ const news = (o: Partial<Comparable> = {}): Comparable => ({
 
 describe("text similarity", () => {
   it("tokenises without stopwords", () => {
-    expect([...tokenize("The explosion in Kyiv, reported by AP")]).toEqual(["explosion", "kyiv"]);
+    expect([...tokenize("The explosion in Kyiv, reported by AP")]).toEqual(["explo", "kyiv"]);
+    expect(tokenize("Russian forces").has("russi") && tokenize("Russia says").has("russi")).toBe(true);
   });
   it("computes jaccard", () => {
     expect(jaccard(new Set(["a", "b"]), new Set(["b", "c"]))).toBeCloseTo(1 / 3);
@@ -75,6 +76,18 @@ describe("deduplication", () => {
     // …but short, generic headlines far apart stay separate
     const c = news({ title: "Explosion at fuel depot kills workers", latitude: 48.5, longitude: 35.0 });
     expect(findBestMatch(c, [news()], opts)).toBeNull();
+  });
+
+  it("merges differently worded reports of the same story", () => {
+    const a = news({ type: "HEALTH", title: "Researcher at Russian plague laboratory dies of unknown infection", latitude: 55, longitude: 37 });
+    const b = news({ type: "HEALTH", title: "Russian lab worker reportedly dies of plague", latitude: 55.1, longitude: 37.2, timestamp: iso(3_600_000) });
+    expect(findBestMatch(b, [a], opts)).not.toBeNull();
+  });
+
+  it("never merges reports about different diseases", () => {
+    const a = news({ type: "HEALTH", title: "Cholera - Sudan", latitude: 15, longitude: 30 });
+    const b = news({ type: "HEALTH", title: "Dengue - Sudan", latitude: 15, longitude: 30 });
+    expect(matchScore(a, b, opts)).toBeNull();
   });
 
   it("keeps unrelated stories in the same city apart", () => {

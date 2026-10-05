@@ -75,7 +75,9 @@ export function enrichGeo(c: EventCandidate): GeoEnrichment {
     region: regionFor(country?.code ?? null, country?.region ?? null, c.longitude),
     fallbackLocationName: c.locationName
       ? null
-      : (describeNearest(c.latitude, c.longitude) ?? country?.name ?? oceanName(c.latitude, c.longitude)),
+      : c.geoPrecision === "country" && country
+        ? country.name // a country-centre point should be labelled as the country, not "N km of City"
+        : (describeNearest(c.latitude, c.longitude) ?? country?.name ?? oceanName(c.latitude, c.longitude)),
     note,
   };
 }
@@ -129,7 +131,7 @@ export function refineNewsLocation(c: EventCandidate): { candidate: EventCandida
  * incidents in the same city would merge.
  */
 export function dedupText(e: { title: string; subtype: string | null; sources: Array<{ title: string | null; dataSourceId: string }> }): string {
-  const headlines = e.sources.filter((s) => s.dataSourceId === "gdelt" && s.title).map((s) => s.title);
+  const headlines = e.sources.filter((s) => (s.dataSourceId === "gdelt" || s.dataSourceId === "gdelt-gkg") && s.title).map((s) => s.title);
   if (!headlines.length) return e.title;
   return [e.subtype ?? "", ...headlines.slice(0, 5)].join(" ");
 }

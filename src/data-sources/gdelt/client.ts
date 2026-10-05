@@ -1,5 +1,5 @@
 import { unzipSync, strFromU8 } from "fflate";
-import { httpGet, type FetchContext } from "../types";
+import { httpGet, SourceHttpError, type FetchContext } from "../types";
 import type { GdeltEventRow, GdeltRaw } from "./types";
 
 const LAST_UPDATE = "https://data.gdeltproject.org/gdeltv2/lastupdate.txt";
@@ -84,9 +84,11 @@ export async function fetchGdelt(ctx: FetchContext): Promise<GdeltRaw> {
       const name = Object.keys(entries)[0];
       if (name) files.push({ url, rows: parseExportTsv(strFromU8(entries[name])) });
     } catch (err) {
-      // A single missing slot (GDELT occasionally skips one) shouldn't fail the run.
-      if (url.includes(latest.slice(-30))) throw err;
+      // The newest slot is sometimes listed before it is published, and GDELT
+      // occasionally skips one: missing slots are skipped, other errors fail.
+      if (!(err instanceof SourceHttpError && err.status === 404)) throw err;
     }
   }
+  if (!files.length) throw new Error("No GDELT event files available yet");
   return { files };
 }

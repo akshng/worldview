@@ -5,6 +5,7 @@
 import type { DataSourceConnector } from "./types";
 import { usgsConnector } from "./usgs";
 import { gdeltConnector } from "./gdelt";
+import { gkgConnector } from "./gdelt-gkg";
 import { firmsConnector } from "./nasa-firms";
 import { weatherConnector } from "./weather";
 import { gdacsConnector } from "./gdacs";
@@ -15,15 +16,18 @@ import { faaConnector } from "./faa";
 import { tsunamiConnector } from "./tsunami";
 import { whoConnector } from "./who";
 import { secConnector } from "./sec";
+import { meteoalarmConnector } from "./meteoalarm";
 import { demoConnector } from "./demo";
 
 export const CONNECTORS = [
   usgsConnector,
   gdacsConnector,
   weatherConnector,
+  meteoalarmConnector,
   eonetConnector,
   firmsConnector,
   gdeltConnector,
+  gkgConnector,
   spaceConnector,
   tsunamiConnector,
   faaConnector,

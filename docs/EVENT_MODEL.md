@@ -101,6 +101,8 @@ score = geo (1 − d/radius) · w_geo + time (1 − Δt/window) · w_time
 | Space | 50 km | 6 h | 0.5 | |
 | News-like (default) | 30 km | 18 h | 0.3 | up to 800 km when headlines are ≥ 0.8 similar and specific (≥ 6 words) — syndicated copies geocoded to different cities |
 
+Title similarity uses lightly stemmed tokens (5-character prefixes, so "Russian" ≈ "Russia") and the better of Jaccard and a discounted overlap coefficient, so a short headline contained in a longer one still matches. Health events additionally never merge when they name different diseases.
+
 A match ≥ 0.55 merges the candidate into the existing event as an additional source. Rules that keep merges honest:
 
 - Two records from the **same authoritative feed** are never merged (two USGS quakes are two quakes). Only aggregators (`mergeWithinSource`, i.e. GDELT) can self-merge.

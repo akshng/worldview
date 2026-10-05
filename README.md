@@ -72,6 +72,8 @@ Secrets are read only on the server (`src/lib/env.ts`, guarded by `server-only`)
 | NASA EONET open events | Storms, wildfires, volcanoes, ice, … | 20 min | none |
 | NASA FIRMS VIIRS (24 h) | Fire (clustered satellite detections) | 30 min | optional |
 | GDELT 2.0 event export | Conflict, protest, politics, crime/public safety | 15 min | none |
+| GDELT Global Knowledge Graph | News with real headlines: conflict, politics, protests, markets, business, tech, science, health, transport | 15 min | none |
+| MeteoAlarm (EUMETNET) | Orange/red weather warnings from 38 European weather services | 20 min | none |
 | Launch Library 2 | Space launches (±7 days) | 30 min | none |
 | NOAA tsunami warning centers | Tsunami warnings/advisories/statements | 3 min | none |
 | FAA NAS status | US airport ground stops, delays, closures | 5 min | none |

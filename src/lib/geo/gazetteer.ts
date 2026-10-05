@@ -7,6 +7,7 @@ import "server-only";
 import countriesData from "@/data/geo/countries.json";
 import citiesData from "@/data/geo/cities.json";
 import airportsData from "@/data/geo/airports.json";
+import regionsData from "@/data/geo/regions.json";
 import { bboxContains, haversineKm, pointInGeometry, type BBox, type PolygonalGeometry } from "./math";
 
 export interface Country {
@@ -187,4 +188,56 @@ function bearingLabel(lat1: number, lon1: number, lat2: number, lon2: number): s
     Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(toRad(lon2 - lon1));
   const brng = ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
   return ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][Math.round(brng / 45) % 8];
+}
+
+// ---------------------------------------------------------------------------
+// Admin-1 regions (states / provinces)
+// ---------------------------------------------------------------------------
+interface RegionRow { n: string[]; a: string[]; c: string; lat: number; lon: number; t: string | null }
+const REGIONS = regionsData as unknown as RegionRow[];
+
+const norm = (s: string) => s.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+const regionIndex = new Map<string, Array<{ c: string; lat: number; lon: number; primary: boolean; label: string }>>();
+for (const r of REGIONS) {
+  for (const [names, primary] of [[r.n, true], [r.a, false]] as const) {
+    for (const name of names) {
+      const k = `${r.c}|${norm(name)}`;
+      const list = regionIndex.get(k) ?? [];
+      list.push({ c: r.c, lat: r.lat, lon: r.lon, primary, label: r.n[0] ?? name });
+      regionIndex.set(k, list);
+    }
+  }
+}
+
+/**
+ * Find a state/province (or a larger region named in several provinces'
+ * alternate names, e.g. "Lombardy") within a country. Multi-province matches
+ * resolve to the average of their label points (region-level).
+ */
+export function findRegion(name: string, iso2: string): { lat: number; lon: number; label: string } | null {
+  const hits = regionIndex.get(`${iso2.toUpperCase()}|${norm(name)}`);
+  if (!hits?.length) return null;
+  const primary = hits.filter((h) => h.primary);
+  const use = primary.length === 1 ? primary : hits;
+  return { lat: use.reduce((s, h) => s + h.lat, 0) / use.length, lon: use.reduce((s, h) => s + h.lon, 0) / use.length, label: name };
+}
+
+/** Region names (length ≥ 4) mentioned anywhere in a text, for a given country. */
+export function regionsInText(text: string, iso2: string): Array<{ lat: number; lon: number; label: string }> {
+  const t = ` ${norm(text)} `;
+  const out: Array<{ lat: number; lon: number; label: string }> = [];
+  const seen = new Set<string>();
+  for (const key of regionIndex.keys()) {
+    if (!key.startsWith(`${iso2.toUpperCase()}|`)) continue;
+    const name = key.slice(3);
+    if (name.length < 4 || seen.has(name)) continue;
+    if (new RegExp(`[^a-z]${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[^a-z]`).test(t)) {
+      const r = findRegion(name, iso2);
+      if (r) {
+        seen.add(name);
+        out.push(r);
+      }
+    }
+  }
+  return out;
 }

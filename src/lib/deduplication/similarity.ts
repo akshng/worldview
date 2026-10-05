@@ -59,7 +59,7 @@ export const DEDUP_RULES: Partial<Record<EventCategory, DedupRule>> = {
   DISASTER: { radiusKm: 250, windowMs: 96 * H, minTextSimilarity: 0.3 },
   SPACE: { radiusKm: 50, windowMs: 6 * H, minTextSimilarity: 0.5 },
   // Successive outbreak reports about the same disease in the same country are one event.
-  HEALTH: { radiusKm: 400, windowMs: 60 * 24 * H, minTextSimilarity: 0.6 },
+  HEALTH: { radiusKm: 400, windowMs: 60 * 24 * H, minTextSimilarity: 0.3, compatible: sameDisease },
 };
 export const DEFAULT_NEWS_RULE: DedupRule = { radiusKm: 30, windowMs: 18 * H, minTextSimilarity: 0.3, strongTextRadiusKm: 800 };
 
@@ -69,10 +69,13 @@ const STOPWORDS = new Set(
   "the a an of in on at to for from by with and or near over under after before into is are was were be has have had its it this that as than new says said report reported reports km mi via about amid".split(" "),
 );
 
+/** Light stemming: a 5-character prefix for longer words (russian≈russia, attacks≈attack). */
+const stem = (t: string) => (t.length >= 6 ? t.slice(0, 5) : t.replace(/s$/, ""));
+
 export function tokenize(s: string): Set<string> {
   const out = new Set<string>();
   for (const t of s.toLowerCase().normalize("NFKD").replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/)) {
-    if (t.length > 2 && !STOPWORDS.has(t)) out.add(t);
+    if (t.length > 2 && !STOPWORDS.has(t)) out.add(stem(t));
   }
   return out;
 }
@@ -82,6 +85,25 @@ export function jaccard(a: Set<string>, b: Set<string>): number {
   let inter = 0;
   for (const x of a) if (b.has(x)) inter++;
   return inter / (a.size + b.size - inter);
+}
+
+/**
+ * Headline similarity: the better of Jaccard and a discounted overlap
+ * coefficient, so a short headline contained in a longer one still matches.
+ */
+export function headlineSimilarity(a: Set<string>, b: Set<string>): number {
+  if (!a.size || !b.size) return 0;
+  let inter = 0;
+  for (const x of a) if (b.has(x)) inter++;
+  return Math.max(inter / (a.size + b.size - inter), (0.75 * inter) / Math.min(a.size, b.size));
+}
+
+const DISEASES = /\b(ebola|cholera|measles|dengue|mpox|monkeypox|influenza|flu|h5n1|avian|plague|polio|malaria|marburg|anthrax|covid|sars|mers|nipah|lassa|yellow fever|zika|chikungunya|diphtheria|meningitis|tuberculosis|swine fever|hepatitis|rabies)\b/gi;
+const diseasesIn = (t: string) => new Set((t.match(DISEASES) ?? []).map((x) => x.toLowerCase()));
+/** Reports naming different diseases are different outbreaks. */
+function sameDisease(a: Comparable, b: Comparable): boolean {
+  const da = diseasesIn(a.title), db = diseasesIn(b.title);
+  return !da.size || !db.size || [...da].some((d) => db.has(d));
 }
 
 export function entityOverlap(a: Entity[], b: Entity[]): number {
@@ -121,7 +143,7 @@ export function matchScore(a: Comparable, b: Comparable, opts: MatchOptions): Ma
   if (onlySameSource && !opts.mergeWithinSource.has(shared[0])) return null;
 
   const ta = tokenize(a.title), tb = tokenize(b.title);
-  const text = jaccard(ta, tb);
+  const text = headlineSimilarity(ta, tb);
   // Only specific headlines (≥ 6 meaningful words) qualify for the wide radius.
   const specific = Math.min(ta.size, tb.size) >= 6;
   const radiusKm = rule.strongTextRadiusKm && text >= 0.8 && specific ? rule.strongTextRadiusKm : rule.radiusKm;

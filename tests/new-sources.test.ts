@@ -93,3 +93,33 @@ describe("SEC", () => {
     expect(valid(r.candidates)).toBe(true);
   });
 });
+
+describe("MeteoAlarm", async () => {
+  const { parseMeteoAlarm, pickInfo, placeFor } = await import("@/data-sources/meteoalarm/parser");
+  const info = (lang: string, level: string, type: string, area: string) => ({
+    language: lang, event: "x", headline: "h", senderName: "DWD", severity: "Severe", expires: new Date(NOW + 3_600_000).toISOString(), onset: new Date(NOW).toISOString(),
+    parameter: [{ valueName: "awareness_level", value: level }, { valueName: "awareness_type", value: type }], area: [{ areaDesc: area }],
+  });
+  it("prefers English text and places warnings on named cities", () => {
+    expect(pickInfo([info("de-DE", "3; orange; Severe", "1; Wind", "x"), info("en-GB", "3; orange; Severe", "1; Wind", "x")])?.language).toBe("en-GB");
+    expect(placeFor("DE", ["Stadt Hamburg"])).toMatchObject({ precision: "city" });
+    expect(placeFor("DE", ["Kreis Nordfriesland"])?.precision).toBe("country");
+    const sard = placeFor("IT", ["Sardegna"])!;
+    expect(sard.precision).toBe("region");
+    expect(sard.lat).toBeGreaterThan(38.5);
+    expect(sard.lat).toBeLessThan(41.5); // Sardinia
+    expect(sard.lon).toBeLessThan(10);
+    expect(placeFor("ES", ["Sur de Salamanca"])?.precision).not.toBe("country");
+  });
+  it("keeps only active orange/red warnings", () => {
+    const r = parseMeteoAlarm({ countries: [{ slug: "germany", iso2: "DE", warnings: [
+      { alert: { identifier: "a", info: [info("en-GB", "4; red; Extreme", "10; Rain", "Stadt Hamburg")] } },
+      { alert: { identifier: "b", info: [info("en-GB", "2; yellow; Moderate", "1; Wind", "Stadt Hamburg")] } },
+      { alert: { identifier: "c", msgType: "Cancel", info: [info("en-GB", "3; orange; Severe", "1; Wind", "Berlin")] } },
+    ] }] }, ctx);
+    expect(r.candidates).toHaveLength(1);
+    expect(r.candidates[0]).toMatchObject({ type: "WEATHER", subtype: "rain", geoPrecision: "city", country: "DE" });
+    expect(r.candidates[0].title).toMatch(/^Red rain warning/);
+    expect(valid(r.candidates)).toBe(true);
+  });
+});
