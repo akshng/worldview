@@ -95,6 +95,9 @@ Details, terms and caveats: [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md).
 - **Map modes**: Events, Heatmap, Density grid, Weather (radar loop), Fires (radiative power), Earthquakes (magnitude × depth), Conflict, Aviation (live aircraft), Maritime (live vessels)
 - Live feed, event details (facts · sources · timeline · score explanation · related events · separate AI box), country overviews, timeline replay, ⌘K search with intent parsing
 - **Daily briefing** (top-bar "Briefing"): new / developing / ongoing / resolved, today vs yesterday, regional sections, what to watch — every line links to an event; optional AI summary written only from those events
+- **Markets** (top bar): indices, Treasury yields, FX, commodities, crypto with sparklines; watchlist; world events linked to the instruments they could affect; AI market wrap — information only, not advice ([docs/FINANCE.md](docs/FINANCE.md))
+- **Markets map mode**: countries coloured by their main stock index's daily move
+- Real areas (warning polygons, fire footprints), uncertainty rings by location precision, and location-correction notes
 - Source health and live-layer status in Settings → Data sources
 - Demo mode with clearly labelled simulated data
 
@@ -143,6 +146,12 @@ The full walkthrough is in [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md#adding-a-
 | `GET /api/stream` | Server-Sent Events change notifications |
 | `GET /api/briefing` | Daily briefing structure (+ cached AI summary) |
 | `POST /api/briefing/narrative` | Generate the AI briefing summary (if configured) |
+| `GET /api/markets` | Cross-asset snapshot (cached) |
+| `GET /api/markets/quote?symbols=` | Quotes for up to 25 symbols |
+| `GET /api/markets/movers` | Last-24 h events with rule-based market exposure |
+| `POST /api/markets/summary` | AI market wrap (descriptive, never advice) |
+| `GET /api/geo-audit` | Developer QA of event coordinates |
+| `POST /api/ai/setup` | Start downloading/loading the local model |
 | `GET /api/layers` | Live layer status |
 | `GET /api/layers/:id` | Cached live layer snapshot (`weather-radar`, `aviation`, `maritime`) |
 | `GET /api/meta` | Mode and AI availability (no secrets) |
@@ -153,6 +162,7 @@ The full walkthrough is in [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md#adding-a-
 - [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md) — every connector, caveats, how to add one
 - [docs/EVENT_MODEL.md](docs/EVENT_MODEL.md) — schema, status rules, importance scoring, deduplication
 - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) — local workflow, testing, demo mode, troubleshooting
+- [docs/FINANCE.md](docs/FINANCE.md) — market data sources, exposure rules, caveats
 
 ## Attribution
 

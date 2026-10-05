@@ -1,0 +1,47 @@
+# Finance features
+
+WorldView connects world events to markets so you can see **what is moving and what is happening at the same time**. Everything here is information, not advice: nothing recommends trades, sets price targets or predicts prices.
+
+## What's included
+
+| Feature | Where | Data |
+| --- | --- | --- |
+| Cross-asset snapshot: 26 equity indices, US Treasury 2Y/10Y/30Y + 2s10s, FX, 9 commodities, crypto | Top bar → **Markets** | Yahoo Finance chart endpoint (unofficial, delayed), U.S. Treasury yield-curve CSV, Coinbase Exchange public candles |
+| Watchlist (any Yahoo symbol: `MSFT`, `^GSPC`, `EURUSD=X`, `GC=F`) | Markets panel; saved in this browser | Same as above |
+| SEC 8-K material filings on the map, linked to the filer's ticker | Map (Business layer), watchlist "Filings for your tickers" | SEC EDGAR |
+| **Market exposure** for an event (which instruments it could plausibly affect, with live change) | Event details panel | Rule-based (below) |
+| **World events with market exposure** (last 24 h) | Markets panel | Rule-based |
+| **Markets map mode**: countries coloured by their main index's daily % change | Sidebar → View mode → Markets | Yahoo Finance |
+| **AI market wrap**: describes today's moves from the numbers shown, mentions coinciding events | Markets panel | Local on-device model (or hosted, if configured) |
+
+All upstream calls are server-side and cached (quotes 3 min, Treasury 6 h); clients share the cache.
+
+## Exposure rules (`src/lib/finance/exposure.ts`)
+
+Transparent heuristics, each with a written rationale shown in the UI. News-derived events only qualify once **≥ 2 independent publishers** report them (status not `UNVERIFIED`).
+
+| Event | Instruments | Rationale |
+| --- | --- | --- |
+| SEC 8-K material filing | the filer's ticker | the company's own filing |
+| Corroborated conflict/politics in the Gulf states, or energy terms (oil, OPEC, Hormuz, Red Sea, Houthi, tanker…) | Brent, WTI | supply / shipping-route risk |
+| Corroborated conflict/politics in Russia/Ukraine | Wheat, natural gas, EUR/USD | Black Sea grain, European gas |
+| Taiwan tensions, China conflict, chip/export-control terms | TAIEX, Nasdaq | semiconductor supply chain |
+| M6+ earthquake or tsunami message in Japan | Nikkei 225, USD/JPY | — |
+| M6+ earthquake in Chile/Peru | Copper | mining concentration |
+| Tropical cyclone in the Gulf of Mexico | Natural gas, WTI | production & refining |
+| Major Brazilian fire (≥ 5,000 MW) or alerted hazard | Coffee, corn | crops (routine dry-season burning excluded) |
+| Ground stop / closure / ground delay at a large US airport | US Global Jets ETF | airline operations |
+| Corroborated conflict with importance ≥ 61 | Gold, VIX | safe haven / volatility |
+| Corroborated event with importance ≥ 55 in a country with a tracked index | that index | — |
+
+The movers list shows at most two events per identical set of instruments so one theme can't flood it.
+
+## Colour
+
+Up/down uses a validated diverging pair on the dark surface — up `#3f8de8` (blue), down `#e5534b` (red), gray midpoint — and always pairs colour with ▲/▼ and a signed number (colour-blind safe; red/green is avoided on purpose).
+
+## Data caveats
+
+- Yahoo Finance's chart endpoint is **unofficial and delayed**; it can change or rate-limit without notice. Quotes are labelled as delayed; failures show "n/a" per tile, never stale numbers presented as live.
+- Index "daily change" is vs the previous close; closed markets show the last session.
+- Treasury yields update once per business day.

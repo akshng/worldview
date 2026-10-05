@@ -19,6 +19,7 @@ export interface RelatedEvent {
 export interface EventDetailResponse {
   event: WorldEvent;
   related: RelatedEvent[];
+  marketExposure: import("@/lib/finance/types").ExposureLink[];
 }
 
 export interface CountryResponse {
@@ -101,6 +102,8 @@ export interface SearchIntent {
 }
 
 export type { DailyBriefing, BriefingItem } from "@/lib/briefing";
+import type { MarketSnapshot, Quote, ExposureLink } from "@/lib/finance/types";
+export type { MarketSnapshot, Quote, ExposureLink };
 
 async function getJSON<T>(url: string, signal?: AbortSignal): Promise<T> {
   const res = await fetch(url, { signal, cache: "no-store" });
@@ -126,6 +129,17 @@ export const api = {
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(body?.error ?? `Request failed (${res.status})`);
     return body.aiNarrative;
+  },
+  markets: (signal?: AbortSignal) => getJSON<MarketSnapshot>("/api/markets", signal),
+  quotes: (symbols: string[], signal?: AbortSignal) =>
+    getJSON<{ quotes: Quote[] }>(`/api/markets/quote?symbols=${encodeURIComponent(symbols.join(","))}`, signal),
+  movers: (signal?: AbortSignal) =>
+    getJSON<{ movers: Array<{ event: EventSummary; exposure: ExposureLink[] }>; note: string }>("/api/markets/movers", signal),
+  async marketSummary() {
+    const res = await fetch("/api/markets/summary", { method: "POST" });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body?.error ?? `Request failed (${res.status})`);
+    return body as { summary: { text: string; provider: string; model: string; generatedAt: string }; disclaimer: string };
   },
   sources: (signal?: AbortSignal) => getJSON<SourcesResponse>("/api/sources", signal),
   meta: (signal?: AbortSignal) => getJSON<MetaResponse>("/api/meta", signal),

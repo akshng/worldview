@@ -12,6 +12,9 @@ export interface GdeltEventRow {
   /** Primary CAMEO actor type codes (e.g. MIL, REB, COP, CRM) */
   actor1Type: string;
   actor2Type: string;
+  /** CAMEO country codes of the actors (e.g. USA, ISR) */
+  actor1Country: string;
+  actor2Country: string;
   isRootEvent: boolean;
   eventCode: string;
   eventBaseCode: string;

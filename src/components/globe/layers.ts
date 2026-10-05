@@ -53,7 +53,17 @@ export const MODE_LAYERS: Record<MapMode, string[]> = {
   conflict: CLUSTERED,
   aviation: [...CLUSTERED, "aircraft"],
   maritime: [...CLUSTERED, "vessels"],
+  markets: ["market-fill", ...CLUSTERED],
 };
+
+/** Diverging scale for daily % change (validated pair: down #e5534b ↔ up #3f8de8, gray midpoint). */
+export const MARKET_STOPS: Array<[number, string]> = [
+  [-3, "#e5534b"],
+  [-1, "#9a4744"],
+  [0, "#3a3d44"],
+  [1, "#35609a"],
+  [3, "#3f8de8"],
+];
 
 export const ALL_MODE_LAYERS = [...new Set(Object.values(MODE_LAYERS).flat())];
 
@@ -409,6 +419,22 @@ export function eventLayers(): LayerSpecification[] {
 
 export function countryLayers(): LayerSpecification[] {
   return [
+    {
+      // Markets mode: feature-state `chg` = daily % change of the country's main index.
+      id: "market-fill",
+      type: "fill",
+      source: COUNTRIES_SOURCE,
+      layout: { visibility: "none" },
+      paint: {
+        "fill-color": [
+          "interpolate",
+          ["linear"],
+          ["coalesce", ["feature-state", "chg"], 0],
+          ...MARKET_STOPS.flatMap(([v, c]) => [v, c]),
+        ] as unknown as ExpressionSpecification,
+        "fill-opacity": ["case", ["==", ["typeof", ["feature-state", "chg"]], "number"], 0.6, 0],
+      },
+    },
     {
       id: "country-fill",
       type: "fill",

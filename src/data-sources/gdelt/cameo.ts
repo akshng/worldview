@@ -74,13 +74,21 @@ const CRIME = /COP|CRM|JUD/;
  * codes to keep CONFLICT for armed actors and route police/criminal/judicial
  * stories to NEWS ("crime / public safety").
  */
-export function refineCategory(rule: CameoRule, root: string, actorCodes: string[]): CameoRule & { subtype?: string } {
+export function refineCategory(
+  rule: CameoRule,
+  root: string,
+  actorCodes: string[],
+  actorCountries: [string, string] = ["", ""],
+): CameoRule & { subtype?: string } {
   const codes = actorCodes.filter(Boolean).join(" ");
   const armed = ARMED.test(codes);
   const crime = CRIME.test(codes) && !armed;
+  // Two different countries' actors = interstate interaction.
+  const interstate = !!actorCountries[0] && !!actorCountries[1] && actorCountries[0] !== actorCountries[1];
   const asCrime = { ...rule, category: "NEWS" as const, priority: 3, subtype: "crime / public safety" };
   if (root === "18") return armed ? rule : asCrime;
-  if ((root === "19" || root === "20") && crime) return asCrime;
+  // Violence coded without armed or interstate actors is usually crime reporting.
+  if ((root === "19" || root === "20") && (crime || (!armed && !interstate))) return asCrime;
   if (root === "17" && crime) return asCrime;
   return rule;
 }

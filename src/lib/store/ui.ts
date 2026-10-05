@@ -23,6 +23,8 @@ export interface Settings {
   defaultCategories: EventCategory[];
   showAI: boolean;
   developerMode: boolean;
+  /** Watchlist tickers (Yahoo-style symbols) */
+  watchlist: string[];
 }
 
 export interface FlyToRequest {
@@ -58,6 +60,7 @@ interface UIState {
   sidebarCollapsed: boolean;
   searchOpen: boolean;
   briefingOpen: boolean;
+  marketsOpen: boolean;
   settingsOpen: boolean;
   settingsTab: "general" | "map" | "sources" | "about";
 
@@ -82,6 +85,7 @@ interface UIState {
   setSidebarCollapsed: (v: boolean) => void;
   setSearchOpen: (v: boolean) => void;
   setBriefingOpen: (v: boolean) => void;
+  setMarketsOpen: (v: boolean) => void;
   openSettings: (tab?: UIState["settingsTab"]) => void;
   closeSettings: () => void;
   updateSettings: (patch: Partial<Settings>) => void;
@@ -96,6 +100,7 @@ const DEFAULT_SETTINGS: Settings = {
   defaultCategories: [...EVENT_CATEGORIES],
   showAI: true,
   developerMode: false,
+  watchlist: ["SPY", "QQQ", "AAPL", "NVDA"],
 };
 
 export const useUI = create<UIState>()(
@@ -118,6 +123,7 @@ export const useUI = create<UIState>()(
       sidebarCollapsed: false,
       searchOpen: false,
       briefingOpen: false,
+      marketsOpen: false,
       settingsOpen: false,
       settingsTab: "general",
       settings: DEFAULT_SETTINGS,
@@ -147,6 +153,7 @@ export const useUI = create<UIState>()(
       setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
       setSearchOpen: (searchOpen) => set({ searchOpen }),
       setBriefingOpen: (briefingOpen) => set({ briefingOpen }),
+      setMarketsOpen: (marketsOpen) => set({ marketsOpen }),
       openSettings: (tab) => set((s) => ({ settingsOpen: true, settingsTab: tab ?? s.settingsTab })),
       closeSettings: () => set({ settingsOpen: false }),
       updateSettings: (patch) => set((s) => ({ settings: { ...s.settings, ...patch } })),

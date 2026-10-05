@@ -57,7 +57,7 @@ export function parseFaa(raw: FaaRaw, ctx: ParseContext): ParseResult {
       country: ap.country,
       city: ap.city,
       timestamp: updatedAt,
-      metrics: { airport: d.airport, reason: d.reason || null, delay: d.detail || null },
+      metrics: { airport: d.airport, reason: d.reason || null, delay: d.detail || null, large_airport: ap.large },
       entities: [{ type: "LOCATION", name: ap.name, code: d.airport }],
       source: {
         id: `faa:${externalId}`,

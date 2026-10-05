@@ -47,6 +47,8 @@ export function parseExportTsv(text: string): GdeltEventRow[] {
       actor2Name: c[16],
       actor1Type: c[12],
       actor2Type: c[22],
+      actor1Country: c[7],
+      actor2Country: c[17],
       isRootEvent: c[25] === "1",
       eventCode: c[26],
       eventBaseCode: c[27],

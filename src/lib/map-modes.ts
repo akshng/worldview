@@ -1,7 +1,7 @@
 /** Visualisation modes. A mode can focus event categories and/or add a live layer. */
 import type { EventCategory } from "@/types/events";
 
-export const MAP_MODE_IDS = ["events", "heatmap", "density", "weather", "fires", "earthquakes", "conflict", "aviation", "maritime"] as const;
+export const MAP_MODE_IDS = ["events", "heatmap", "density", "weather", "fires", "earthquakes", "conflict", "aviation", "maritime", "markets"] as const;
 export type MapModeId = (typeof MAP_MODE_IDS)[number];
 
 export interface MapModeMeta {
@@ -11,7 +11,7 @@ export interface MapModeMeta {
   /** When set, only these categories are shown (overrides layer toggles) */
   categories: EventCategory[] | null;
   /** Live layer to load for this mode */
-  liveLayer: "weather-radar" | "aviation" | "maritime" | null;
+  liveLayer: "weather-radar" | "aviation" | "maritime" | "markets" | null;
 }
 
 export const MAP_MODES: MapModeMeta[] = [
@@ -24,6 +24,13 @@ export const MAP_MODES: MapModeMeta[] = [
   { id: "conflict", label: "Conflict", description: "Conflict and protest reporting", categories: ["CONFLICT", "PROTEST"], liveLayer: null },
   { id: "aviation", label: "Aviation", description: "Live aircraft positions over events", categories: null, liveLayer: "aviation" },
   { id: "maritime", label: "Maritime", description: "Live vessel positions over events", categories: null, liveLayer: "maritime" },
+  {
+    id: "markets",
+    label: "Markets",
+    description: "Countries coloured by their main stock index's daily move, with market-relevant events",
+    categories: ["CONFLICT", "POLITICS", "BUSINESS", "MARKETS", "EARTHQUAKE", "WEATHER", "INFRASTRUCTURE", "AVIATION", "MARITIME", "TECHNOLOGY", "HEALTH", "DISASTER", "FLOOD"],
+    liveLayer: "markets",
+  },
 ];
 
 export function modeMeta(id: MapModeId): MapModeMeta {

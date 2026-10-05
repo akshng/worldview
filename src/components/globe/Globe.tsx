@@ -62,6 +62,8 @@ export default function Globe({ window: win, live }: GlobeProps) {
   const areaIds = useRef(new Map<string, number>());
   const selectedAreaFid = useRef<number | null>(null);
   const [ready, setReady] = useState(false);
+  const [countriesLoaded, setCountriesLoaded] = useState(false);
+  const marketByCountry = useRef(new Map<string, { name: string; changePct: number }>());
   /** The map instance whose style finished loading (guards StrictMode/HMR remounts). */
   const loadedMap = useRef<MlMap | null>(null);
   const liveMap = () => (mapRef.current && loadedMap.current === mapRef.current ? mapRef.current : null);
@@ -144,6 +146,7 @@ export default function Globe({ window: win, live }: GlobeProps) {
         .then((fc: GeoJSON.FeatureCollection) => {
           for (const f of fc.features) countryIds.current.set(String(f.properties?.code), Number(f.id));
           (map.getSource(COUNTRIES_SOURCE) as GeoJSONSource | undefined)?.setData(fc);
+          setCountriesLoaded(true);
         })
         .catch(() => {});
 
@@ -217,6 +220,16 @@ export default function Globe({ window: win, live }: GlobeProps) {
       if (useUI.getState().hoveredEventId !== hoveredEvent) useUI.getState().setHovered(hoveredEvent);
       // Country hover
       const country = top ? undefined : map.queryRenderedFeatures(e.point, { layers: map.getLayer("country-fill") ? ["country-fill"] : [] })[0];
+      const idx = country && useUI.getState().mapMode === "markets" ? marketByCountry.current.get(String(country.properties?.code)) : undefined;
+      if (idx) {
+        const up = idx.changePct >= 0;
+        popupLines(
+          [e.lngLat.lng, e.lngLat.lat],
+          { text: String(country!.properties?.name ?? ""), color: up ? "#3f8de8" : "#e5534b" },
+          `${idx.name} ${up ? "▲" : "▼"} ${up ? "+" : ""}${idx.changePct.toFixed(2)}%`,
+          "Daily change vs previous close (delayed)",
+        );
+      }
       const fid = country?.id !== undefined ? Number(country.id) : null;
       if (fid !== hoveredCountry.current) {
         if (hoveredCountry.current !== null) map.setFeatureState({ source: COUNTRIES_SOURCE, id: hoveredCountry.current }, { hover: false });
@@ -347,6 +360,25 @@ export default function Globe({ window: win, live }: GlobeProps) {
         : EMPTY_FC,
     );
   }, [live, ready]);
+
+  // ---- markets choropleth -----------------------------------------------------
+  const marketStateIds = useRef<number[]>([]);
+  useEffect(() => {
+    const map = liveMap();
+    if (!ready || !map) return;
+    for (const fid of marketStateIds.current) map.setFeatureState({ source: COUNTRIES_SOURCE, id: fid }, { chg: null });
+    marketStateIds.current = [];
+    marketByCountry.current.clear();
+    if (mapMode !== "markets" || live?.layerId !== "markets") return;
+    const data = live.data as { countries: Array<{ country: string; name: string; changePct: number | null }> };
+    for (const c of data.countries) {
+      const fid = countryIds.current.get(c.country);
+      if (fid === undefined || c.changePct === null) continue;
+      marketByCountry.current.set(c.country, { name: c.name, changePct: c.changePct });
+      map.setFeatureState({ source: COUNTRIES_SOURCE, id: fid }, { chg: c.changePct });
+      marketStateIds.current.push(fid);
+    }
+  }, [live, mapMode, ready, countriesLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- weather radar --------------------------------------------------------
   const radar = live?.layerId === "weather-radar" ? (live.data as RadarData) : null;

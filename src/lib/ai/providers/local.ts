@@ -10,8 +10,8 @@ import { existsSync, readdirSync } from "node:fs";
 import type { WorldEvent } from "@/types/events";
 import type { DailyBriefing } from "@/lib/briefing";
 import { EVENT_CATEGORIES } from "@/types/events";
-import { CommandIntentSchema, type AIProvider, type CommandIntent } from "../types";
-import { BRIEFING_SYSTEM, COMMAND_SYSTEM, INTERPRET_SYSTEM, briefingPayload, interpretPayload } from "../prompts";
+import { CommandIntentSchema, type AIProvider, type CommandIntent, type MarketBriefInput } from "../types";
+import { BRIEFING_SYSTEM, COMMAND_SYSTEM, INTERPRET_SYSTEM, MARKET_SYSTEM, briefingPayload, interpretPayload, marketPayload } from "../prompts";
 
 export const DEFAULT_LOCAL_MODEL = "hf:unsloth/Qwen3-4B-Instruct-2507-GGUF:Q4_K_M";
 const CONTEXT_SIZE = 12_288;
@@ -124,6 +124,12 @@ export class LocalProvider implements AIProvider {
     const text = await this.run((_, s) => s.prompt(briefingPayload(briefing, 220), { maxTokens: 900, temperature: 0.3 }), BRIEFING_SYSTEM);
     if (!text.trim()) throw new Error("The local model returned no text.");
     return text.trim().slice(0, 8000);
+  }
+
+  async writeMarketBrief(input: MarketBriefInput): Promise<string> {
+    const text = await this.run((_, s) => s.prompt(marketPayload(input), { maxTokens: 900, temperature: 0.2 }), MARKET_SYSTEM);
+    if (!text.trim()) throw new Error("The local model returned no text.");
+    return text.trim().slice(0, 5000);
   }
 
   async parseCommand(query: string): Promise<CommandIntent> {

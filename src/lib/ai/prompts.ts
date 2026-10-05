@@ -69,3 +69,28 @@ export function briefingPayload(b: DailyBriefing, summaryChars = 400) {
     category_counts_today_vs_yesterday: b.comparison,
   })}`;
 }
+
+export const MARKET_SYSTEM = `You write a short, factual market wrap for a world-events dashboard.
+You receive JSON with current quotes (price, change, % change) and a list of world events that the application has linked to instruments by simple rules.
+Write 2–4 short paragraphs of plain prose:
+- Describe the largest moves across indices, rates, FX, commodities and crypto using ONLY the numbers given.
+- Mention events only as context that coincides with moves ("…while reports of X…"). Never claim an event caused a move.
+- Do NOT give investment advice, recommendations, price targets, predictions, or buy/sell/hold language.
+- Yield changes are in basis points (bp); write them as "bp", never as percent.
+- Keep it under 250 words. If data is missing or stale, say so briefly.`;
+
+export function marketPayload(input: import("./types").MarketBriefInput) {
+  const q = (list: import("@/lib/finance/types").Quote[]) =>
+    list.filter((x) => x.price !== null).map((x) => ({ name: x.name, price: x.price, change: x.change, change_pct: x.changePct, unit: x.unit }));
+  const g = input.snapshot.groups;
+  return `Market data (JSON):\n${JSON.stringify({
+    as_of: input.snapshot.generatedAt,
+    indices: q(g.indices),
+    // Yields are levels in percent; their change is given in basis points to avoid "%" confusion.
+    rates: g.rates.filter((x) => x.price !== null).map((x) => ({ name: x.name, yield_percent: x.price, change_bp: x.change === null ? null : Math.round(x.change * 100) })),
+    fx: q(g.fx),
+    commodities: q(g.commodities),
+    crypto: q(g.crypto),
+    linked_events: input.movers.slice(0, 12),
+  })}`;
+}

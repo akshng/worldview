@@ -72,6 +72,9 @@ Settings → General → Developer mode adds: recent ingestion runs (received/ne
 | `search.test.ts` | Intent parsing, location search, solar terminator |
 | `repository.test.ts` | Repository contract run against **both** the memory store and Postgres (PGlite) |
 | `briefing.test.ts` | NEW/DEVELOPING/ONGOING/RESOLVED classification, ranking, day comparison |
+| `geo-accuracy.test.ts` | Headline place checks, US namesake towns, offshore countries, interior points, hulls |
+| `new-sources.test.ts` | IODA, FAA, tsunami, WHO, SEC parsers; airport and address lookups |
+| `finance.test.ts` | Market exposure rules, mover diversity, Treasury CSV parsing |
 | `ai.test.ts` | AI command handling with a mock model: schema validation, gazetteer-only place resolution, narrative cache |
 
 Parsers are pure functions, so new connectors are tested without network access.

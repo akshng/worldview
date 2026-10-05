@@ -67,7 +67,7 @@ export function parseGdelt(raw: GdeltRaw, ctx: ParseContext): ParseResult {
   for (const file of raw.files) {
     for (const r of file.rows) {
       const base = cameoRule(r.eventRootCode, r.eventBaseCode);
-      const rule = base && refineCategory(base, r.eventRootCode, [r.actor1Code, r.actor2Code, r.actor1Type, r.actor2Type]);
+      const rule = base && refineCategory(base, r.eventRootCode, [r.actor1Code, r.actor2Code, r.actor1Type, r.actor2Type], [r.actor1Country, r.actor2Country]);
       const url = safeUrl(r.sourceUrl);
       if (
         !rule ||
@@ -79,7 +79,7 @@ export function parseGdelt(raw: GdeltRaw, ctx: ParseContext): ParseResult {
         (r.lat === 0 && r.lon === 0) ||
         !(r.numArticles >= rule.minArticles) ||
         // Single-article, single-source violent codes are the noisiest part of GDELT.
-        (rule.category === "CONFLICT" && r.numSources < 2 && r.numArticles < 3) ||
+        (base?.category === "CONFLICT" && r.numSources < 2 && r.numArticles < 3) ||
         sqlDateMs(r.sqlDate) < minDate ||
         NON_NEWS_SECTION.test(new URL(url).pathname) ||
         /^(sports?|espn)\./i.test(new URL(url).hostname)

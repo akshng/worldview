@@ -4,8 +4,9 @@ import type { LayerSnapshot, LiveLayerProvider } from "./types";
 import { aviationLayer } from "./aviation";
 import { maritimeLayer } from "./maritime";
 import { weatherRadarLayer } from "./weather-radar";
+import { marketsLayer } from "./markets";
 
-export const LAYERS = [weatherRadarLayer, aviationLayer, maritimeLayer] as LiveLayerProvider<unknown>[];
+export const LAYERS = [weatherRadarLayer, aviationLayer, maritimeLayer, marketsLayer] as LiveLayerProvider<unknown>[];
 
 interface CacheEntry {
   snapshot: LayerSnapshot | null;

@@ -16,6 +16,7 @@ export function TopBar() {
   const setSearchOpen = useUI((s) => s.setSearchOpen);
   const openSettings = useUI((s) => s.openSettings);
   const setBriefingOpen = useUI((s) => s.setBriefingOpen);
+  const setMarketsOpen = useUI((s) => s.setMarketsOpen);
   const visibleCount = useData((s) => s.visible.length);
   const mode = useData((s) => s.mode);
   const now = useNow(15_000);
@@ -75,12 +76,15 @@ export function TopBar() {
       <div className="flex w-[260px] items-center justify-end gap-1">
         <button
           onClick={() => setSearchOpen(true)}
-          className="mr-1 flex h-8 w-44 items-center gap-2 rounded-md border border-line px-2.5 text-left text-[12px] text-faint transition-colors hover:border-line-strong hover:text-muted"
+          className="mr-1 flex h-8 w-36 items-center gap-2 rounded-md border border-line px-2.5 text-left text-[12px] text-faint transition-colors hover:border-line-strong hover:text-muted"
         >
           <SearchIcon width={14} height={14} />
           <span className="flex-1">Search</span>
           <kbd className="meta rounded border border-line px-1 text-faint">⌘K</kbd>
         </button>
+        <IconButton onClick={() => setMarketsOpen(true)} title="Markets" aria-label="Markets" className="meta px-2.5">
+          Markets
+        </IconButton>
         <IconButton onClick={() => setBriefingOpen(true)} title="Daily briefing" aria-label="Daily briefing" className="meta px-2.5">
           Briefing
         </IconButton>

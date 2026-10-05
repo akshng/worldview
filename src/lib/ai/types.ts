@@ -8,6 +8,12 @@
 import { z } from "zod";
 import { EVENT_CATEGORIES, type EventCategory, type WorldEvent } from "@/types/events";
 import type { DailyBriefing } from "@/lib/briefing";
+import type { MarketSnapshot, ExposureLink } from "@/lib/finance/types";
+
+export interface MarketBriefInput {
+  snapshot: MarketSnapshot;
+  movers: Array<{ title: string; status: string; importance: number; where: string | null; exposure: ExposureLink[] }>;
+}
 
 /**
  * Structured interpretation of a natural-language command. The model only
@@ -33,6 +39,8 @@ export interface AIProvider {
   writeBriefing(briefing: DailyBriefing): Promise<string>;
   /** Natural-language query → structured filters (no facts). */
   parseCommand(query: string): Promise<CommandIntent>;
+  /** Descriptive summary of market moves alongside world events. Never advice. */
+  writeMarketBrief(input: MarketBriefInput): Promise<string>;
 }
 
 /**

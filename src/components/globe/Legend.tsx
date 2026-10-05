@@ -6,7 +6,7 @@ import { modeMeta } from "@/lib/map-modes";
 import { formatClock, relativeTime } from "@/lib/time";
 import type { LiveLayerResponse } from "@/lib/client/use-live-layer";
 import type { RadarData } from "@/layers/weather-radar";
-import { ALTITUDE_STOPS, DENSITY_STOPS, DEPTH_STOPS } from "./layers";
+import { ALTITUDE_STOPS, DENSITY_STOPS, DEPTH_STOPS, MARKET_STOPS } from "./layers";
 
 function Swatches({ stops, unit, format = (v: number) => v.toLocaleString("en-US") }: { stops: Array<[number, string]>; unit: string; format?: (v: number) => string }) {
   return (
@@ -48,6 +48,21 @@ export function Legend({ live }: { live: { data: LiveLayerResponse<unknown> | nu
           <>
             <Swatches stops={DEPTH_STOPS} unit="km depth" />
             <div className="meta normal-case tracking-normal text-faint">Circle size grows with magnitude (USGS / GDACS)</div>
+          </>
+        )}
+        {mode === "markets" && (
+          <>
+            <div className="flex h-2 overflow-hidden rounded-full" aria-label="Daily index change from −3% (red) to +3% (blue)">
+              {MARKET_STOPS.map(([v, c]) => (
+                <span key={v} className="flex-1" style={{ background: c }} />
+              ))}
+            </div>
+            <div className="meta flex justify-between normal-case tracking-normal text-faint">
+              <span>▼ −3%</span>
+              <span>0</span>
+              <span>▲ +3%</span>
+            </div>
+            <div className="meta normal-case tracking-normal text-faint">Hover a country for its index. Not investment advice.</div>
           </>
         )}
         {mode === "fires" && <Swatches stops={[[50, "#ffd43b"], [500, "#ff922b"], [3000, "#ff4d1a"], [15000, "#d6001c"]]} unit="MW radiative power" />}
@@ -97,7 +112,7 @@ export function Legend({ live }: { live: { data: LiveLayerResponse<unknown> | nu
           ) : (
             <>
               <div className={clsx("meta normal-case tracking-normal", live.data.stale ? "text-warn" : "text-muted")}>
-                {live.data.layerId === "weather-radar" ? `${past.length} frames` : `${live.data.count.toLocaleString("en-US")} ${live.data.layerId === "aviation" ? "aircraft" : "vessels"}`} · observed{" "}
+                {live.data.layerId === "weather-radar" ? `${past.length} frames` : `${live.data.count.toLocaleString("en-US")} ${live.data.layerId === "aviation" ? "aircraft" : live.data.layerId === "markets" ? "country indices" : "vessels"}`} · observed{" "}
                 {relativeTime(live.data.observedAt)}
                 {live.data.stale && " (stale — upstream unavailable)"}
               </div>

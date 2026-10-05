@@ -9,6 +9,7 @@ import { CATEGORIES } from "@/lib/categories";
 import { CategoryLabel, ImportanceMeter, SafeLink, SectionTitle, SimulatedBadge, StatusBadge } from "@/components/ui/primitives";
 import { CloseIcon, ExternalIcon, SparkIcon } from "@/components/ui/icons";
 import { focusEvent } from "@/components/event-feed/EventFeed";
+import { ExposureChip } from "@/components/markets/MarketsPanel";
 import type { EventMetrics, WorldEvent } from "@/types/events";
 
 const METRIC_LABELS: Record<string, string> = {
@@ -106,13 +107,13 @@ export function EventPanel() {
       <div className="scroll-thin overflow-y-auto">
         {!ev && !error && <div className="p-6 text-[12.5px] text-muted">Loading…</div>}
         {error && <div className="p-6 text-[12.5px] text-danger">{error}</div>}
-        {ev && <EventBody ev={ev} related={data!.related} showAI={showAI} developer={developer} />}
+        {ev && <EventBody ev={ev} related={data!.related} exposure={data!.marketExposure ?? []} showAI={showAI} developer={developer} />}
       </div>
     </div>
   );
 }
 
-function EventBody({ ev, related, showAI, developer }: { ev: WorldEvent; related: EventDetailResponse["related"]; showAI: boolean; developer: boolean }) {
+function EventBody({ ev, related, exposure, showAI, developer }: { ev: WorldEvent; related: EventDetailResponse["related"]; exposure: EventDetailResponse["marketExposure"]; showAI: boolean; developer: boolean }) {
   const metrics = Object.entries(ev.metrics).filter(([, v]) => v !== null && v !== "" && v !== undefined);
   return (
     <>
@@ -272,6 +273,8 @@ function EventBody({ ev, related, showAI, developer }: { ev: WorldEvent; related
         </section>
       )}
 
+      {exposure.length > 0 && <MarketExposure links={exposure} />}
+
       {/* AI — visually separated, never mixed with facts */}
       {showAI && <AIInterpretation ev={ev} />}
 
@@ -285,6 +288,32 @@ function EventBody({ ev, related, showAI, developer }: { ev: WorldEvent; related
         </section>
       )}
     </>
+  );
+}
+
+function MarketExposure({ links }: { links: EventDetailResponse["marketExposure"] }) {
+  const [quotes, setQuotes] = useState<Map<string, import("@/lib/client/api").Quote>>(new Map());
+  const key = links.map((l) => l.symbol).join(",");
+  useEffect(() => {
+    const ctrl = new AbortController();
+    api.quotes(key.split(","), ctrl.signal).then((r) => setQuotes(new Map(r.quotes.map((q) => [q.symbol, q])))).catch(() => {});
+    return () => ctrl.abort();
+  }, [key]);
+  return (
+    <section className="border-t border-line px-4 py-3.5">
+      <SectionTitle right={<span className="meta text-faint">Rule-based · not advice</span>}>Market exposure</SectionTitle>
+      <ul className="space-y-1.5">
+        {links.map((l) => (
+          <li key={l.symbol} className="flex items-start justify-between gap-3 text-[12px]">
+            <div className="min-w-0">
+              <div className="text-fg/90">{l.name}</div>
+              <div className="text-[11px] text-faint">{l.rationale}</div>
+            </div>
+            <ExposureChip link={{ ...l, name: l.symbol }} quote={quotes.get(l.symbol)} />
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

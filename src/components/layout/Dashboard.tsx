@@ -19,6 +19,7 @@ import { SearchPalette } from "@/components/search/SearchPalette";
 import { SettingsModal } from "@/components/settings/SettingsModal";
 import { Legend } from "@/components/globe/Legend";
 import { BriefingModal } from "@/components/briefing/BriefingModal";
+import { MarketsPanel } from "@/components/markets/MarketsPanel";
 import { modeMeta } from "@/lib/map-modes";
 import { useLiveLayer } from "@/lib/client/use-live-layer";
 
@@ -97,6 +98,7 @@ export function Dashboard() {
       <SearchPalette />
       <SettingsModal />
       <BriefingModal />
+      <MarketsPanel />
     </div>
   );
 }

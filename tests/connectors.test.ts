@@ -88,9 +88,13 @@ describe("GDELT parser", () => {
   it("routes police/crime stories away from CONFLICT", () => {
     const crime = parseExportTsv(gdeltLine({ 0: "8", 5: "USACOP", 6: "POLICE", 12: "COP", 15: "USACRM", 16: "GUNMAN", 22: "CRM", 26: "190", 27: "190", 28: "19", 32: "3", 33: "5", 60: "https://n.example/police-say-gunman-opened-fire-downtown" }));
     const war = parseExportTsv(gdeltLine({ 0: "9", 5: "RUSMIL", 6: "RUSSIAN ARMY", 12: "MIL", 26: "195", 27: "195", 28: "19", 32: "3", 33: "5", 60: "https://n.example/drone-strikes-hit-energy-facilities-overnight" }));
-    const cats = parseGdelt({ files: [{ url: "x", rows: [...crime, ...war] }] }, ctx).candidates.map((c) => [c.type, c.subtype]);
-    expect(cats).toContainEqual(["NEWS", "crime / public safety"]);
-    expect(cats).toContainEqual(["CONFLICT", "aerial attack"]);
+    const unlabeled = parseExportTsv(gdeltLine({ 0: "10", 5: "", 6: "", 15: "", 16: "", 26: "190", 27: "190", 28: "19", 32: "3", 33: "5", 60: "https://n.example/man-shot-during-robbery-downtown" }));
+    const interstate = parseExportTsv(gdeltLine({ 0: "11", 5: "ISR", 6: "ISRAEL", 7: "ISR", 15: "LBN", 16: "LEBANON", 17: "LBN", 26: "190", 27: "190", 28: "19", 32: "3", 33: "5", 60: "https://n.example/israel-lebanon-border-exchange-of-fire" }));
+    const cats = parseGdelt({ files: [{ url: "x", rows: [...crime, ...war, ...unlabeled, ...interstate] }] }, ctx).candidates.map((c) => [c.type, c.subtype, c.source.title]);
+    expect(cats.find((c) => String(c[2]).startsWith("Man shot"))?.[0]).toBe("NEWS");
+    expect(cats.find((c) => String(c[2]).startsWith("Israel lebanon"))?.[0]).toBe("CONFLICT");
+    expect(cats.map((c) => [c[0], c[1]])).toContainEqual(["NEWS", "crime / public safety"]);
+    expect(cats.map((c) => [c[0], c[1]])).toContainEqual(["CONFLICT", "aerial attack"]);
   });
 
   it("derives readable titles from URL slugs and ignores ids", () => {
