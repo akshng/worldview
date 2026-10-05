@@ -56,6 +56,21 @@ export const INSTRUMENTS: Instrument[] = [
   { symbol: "USDBRL=X", name: "USD/BRL", group: "fx", provider: "yahoo" },
   { symbol: "USDKRW=X", name: "USD/KRW", group: "fx", provider: "yahoo" },
 
+  { symbol: "SHY", name: "1–3 yr Treasuries", group: "bonds", provider: "yahoo" },
+  { symbol: "IEF", name: "7–10 yr Treasuries", group: "bonds", provider: "yahoo" },
+  { symbol: "TLT", name: "20+ yr Treasuries", group: "bonds", provider: "yahoo" },
+  { symbol: "TIP", name: "TIPS (inflation-linked)", group: "bonds", provider: "yahoo" },
+  { symbol: "LQD", name: "Investment-grade corporate", group: "bonds", provider: "yahoo" },
+  { symbol: "HYG", name: "High-yield corporate", group: "bonds", provider: "yahoo" },
+  { symbol: "EMB", name: "Emerging-market bonds", group: "bonds", provider: "yahoo" },
+  { symbol: "MUB", name: "Municipal bonds", group: "bonds", provider: "yahoo" },
+
+  { symbol: "^VIX9D", name: "VIX 9-day", group: "volatility", provider: "yahoo" },
+  { symbol: "^VIX3M", name: "VIX 3-month", group: "volatility", provider: "yahoo" },
+  { symbol: "^VVIX", name: "VVIX (vol of VIX)", group: "volatility", provider: "yahoo" },
+  { symbol: "^OVX", name: "Oil volatility (OVX)", group: "volatility", provider: "yahoo" },
+  { symbol: "^GVZ", name: "Gold volatility (GVZ)", group: "volatility", provider: "yahoo" },
+
   { symbol: "CL=F", name: "WTI crude", group: "commodities", provider: "yahoo" },
   { symbol: "BZ=F", name: "Brent crude", group: "commodities", provider: "yahoo" },
   { symbol: "NG=F", name: "Natural gas", group: "commodities", provider: "yahoo" },

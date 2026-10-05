@@ -77,7 +77,7 @@ export async function getMarketSnapshot(): Promise<MarketSnapshot> {
       INSTRUMENTS.filter((i) => i.provider === "treasury").map((i) => failed(i.symbol, i.name, "rates", err)),
     ),
   ]);
-  const groups: MarketSnapshot["groups"] = { indices: [], sectors: [], rates, fx: [], commodities: [], crypto: [] };
+  const groups: MarketSnapshot["groups"] = { indices: [], sectors: [], rates, fx: [], bonds: [], volatility: [], commodities: [], crypto: [] };
   for (const q of quotes) if (q.group !== "watchlist" && q.group !== "rates") groups[q.group].push(q);
   return { generatedAt: new Date().toISOString(), groups, disclaimer: DISCLAIMER };
 }

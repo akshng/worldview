@@ -1,5 +1,5 @@
 /** Market data types (client + server safe). */
-export type InstrumentGroup = "indices" | "sectors" | "rates" | "fx" | "commodities" | "crypto" | "watchlist";
+export type InstrumentGroup = "indices" | "sectors" | "rates" | "fx" | "bonds" | "volatility" | "commodities" | "crypto" | "watchlist";
 
 export interface Quote {
   symbol: string;

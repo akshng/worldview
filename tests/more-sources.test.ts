@@ -152,3 +152,47 @@ describe("NIFC wildfires", () => {
     expect(valid(r.candidates)).toBe(true);
   });
 });
+
+import { parseFeedXml, decodeXmlText } from "@/data-sources/news-rss/client";
+import { classifyHeadline, parseNewsRss, placeFor } from "@/data-sources/news-rss/parser";
+
+describe("news RSS", () => {
+  it("reads RSS, RDF and Atom items", () => {
+    const rss = `<rss><channel><item><title><![CDATA[Floods hit Texas towns]]></title><link>https://example.com/a</link><description>&lt;p&gt;Rivers rose.&lt;/p&gt;</description><pubDate>Mon, 05 Oct 2026 10:00:00 GMT</pubDate></item></channel></rss>`;
+    const atom = `<feed><entry><title>Kyiv hit by drones</title><link href="https://example.com/b"/><updated>2026-10-05T09:00:00Z</updated><summary>x</summary></entry></feed>`;
+    expect(parseFeedXml(rss)[0]).toMatchObject({ title: "Floods hit Texas towns", link: "https://example.com/a", published: "Mon, 05 Oct 2026 10:00:00 GMT" });
+    expect(parseFeedXml(atom)[0]).toMatchObject({ title: "Kyiv hit by drones", link: "https://example.com/b" });
+    expect(decodeXmlText("Caf&#233; &amp; bar")).toBe("Café & bar");
+  });
+  it("classifies headlines conservatively", () => {
+    expect(classifyHeadline("Extreme heat warnings issued for southern California").type).toBe("DISASTER");
+    expect(classifyHeadline("Stocks rally as inflation cools").type).toBe("MARKETS");
+    expect(classifyHeadline("Russian gold floods Hong Kong as sanctions redraw bullion trade").type).not.toBe("DISASTER");
+    expect(classifyHeadline("Trump holds rally for voters").type).not.toBe("PROTEST");
+    expect(classifyHeadline("Police clash with protesters in Nairobi").type).not.toBe("NEWS");
+  });
+  it("places headlines on the most specific named place", () => {
+    expect(placeFor("Russia ramps up attacks on Kyiv infrastructure", "")?.place.name).toBe("Kyiv");
+    expect(placeFor("Extreme heat warnings issued for parts of southern California", "")?.place.name).toBe("California");
+    expect(placeFor("Turkiye and Pakistan sign defence pact", "")?.place.country.code).toBe("TR");
+    expect(placeFor("New study on sleep", "Researchers said nothing about places.")).toBeNull();
+  });
+  it("skips unlocatable and stale items and dedupes links", () => {
+    const outlet = { id: "bbc", name: "BBC News", url: "u", homepage: "h" };
+    const fresh = new Date(now - 3_600_000).toUTCString();
+    const r = parseNewsRss(
+      {
+        feeds: [{ outlet, items: [
+          { title: "Russia ramps up attacks on Kyiv infrastructure", link: "https://bbc.co.uk/1", description: "", published: fresh },
+          { title: "Russia ramps up attacks on Kyiv infrastructure", link: "https://bbc.co.uk/1", description: "", published: fresh },
+          { title: "A long headline that names nowhere at all", link: "https://bbc.co.uk/2", description: "", published: fresh },
+          { title: "Old story about Kyiv from last week", link: "https://bbc.co.uk/3", description: "", published: new Date(now - 6 * 86_400_000).toUTCString() },
+        ] }],
+      },
+      ctx,
+    );
+    expect(r.candidates).toHaveLength(1);
+    expect(r.candidates[0]).toMatchObject({ type: "CONFLICT", country: "UA", source: { sourceType: "NEWS_MEDIA", assertion: "MEDIA_REPORT" } });
+    expect(valid(r.candidates)).toBe(true);
+  });
+});

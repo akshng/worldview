@@ -23,6 +23,7 @@ const COUNTRY_NAMES: Array<{ re: RegExp; country: Country; name: string }> = [];
 const EXTRA_ALIASES: Record<string, string> = {
   "u.s.": "US", "u.s": "US", usa: "US", "united states": "US", america: "US", uk: "GB", britain: "GB", england: "GB", scotland: "GB", wales: "GB",
   russia: "RU", "south korea": "KR", "north korea": "KP", iran: "IR", syria: "SY", gaza: "PS", "west bank": "PS", palestine: "PS",
+  turkiye: "TR", "türkiye": "TR",
   uae: "AE", "dr congo": "CD", "drc": "CD", "ivory coast": "CI", "czech republic": "CZ", burma: "MM", vietnam: "VN", laos: "LA", taiwan: "TW",
 };
 function add(name: string, country: Country | undefined) {
@@ -114,6 +115,27 @@ export function countryFromPlaceText(text: string | null): Country | null {
     if (US_STATES.has(phrase) || (n === 2 && US_STATES.has(words.slice(-2).join(" ")))) return COUNTRIES.find((c) => c.code === "US") ?? null;
     const c = findCountryByName(phrase);
     if (c) return c;
+  }
+  return null;
+}
+
+// "Georgia" (country) and "Washington" (the capital, as in US politics) are too ambiguous to place on a state.
+const PLACEABLE_STATES = US_STATE_LIST.filter((st) => st !== "georgia" && st !== "washington");
+const STATE_RES = PLACEABLE_STATES.map((st) => ({ st, re: new RegExp(`(^|[^a-z])${st}(?:'?s)?([^a-z]|$)`, "i") }));
+
+/** A US state named in the text, placed at the centre of its bundled cities (region precision). */
+export function usStateInText(text: string): HeadlinePlace | null {
+  const lower = ` ${text.toLowerCase()} `;
+  const us = COUNTRIES.find((c) => c.code === "US");
+  if (!us) return null;
+  for (const { st, re } of STATE_RES) {
+    const m = re.exec(lower);
+    if (!m) continue;
+    const center = stateCenter(st);
+    if (!center) continue;
+    const name = st.replace(/\b\w/g, (x) => x.toUpperCase());
+    const idx = m.index + m[1].length;
+    return { name, country: us, city: { name, country: "US", countryName: us.name, admin1: st, lat: center[1], lon: center[0], population: 0, capital: false }, cued: CUE.test(lower.slice(Math.max(0, idx - 40), idx)), index: idx };
   }
   return null;
 }

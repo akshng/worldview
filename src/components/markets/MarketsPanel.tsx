@@ -19,12 +19,15 @@ import { QuoteTile } from "./QuoteTile";
 import { EconomicCalendar, SectorBars, YieldCurve } from "./MarketExtras";
 import { MacroDashboard } from "./MacroDashboard";
 import { StockMovers } from "./StockMovers";
+import { CryptoTable } from "./CryptoTable";
 
 const GROUPS: Array<{ id: keyof MarketSnapshot["groups"]; title: string }> = [
   { id: "indices", title: "Equity indices" },
   { id: "sectors", title: "US sectors (SPDR ETFs)" },
   { id: "rates", title: "US Treasury yields" },
   { id: "fx", title: "Currencies" },
+  { id: "bonds", title: "Bonds & credit (ETFs)" },
+  { id: "volatility", title: "Volatility" },
   { id: "commodities", title: "Commodities" },
   { id: "crypto", title: "Crypto" },
 ];
@@ -152,6 +155,12 @@ export function MarketsPanel() {
                   )}
                 </section>
               ))}
+            {snap && (
+              <section className="mb-5">
+                <h3 className="meta mb-2 text-faint">Crypto · top 20 by market cap</h3>
+                <CryptoTable />
+              </section>
+            )}
             {snap && (
               <section className="mb-5">
                 <h3 className="meta mb-2 text-faint">US economy · key indicators</h3>

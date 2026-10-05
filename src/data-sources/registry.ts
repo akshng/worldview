@@ -24,6 +24,7 @@ import { ukFloodsConnector } from "./uk-floods";
 import { nhcConnector } from "./nhc";
 import { spcReportsConnector } from "./spc-reports";
 import { nifcConnector } from "./nifc";
+import { newsRssConnector } from "./news-rss";
 import { demoConnector } from "./demo";
 
 export const CONNECTORS = [
@@ -42,6 +43,7 @@ export const CONNECTORS = [
   nifcConnector,
   gdeltConnector,
   gkgConnector,
+  newsRssConnector,
   spaceConnector,
   tsunamiConnector,
   faaConnector,
