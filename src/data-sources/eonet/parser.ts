@@ -1,6 +1,7 @@
 import type { EventCandidateInput, EventCategory } from "@/types/events";
 import { plainText, safeUrl, type ParseContext, type ParseResult } from "../types";
 import type { EonetGeometry, EonetResponse } from "./types";
+import { interiorPoint, simplifyRing } from "@/lib/geo/math";
 
 const CATEGORY: Record<string, { type: EventCategory; subtype: string }> = {
   wildfires: { type: "FIRE", subtype: "wildfire" },
@@ -37,10 +38,9 @@ function point(g: EonetGeometry): [number, number] | null {
     const [lon, lat] = g.coordinates as number[];
     return Number.isFinite(lat) && Number.isFinite(lon) ? [lon, lat] : null;
   }
-  const ring = (g.coordinates as number[][][])[0] ?? [];
-  if (!ring.length) return null;
-  const s = ring.reduce((a, [x, y]) => [a[0] + x, a[1] + y], [0, 0]);
-  return [s[0] / ring.length, s[1] / ring.length];
+  const poly = g.coordinates as [number, number][][];
+  if (!poly[0]?.length) return null;
+  return interiorPoint(poly);
 }
 
 export function parseEonet(res: EonetResponse, ctx: ParseContext): ParseResult {
@@ -77,6 +77,10 @@ export function parseEonet(res: EonetResponse, ctx: ParseContext): ParseResult {
       latitude: p[1],
       longitude: p[0],
       geoPrecision: last.type === "Point" ? "exact" : "region",
+      geometry:
+        last.type === "Polygon"
+          ? { type: "Polygon", coordinates: (last.coordinates as [number, number][][]).map((r) => simplifyRing(r, 0.01)) }
+          : null,
       locationName: null,
       timestamp: new Date(last.date).toISOString(),
       resolvedAt: e.closed ? new Date(e.closed).toISOString() : null,

@@ -46,6 +46,14 @@ const METRIC_LABELS: Record<string, string> = {
   area_km2: "Area (km²)",
 };
 
+const PRECISION_TEXT: Record<WorldEvent["geoPrecision"], string> = {
+  exact: "Exact coordinates reported by the source.",
+  city: "Located at city level — the marker is the city, not the exact spot (ring ≈ 8 km).",
+  region: "Located at region/area level (ring ≈ 40 km, or the drawn area).",
+  approximate: "Approximate location from the source (ring ≈ 120 km).",
+  country: "Only the country is known — the marker is the country's centre (ring ≈ 350 km).",
+};
+
 function formatMetric(k: string, v: EventMetrics[string]): string {
   if (v === null || v === undefined) return "—";
   if (typeof v === "boolean") return v ? "Yes" : "No";
@@ -170,7 +178,14 @@ function EventBody({ ev, related, showAI, developer }: { ev: WorldEvent; related
           </div>
           <div><dt className="meta text-faint">Region</dt><dd className="mt-0.5">{ev.region ?? "—"}</dd></div>
           {ev.city && <div><dt className="meta text-faint">City</dt><dd className="mt-0.5">{ev.city}</dd></div>}
+          {ev.geometry && <div><dt className="meta text-faint">Area</dt><dd className="mt-0.5">Drawn on the map ({ev.geometry.type === "MultiPolygon" ? `${ev.geometry.coordinates.length} parts` : "polygon"})</dd></div>}
         </dl>
+        <p className="mt-2 text-[11.5px] leading-snug text-faint">{PRECISION_TEXT[ev.geoPrecision]}</p>
+        {ev.geoNote && (
+          <p className={clsx("mt-2 rounded border px-2 py-1.5 text-[11.5px] leading-snug", ev.geoNote.method === "unverified-geocode" ? "border-warn/30 text-warn" : "border-line text-muted")}>
+            {ev.geoNote.detail}
+          </p>
+        )}
       </section>
 
       {/* TIMELINE */}

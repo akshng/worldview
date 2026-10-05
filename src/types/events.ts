@@ -153,6 +153,21 @@ export const MetricsSchema = z.record(
 );
 export type EventMetrics = z.infer<typeof MetricsSchema>;
 
+const ring = z.array(z.tuple([z.number(), z.number()])).min(4);
+/** Affected area for events that are areas (warning polygons, fire clusters). Simplified. */
+export const AreaGeometrySchema = z.union([
+  z.object({ type: z.literal("Polygon"), coordinates: z.array(ring).min(1) }),
+  z.object({ type: z.literal("MultiPolygon"), coordinates: z.array(z.array(ring).min(1)).min(1) }),
+]);
+export type AreaGeometry = z.infer<typeof AreaGeometrySchema>;
+
+/** How a location was determined/changed, shown to users for transparency. */
+export const GeoNoteSchema = z.object({
+  method: z.string(),
+  detail: z.string(),
+});
+export type GeoNote = z.infer<typeof GeoNoteSchema>;
+
 export const ImportanceFactorSchema = z.object({
   factor: z.string(),
   points: z.number(),
@@ -185,6 +200,8 @@ export const EventCandidateSchema = z.object({
   latitude: lat,
   longitude: lon,
   geoPrecision: z.enum(GEO_PRECISIONS),
+  /** Affected area, when the source provides one (point = representative interior point) */
+  geometry: AreaGeometrySchema.nullable().default(null),
   locationName: z.string().nullable().default(null),
   /** ISO 3166-1 alpha-2 if known; reverse-geocoded by the pipeline when null */
   country: z.string().nullable().default(null),
@@ -220,6 +237,9 @@ export const WorldEventSchema = z.object({
   latitude: lat,
   longitude: lon,
   geoPrecision: z.enum(GEO_PRECISIONS),
+  geometry: AreaGeometrySchema.nullable().optional(),
+  /** Set when the pipeline refined/corrected the source location */
+  geoNote: GeoNoteSchema.nullable().optional(),
   locationName: z.string().nullable(),
   country: z.string().nullable(),
   countryName: z.string().nullable(),
@@ -267,7 +287,8 @@ export type EventSummary = Pick<
   | "status"
   | "isSynthetic"
   | "metrics"
-> & { primarySource: string };
+  | "geoPrecision"
+> & { primarySource: string; area: AreaGeometry | null };
 
 export type EventRelationshipType =
   | "SAME_STORY"
@@ -304,6 +325,8 @@ export function toEventSummary(e: WorldEvent): EventSummary {
     status: e.status,
     isSynthetic: e.isSynthetic,
     metrics: e.metrics,
+    geoPrecision: e.geoPrecision,
+    area: e.geometry ?? null,
     primarySource: e.sources[0]?.sourceName ?? "Unknown",
   };
 }

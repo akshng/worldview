@@ -113,6 +113,16 @@ describe("FIRMS parser", () => {
     expect(new Date(dets[0].acquiredAt).toISOString()).toBe("2026-10-04T01:00:00.000Z");
   });
 
+  it("splits long connected fire chains into tiles instead of one giant area", () => {
+    const chain = Array.from({ length: 60 }, (_, i) => ({ lat: -5 - i * 0.05, lon: 15 + i * 0.01, frp: 20, confidence: "nominal" as const, acquiredAt: NOW, satellite: "N", daynight: "D" as const }));
+    const clusters = clusterDetections(chain);
+    expect(clusters.length).toBeGreaterThan(4);
+    for (const c of clusters) {
+      const lats = c.detections.map((d) => d.lat);
+      expect(Math.max(...lats) - Math.min(...lats)).toBeLessThanOrEqual(0.5);
+    }
+  });
+
   it("clusters adjacent hotspots and drops small/low-confidence ones", () => {
     const clusters = clusterDetections(dets);
     expect(clusters.find((c) => c.detections.length === 25)).toBeTruthy();

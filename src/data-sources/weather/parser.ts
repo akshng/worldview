@@ -1,18 +1,23 @@
 import type { EventCandidateInput, EventCategory } from "@/types/events";
 import { plainText, safeUrl, type ParseContext, type ParseResult } from "../types";
+import type { AreaGeometry } from "@/types/events";
+import { interiorPoint, mainPolygon, simplifyRing } from "@/lib/geo/math";
 import type { NwsAlertCollection, NwsAlertFeature } from "./types";
 
-/** Area-weighted-ish centroid: mean of outer-ring vertices (adequate for alert polygons). */
+type Pt = [number, number];
+
+/** Representative point guaranteed inside the (largest) warning polygon. */
 export function polygonCentroid(g: NonNullable<NwsAlertFeature["geometry"]>): [number, number] | null {
-  const rings = g.type === "Polygon" ? [g.coordinates[0]] : g.coordinates.map((p) => p[0]);
-  let x = 0, y = 0, n = 0;
-  for (const ring of rings)
-    for (const [lon, lat] of ring) {
-      x += lon;
-      y += lat;
-      n++;
-    }
-  return n ? [x / n, y / n] : null;
+  const poly = mainPolygon(g as AreaGeometry) as Pt[][];
+  if (!poly?.[0]?.length) return null;
+  return interiorPoint(poly);
+}
+
+export function simplifyArea(g: NonNullable<NwsAlertFeature["geometry"]>): AreaGeometry {
+  const simp = (poly: number[][][]) => poly.map((r) => simplifyRing(r as Pt[], 0.002));
+  return g.type === "Polygon"
+    ? { type: "Polygon", coordinates: simp(g.coordinates) }
+    : { type: "MultiPolygon", coordinates: g.coordinates.map(simp) };
 }
 
 function categorize(event: string): { type: EventCategory; subtype: string } {
@@ -55,6 +60,7 @@ export function parseNwsAlerts(fc: NwsAlertCollection, ctx: ParseContext): Parse
       latitude: c[1],
       longitude: c[0],
       geoPrecision: "region",
+      geometry: simplifyArea(f.geometry!),
       locationName: area,
       country: "US",
       timestamp: new Date(p.effective ?? p.sent).toISOString(),

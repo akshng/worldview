@@ -17,6 +17,7 @@ import {
 import { createEvent, mergeCandidate, type GeoEnrichment } from "@/lib/events/build";
 import { findBestMatch, ruleFor, type Comparable } from "@/lib/deduplication/similarity";
 import { describeNearest, getCountry, reverseGeocode } from "@/lib/geo/gazetteer";
+import { countryFromPlaceText, placesInText } from "@/lib/geo/headline-places";
 import { normalizeLon, oceanName } from "@/lib/geo/math";
 import type { EventRepository } from "@/lib/db/types";
 
@@ -58,7 +59,16 @@ export function regionFor(code: string | null, region: string | null, lon: numbe
 
 export function enrichGeo(c: EventCandidate): GeoEnrichment {
   let country = c.country ? getCountry(c.country) : undefined;
+  let note: GeoEnrichment["note"] = null;
   if (!country) country = reverseGeocode(c.latitude, c.longitude).country ?? undefined;
+  if (!country) {
+    // Offshore: use the country the source itself names ("120 km E of Miyako, Japan").
+    const named = countryFromPlaceText(c.locationName);
+    if (named) {
+      country = named;
+      note = { method: "source-text", detail: `Offshore location; associated with ${named.name} as named by the source.` };
+    }
+  }
   return {
     country: country?.code ?? c.country ?? null,
     countryName: country?.name ?? null,
@@ -66,6 +76,49 @@ export function enrichGeo(c: EventCandidate): GeoEnrichment {
     fallbackLocationName: c.locationName
       ? null
       : (describeNearest(c.latitude, c.longitude) ?? country?.name ?? oceanName(c.latitude, c.longitude)),
+    note,
+  };
+}
+
+/**
+ * Machine-geocoded news (GDELT) is cross-checked against places named in the
+ * headline. When the headline locates the story ("… in southern Syria") in a
+ * different country than the geocode, the event is moved to the named place and
+ * its precision lowered accordingly. The change is recorded in `geoNote`.
+ */
+export function refineNewsLocation(c: EventCandidate): { candidate: EventCandidate; note: GeoEnrichment["note"] } {
+  if (c.source.sourceType !== "NEWS_MEDIA" || !c.source.title) return { candidate: c, note: null };
+  const places = placesInText(c.source.title);
+  if (!places.length) return { candidate: c, note: null };
+  const geocoded = reverseGeocode(c.latitude, c.longitude).country;
+  if (geocoded && places.some((p) => p.country.code === geocoded.code)) return { candidate: c, note: null };
+  const target = places.find((p) => p.cued);
+  if (!target) {
+    return {
+      // Keep GDELT's point but stop presenting it as city-precise.
+      candidate: { ...c, geoPrecision: "approximate" },
+      note: {
+        method: "unverified-geocode",
+        detail: `Placed by GDELT geocoding at ${c.locationName ?? "this point"}; the headline mentions ${places.map((p) => p.name).join(", ")}.`,
+      },
+    };
+  }
+  const [lon, lat] = target.city ? [target.city.lon, target.city.lat] : target.country.label;
+  return {
+    candidate: {
+      ...c,
+      latitude: lat,
+      longitude: lon,
+      // A US-state centre (from "Vienna Georgia") is region-level, not city-level.
+      geoPrecision: target.city ? (target.city.population === 0 ? "region" : "city") : "country",
+      locationName: target.city ? `${target.city.name}, ${target.country.name}` : target.country.name,
+      country: target.country.code,
+      city: target.city?.name ?? null,
+    },
+    note: {
+      method: "headline",
+      detail: `GDELT geocoded this article to ${c.locationName ?? "another place"}; the headline places it ${target.city ? "in" : "in"} ${target.city ? target.city.name : target.country.name}, so it is shown there${target.city ? "" : " (country-level precision)"}.`,
+    },
   };
 }
 
@@ -129,7 +182,8 @@ export async function ingestCandidates(
       }
       continue;
     }
-    const c = normalizeCandidate(parsed.data);
+    const refined = refineNewsLocation(normalizeCandidate(parsed.data));
+    const c = refined.candidate;
 
     // 1. Same source record seen before → update in place.
     const existing = await repo.findBySourceRecord(c.source.id);
@@ -202,7 +256,8 @@ export async function ingestCandidates(
     }
 
     // 3. New event.
-    const event = createEvent(c, enrichGeo(c), now);
+    const geo = enrichGeo(c);
+    const event = createEvent(c, { ...geo, note: refined.note ?? geo.note }, now);
     await repo.save(event); // persist first: relationships reference it
     if (await linkRelated(repo, event, now)) await repo.save(event);
     stats.created++;

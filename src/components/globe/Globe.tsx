@@ -11,6 +11,8 @@ import { buildStyle, labelLayers, variantVisibility } from "./style";
 import {
   AIRCRAFT_SOURCE,
   ALL_MODE_LAYERS,
+  AREAS_SOURCE,
+  areaCollection,
   COUNTRIES_SOURCE,
   DENSITY_SOURCE,
   EVENT_POINT_LAYERS,
@@ -53,9 +55,12 @@ export default function Globe({ window: win, live }: GlobeProps) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MlMap | null>(null);
   const popupRef = useRef<Popup | null>(null);
+  const listPopupRef = useRef<Popup | null>(null);
   const hoveredCountry = useRef<number | null>(null);
   const selectedCountryFid = useRef<number | null>(null);
   const countryIds = useRef(new Map<string, number>());
+  const areaIds = useRef(new Map<string, number>());
+  const selectedAreaFid = useRef<number | null>(null);
   const [ready, setReady] = useState(false);
   /** The map instance whose style finished loading (guards StrictMode/HMR remounts). */
   const loadedMap = useRef<MlMap | null>(null);
@@ -117,10 +122,13 @@ export default function Globe({ window: win, live }: GlobeProps) {
         data: { type: "FeatureCollection", features: [] },
         cluster: true,
         clusterRadius: 42,
-        clusterMaxZoom: 6,
+        // High max zoom keeps events that share a point grouped; clicking such a
+        // cluster at high zoom opens a pick-list instead of overlapping markers.
+        clusterMaxZoom: 14,
         clusterProperties: { maxImp: ["max", ["get", "imp"]] },
       });
       map.addSource(FLAT_SOURCE, { type: "geojson", data: EMPTY_FC });
+      map.addSource(AREAS_SOURCE, { type: "geojson", data: EMPTY_FC });
       map.addSource(DENSITY_SOURCE, { type: "geojson", data: EMPTY_FC });
       map.addSource(AIRCRAFT_SOURCE, { type: "geojson", data: EMPTY_FC });
       map.addSource(VESSELS_SOURCE, { type: "geojson", data: EMPTY_FC });
@@ -231,8 +239,45 @@ export default function Globe({ window: win, live }: GlobeProps) {
       }
       if (hit?.layer.id === "ev-cluster") {
         const src = map.getSource(EVENTS_SOURCE) as GeoJSONSource;
+        const center = (hit.geometry as GeoJSON.Point).coordinates as [number, number];
         const zoom = await src.getClusterExpansionZoom(Number(hit.properties.cluster_id));
-        map.easeTo({ center: (hit.geometry as GeoJSON.Point).coordinates as [number, number], zoom: Math.min(zoom + 0.3, 12), duration: 700 });
+        if (zoom <= 14 && map.getZoom() < 9) {
+          map.easeTo({ center, zoom: Math.min(zoom + 0.3, 14), duration: 700 });
+          return;
+        }
+        // Events that share (nearly) the same point: list them instead of zooming forever.
+        const leaves = await src.getClusterLeaves(Number(hit.properties.cluster_id), 25, 0);
+        const byId = new Map(useData.getState().visible.map((ev) => [ev.id, ev]));
+        const el = document.createElement("div");
+        el.style.cssText = "max-height:260px;overflow:auto;min-width:240px";
+        const head = document.createElement("div");
+        head.className = "meta";
+        head.style.cssText = "color:var(--text-faint);margin-bottom:4px";
+        head.textContent = `${hit.properties.point_count} events at this location`;
+        el.append(head);
+        for (const leaf of leaves) {
+          const ev = byId.get(String(leaf.properties?.id));
+          if (!ev) continue;
+          const b = document.createElement("button");
+          b.style.cssText = "display:block;width:100%;text-align:left;padding:4px 2px;border-top:1px solid var(--border);font-size:12px;line-height:1.3";
+          const cat = document.createElement("span");
+          cat.className = "meta";
+          cat.style.color = CATEGORIES[ev.type].color;
+          cat.textContent = CATEGORIES[ev.type].label + "  ";
+          const t = document.createElement("span");
+          t.textContent = ev.title;
+          b.append(cat, t);
+          b.onclick = () => {
+            popupRef.current?.remove();
+            useUI.getState().selectEvent(ev.id);
+          };
+          el.append(b);
+        }
+        listPopupRef.current?.remove();
+        listPopupRef.current = new (getMaplibre().Popup)({ closeButton: true, closeOnClick: true, offset: 14, maxWidth: "320px" })
+          .setLngLat(center)
+          .setDOMContent(el)
+          .addTo(map);
         return;
       }
       if (hit?.layer.id === "density-fill") {
@@ -265,6 +310,10 @@ export default function Globe({ window: win, live }: GlobeProps) {
     (map.getSource(EVENTS_SOURCE) as GeoJSONSource | undefined)?.setData(fc);
     (map.getSource(FLAT_SOURCE) as GeoJSONSource | undefined)?.setData(fc);
     (map.getSource(DENSITY_SOURCE) as GeoJSONSource | undefined)?.setData(densityGrid(visible));
+    const areas = areaCollection(visible);
+    areaIds.current = areas.ids;
+    selectedAreaFid.current = null;
+    (map.getSource(AREAS_SOURCE) as GeoJSONSource | undefined)?.setData(areas.fc);
   }, [visible, win, ready]);
 
   // ---- live layers (aircraft / vessels) ------------------------------------
@@ -372,7 +421,11 @@ export default function Globe({ window: win, live }: GlobeProps) {
     const map = liveMap();
     if (!ready || !map) return;
     map.setFilter("ev-selected", ["==", ["get", "id"], selectedEventId ?? "__none__"]);
-  }, [selectedEventId, ready]);
+    if (selectedAreaFid.current !== null) map.setFeatureState({ source: AREAS_SOURCE, id: selectedAreaFid.current }, { selected: false });
+    const fid = selectedEventId ? areaIds.current.get(selectedEventId) : undefined;
+    if (fid !== undefined) map.setFeatureState({ source: AREAS_SOURCE, id: fid }, { selected: true });
+    selectedAreaFid.current = fid ?? null;
+  }, [selectedEventId, visible, ready]);
 
   useEffect(() => {
     const map = liveMap();

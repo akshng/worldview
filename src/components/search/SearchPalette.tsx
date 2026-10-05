@@ -43,9 +43,6 @@ export function SearchPalette() {
     return () => window.removeEventListener("keydown", onKey);
   }, [setOpen]);
 
-  useEffect(() => {
-    if (open) setTimeout(() => input.current?.focus(), 10);
-  }, [open]);
 
   // Debounced search
   useEffect(() => {
@@ -167,6 +164,7 @@ export function SearchPalette() {
           <SearchIcon className="text-faint" />
           <input
             ref={input}
+            autoFocus
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={onKeyDown}

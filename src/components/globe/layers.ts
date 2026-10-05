@@ -16,6 +16,7 @@ export const EVENTS_SOURCE = "events";
 export const FLAT_SOURCE = "events-flat";
 export const DENSITY_SOURCE = "density";
 export const AIRCRAFT_SOURCE = "aircraft";
+export const AREAS_SOURCE = "areas";
 export const VESSELS_SOURCE = "vessels";
 export const COUNTRIES_SOURCE = "countries";
 export const NIGHT_SOURCE = "night";
@@ -39,7 +40,7 @@ const tierColor = (prop: ExpressionSpecification): ExpressionSpecification => [
   "#ff3b4e",
 ];
 
-const CLUSTERED = ["ev-cluster", "ev-cluster-count", "ev-halo", "ev-point"];
+const CLUSTERED = ["area-fill", "area-line", "ev-uncertainty", "ev-cluster", "ev-cluster-count", "ev-halo", "ev-point"];
 
 /** Layers visible in each mode (everything else in ALL_MODE_LAYERS is hidden). */
 export const MODE_LAYERS: Record<MapMode, string[]> = {
@@ -47,7 +48,7 @@ export const MODE_LAYERS: Record<MapMode, string[]> = {
   heatmap: ["ev-heat"],
   density: ["density-fill", "density-line"],
   weather: CLUSTERED, // + radar rasters managed by the Globe
-  fires: ["fire-glow", "fire-point"],
+  fires: ["area-fill", "area-line", "fire-glow", "fire-point"],
   earthquakes: ["eq-point"],
   conflict: CLUSTERED,
   aviation: [...CLUSTERED, "aircraft"],
@@ -91,8 +92,31 @@ const interpColor = (prop: ExpressionSpecification, stops: Array<[number, string
   ["interpolate", ["linear"], prop, ...stops.flatMap(([v, c]) => [v, c])] as unknown as ExpressionSpecification;
 
 /** Mode-specific layers (added below the clustered event layers). */
+/** Approximate location uncertainty (km) per precision class, drawn as a ring. */
+export const UNCERTAINTY_KM: Record<string, number> = { exact: 0, city: 8, region: 40, approximate: 120, country: 350 };
+
 export function modeLayers(): LayerSpecification[] {
   return [
+    {
+      id: "area-fill",
+      type: "fill",
+      source: AREAS_SOURCE,
+      paint: {
+        "fill-color": categoryColor,
+        "fill-opacity": ["case", ["boolean", ["feature-state", "selected"], false], 0.28, 0.1],
+      },
+    },
+    {
+      id: "area-line",
+      type: "line",
+      source: AREAS_SOURCE,
+      minzoom: 2.5,
+      paint: {
+        "line-color": categoryColor,
+        "line-opacity": ["case", ["boolean", ["feature-state", "selected"], false], 0.95, 0.45],
+        "line-width": ["case", ["boolean", ["feature-state", "selected"], false], 2, 0.8],
+      },
+    },
     {
       id: "density-fill",
       type: "fill",
@@ -289,6 +313,23 @@ export function eventLayers(): LayerSpecification[] {
       paint: { "text-color": "#eef1f5" },
     },
     {
+      // Location uncertainty: ring radius ≈ km of uncertainty at the current zoom.
+      id: "ev-uncertainty",
+      type: "circle",
+      source: EVENTS_SOURCE,
+      minzoom: 3,
+      filter: ["all", ["!", ["has", "point_count"]], [">", ["get", "uncpx0"], 0]],
+      paint: {
+        "circle-radius": ["interpolate", ["exponential", 2], ["zoom"], 0, ["get", "uncpx0"], 20, ["*", ["get", "uncpx0"], 1048576]],
+        "circle-color": categoryColor,
+        "circle-opacity": 0.04,
+        "circle-stroke-color": categoryColor,
+        "circle-stroke-opacity": 0.35,
+        "circle-stroke-width": 1,
+        "circle-pitch-alignment": "map",
+      },
+    },
+    {
       id: "ev-halo",
       type: "circle",
       source: EVENTS_SOURCE,
@@ -417,6 +458,9 @@ export function toFeatureCollection(
     features: events.map((e) => {
       const t = Math.min(Date.parse(e.timestamp), window.to);
       const fresh = Math.max(0, Math.min(1, (t - window.from) / span));
+      // Areas are drawn as polygons, so only point events get an uncertainty ring.
+      const uncKm = e.area ? 0 : (UNCERTAINTY_KM[e.geoPrecision] ?? 0);
+      const uncpx0 = uncKm / (78.2715 * Math.max(Math.cos((e.latitude * Math.PI) / 180), 0.05));
       return {
         type: "Feature",
         geometry: { type: "Point", coordinates: [e.longitude, e.latitude] },
@@ -429,8 +473,22 @@ export function toFeatureCollection(
           frp: typeof e.metrics.frp_total_mw === "number" ? e.metrics.frp_total_mw : null,
           title: e.title.length > 60 ? `${e.title.slice(0, 57)}…` : e.title,
           op: 0.5 + 0.5 * fresh,
+          uncpx0,
         },
       };
     }),
   };
+}
+
+/** Polygons for area events (warning areas, fire footprints). Feature id = event index for feature-state. */
+export function areaCollection(events: EventSummary[]): { fc: GeoJSON.FeatureCollection; ids: Map<string, number> } {
+  const ids = new Map<string, number>();
+  const features: GeoJSON.Feature[] = [];
+  for (const e of events) {
+    if (!e.area) continue;
+    const fid = features.length + 1;
+    ids.set(e.id, fid);
+    features.push({ type: "Feature", id: fid, properties: { id: e.id, type: e.type }, geometry: e.area as GeoJSON.Geometry });
+  }
+  return { fc: { type: "FeatureCollection", features }, ids };
 }

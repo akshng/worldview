@@ -116,7 +116,9 @@ export function parseGdelt(raw: GdeltRaw, ctx: ParseContext): ParseResult {
     const host = new URL(url).hostname.replace(/^www\./, "");
     const label = cameoLabel(r.eventBaseCode, r.eventRootCode);
     const place = r.geoName.trim();
-    const reportedAt = stampToIso(r.dateAdded) ?? ctx.retrievedAt;
+    // File stamps can run slightly ahead of the clock; never report from the future.
+    const stamp = stampToIso(r.dateAdded);
+    const reportedAt = stamp && Date.parse(stamp) <= Date.parse(ctx.retrievedAt) ? stamp : ctx.retrievedAt;
     const actors = [...g.actors].slice(0, 4);
     const derivedTitle = titleFromUrl(url);
     const summary =

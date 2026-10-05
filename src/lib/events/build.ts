@@ -12,6 +12,8 @@ export interface GeoEnrichment {
   region: string | null;
   /** Used when the candidate has no location name of its own */
   fallbackLocationName: string | null;
+  /** Explanation when the pipeline refined the location */
+  note?: { method: string; detail: string } | null;
 }
 
 const AUTHORITY: Record<SourceAssertion, number> = {
@@ -56,6 +58,8 @@ export function createEvent(c: EventCandidate, geo: GeoEnrichment, now = Date.no
     latitude: c.latitude,
     longitude: c.longitude,
     geoPrecision: c.geoPrecision,
+    geometry: c.geometry ?? null,
+    geoNote: geo.note ?? null,
     locationName: c.locationName ?? geo.fallbackLocationName,
     country: c.country ?? geo.country,
     countryName: geo.countryName,
@@ -141,6 +145,7 @@ export function mergeCandidate(event: WorldEvent, c: EventCandidate, now = Date.
     next.latitude = c.latitude;
     next.longitude = c.longitude;
     next.geoPrecision = c.geoPrecision;
+    if (c.geometry) next.geometry = c.geometry;
     next.locationName = c.locationName ?? event.locationName;
     next.timestamp = c.timestamp;
     next.metrics = { ...event.metrics, ...c.metrics };
