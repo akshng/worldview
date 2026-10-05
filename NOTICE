@@ -1,0 +1,14 @@
+WorldView
+Copyright 2026 akshng (https://github.com/akshng)
+
+Original project: https://github.com/akshng/worldview
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+If you redistribute this software or a derivative work, you must include this
+NOTICE file (Apache License 2.0, section 4(d)). Please keep the credit to the
+original author visible in your project, e.g. "Based on WorldView by akshng".
+
+Third-party data and assets: basemap (c) OpenFreeMap / OpenMapTiles /
+OpenStreetMap contributors; imagery NASA GIBS; reference geography Natural
+Earth (public domain). Each data source keeps its own terms; see
+docs/DATA_SOURCES.md.

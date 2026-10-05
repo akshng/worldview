@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useUI, type MapStyleId } from "@/lib/store/ui";
 import { useData } from "@/lib/client/data-store";
 import { api, type SourcesResponse } from "@/lib/client/api";
-import { APP_NAME, APP_TAGLINE } from "@/lib/config/app";
+import { APP_NAME, APP_TAGLINE, AUTHOR_NAME, AUTHOR_URL } from "@/lib/config/app";
 import { TIME_RANGES, formatUtc, relativeTime } from "@/lib/time";
 import { CloseIcon, ExternalIcon } from "@/components/ui/icons";
 import { SafeLink } from "@/components/ui/primitives";
@@ -33,13 +33,16 @@ export function SettingsModal() {
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/55" onMouseDown={close}>
       <div className="glass flex h-[620px] w-[860px] overflow-hidden rounded-lg shadow-2xl shadow-black/60" onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Settings">
-        <nav className="w-44 shrink-0 border-r border-line p-3">
+        <nav className="flex w-44 shrink-0 flex-col border-r border-line p-3">
           <div className="meta px-2 pb-3 text-faint">Settings</div>
           {TABS.map((t) => (
             <button key={t.id} onClick={() => openSettings(t.id)} className={clsx("block w-full rounded px-2 py-1.5 text-left text-[13px]", tab === t.id ? "bg-panel-hover text-fg" : "text-muted hover:text-fg")}>
               {t.label}
             </button>
           ))}
+          <a href={AUTHOR_URL} target="_blank" rel="noreferrer" className="mt-auto px-2 text-[11px] leading-snug text-faint hover:text-fg">
+            Built by {AUTHOR_NAME}
+          </a>
         </nav>
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex h-11 items-center justify-between border-b border-line px-5">
@@ -400,6 +403,11 @@ function About() {
   return (
     <div className="max-w-xl space-y-3 text-[13px] leading-relaxed text-muted">
       <p><span className="text-fg">{APP_NAME}</span> — {APP_TAGLINE}</p>
+      <p>
+        Created by <span className="text-fg">{AUTHOR_NAME}</span>. Open source under the Apache License 2.0 — free to use, change and share; keep the
+        NOTICE file crediting the original author.{" "}
+        <a href={AUTHOR_URL} target="_blank" rel="noreferrer" className="text-accent hover:underline">Source on GitHub</a>
+      </p>
       <p>
         Every event on the map is derived from a listed, linkable public source. Verified facts and AI interpretation are stored in separate fields and
         displayed separately. Importance is a transparent rule-based score; status is never “Confirmed” without an authoritative final record.

@@ -1,6 +1,13 @@
 {
   "name": "worldview",
   "version": "0.1.0",
+  "description": "3D globe of real-world events from keyless public feeds",
+  "author": "akshng (https://github.com/akshng)",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/akshng/worldview.git"
+  },
   "private": true,
   "scripts": {
     "dev": "next dev",

@@ -2,6 +2,8 @@
 
 **See what is happening in the world right now.**
 
+Created by **[akshng](https://github.com/akshng)** · Open source under the [Apache License 2.0](LICENSE), built for students to learn from and use.
+
 WorldView is a local-first global intelligence dashboard: an interactive 3D globe of real-world events — earthquakes, disasters, severe weather, satellite fire detections, conflict/protest reporting, rocket launches — ingested from legitimate public feeds, normalised into one event model, deduplicated, scored, and traceable to their sources.
 
 > The working name lives in one place: `NEXT_PUBLIC_APP_NAME` (default `WorldView`, see `src/lib/config/app.ts`).
@@ -201,3 +203,7 @@ The full walkthrough is in [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md#adding-a-
 ## Attribution
 
 Basemap © [OpenFreeMap](https://openfreemap.org), [OpenMapTiles](https://openmaptiles.org), [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors. Imagery: NASA GIBS. Reference geography: Natural Earth (public domain). Event data © its respective publishers, linked from every event.
+
+## License & credit
+
+WorldView is created by **[akshng](https://github.com/akshng)** and released under the [Apache License 2.0](LICENSE). You're free to use, change and share it, including for school projects. If you redistribute it or build on it, keep the [NOTICE](NOTICE) file and credit the original project, e.g. *"Based on WorldView by akshng"*. GitHub's **Cite this repository** button (from [CITATION.cff](CITATION.cff)) gives a ready-made citation.
