@@ -67,7 +67,17 @@ export interface SourcesResponse {
 
 export interface MetaResponse {
   mode: "live" | "demo";
-  ai: { enabled: boolean; provider: string | null; model: string | null; reason: string | null };
+  ai: {
+    enabled: boolean;
+    provider: string | null;
+    model: string | null;
+    reason: string | null;
+    local:
+      | { state: "not-downloaded" | "downloaded" | "loading" | "ready" }
+      | { state: "downloading"; downloadedBytes: number; totalBytes: number }
+      | { state: "error"; message: string }
+      | null;
+  };
   repository: string;
   version: number;
 }
@@ -126,6 +136,12 @@ export const api = {
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(body?.error ?? `Request failed (${res.status})`);
     return body.aiInterpretation as AIInterpretation;
+  },
+  async setupLocalAI() {
+    const res = await fetch("/api/ai/setup", { method: "POST" });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body?.error ?? `Request failed (${res.status})`);
+    return body;
   },
   async ingest(source: string) {
     const res = await fetch(`/api/ingest/${encodeURIComponent(source)}`, { method: "POST" });

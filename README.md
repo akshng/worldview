@@ -13,6 +13,14 @@ WorldView is a local-first global intelligence dashboard: an interactive 3D glob
 3. **Honest status.** An event is only `CONFIRMED` when an authoritative source publishes a final record (e.g. a USGS-reviewed solution).
 4. **No fake data in live mode.** Demo mode exists for offline development, is unmistakably labelled, and uses a separate store.
 
+## AI without accounts
+
+AI features (event interpretation, briefing summary, natural-language search) run **on your computer** by default: an open-weights model (Qwen3-4B-Instruct-2507, Apache-2.0) via llama.cpp (Metal on Apple Silicon). No account, no API key, nothing leaves the machine. The model (≈2.5 GB) downloads once from Hugging Face on first use, or ahead of time:
+
+```bash
+npm run ai:setup
+```
+
 ## Quick start
 
 Requirements: Node.js 20.9+ (tested on Node 24), npm.
@@ -47,9 +55,9 @@ cp .env.example .env.local
 | `NASA_FIRMS_MAP_KEY` | — | Optional FIRMS API key; without it the public 24 h VIIRS file is used |
 | `OPENSKY_CLIENT_ID` / `OPENSKY_CLIENT_SECRET` | — | Optional OpenSky API client (raises the anonymous aviation quota) |
 | `AISSTREAM_API_KEY` | — | Free key from aisstream.io — required for the Maritime map mode |
-| `AI_PROVIDER` | `none` | `anthropic` to enable optional AI interpretation |
-| `AI_API_KEY` | — | Key for the AI provider (server-side only) |
-| `AI_MODEL` | `claude-opus-5-5` | Model override |
+| `AI_PROVIDER` | `local` | `local` = keyless on-device model (no account), `anthropic` = hosted Claude, `none` = off |
+| `AI_LOCAL_MODEL` | Qwen3-4B-Instruct Q4_K_M | Override the on-device model (node-llama-cpp URI) |
+| `AI_API_KEY` / `AI_MODEL` | — / `claude-opus-5-5` | Only for `AI_PROVIDER=anthropic` |
 | `DATABASE_URL` | — | Storage: unset = in-memory + JSON snapshot; `pglite` = embedded Postgres (no install); `postgres://…` = PostgreSQL server |
 
 Secrets are read only on the server (`src/lib/env.ts`, guarded by `server-only`) and never sent to the browser.
@@ -65,6 +73,11 @@ Secrets are read only on the server (`src/lib/env.ts`, guarded by `server-only`)
 | NASA FIRMS VIIRS (24 h) | Fire (clustered satellite detections) | 30 min | optional |
 | GDELT 2.0 event export | Conflict, protest, politics, crime/public safety | 15 min | none |
 | Launch Library 2 | Space launches (±7 days) | 30 min | none |
+| NOAA tsunami warning centers | Tsunami warnings/advisories/statements | 3 min | none |
+| FAA NAS status | US airport ground stops, delays, closures | 5 min | none |
+| IODA (Georgia Tech) | National internet outages | 15 min | none |
+| WHO Disease Outbreak News | Disease outbreaks (Health) | 60 min | none |
+| SEC EDGAR 8-K | Material corporate events at company HQ | 10 min | none |
 
 Live layers (shown in map modes, not stored as events, fetched only while in use):
 

@@ -88,6 +88,46 @@ function Select<T extends string>({ value, options, onChange, label }: { value: 
   );
 }
 
+function formatGB(b: number) {
+  return `${(b / 1e9).toFixed(2)} GB`;
+}
+
+/** On-device model status: keyless, runs locally, downloads once. */
+function LocalAIRow() {
+  const [status, setStatus] = useState<NonNullable<import("@/lib/client/api").MetaResponse["ai"]["local"]> | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    const load = () => api.meta().then((m) => setStatus(m.ai.local)).catch(() => {});
+    load();
+    const t = setInterval(load, 2000);
+    return () => clearInterval(t);
+  }, []);
+  const label =
+    !status ? "…"
+    : status.state === "ready" ? "Ready (loaded in memory)"
+    : status.state === "downloaded" ? "Downloaded — loads on first use"
+    : status.state === "loading" ? "Loading model…"
+    : status.state === "downloading" ? `Downloading ${formatGB(status.downloadedBytes)} / ${formatGB(status.totalBytes)}`
+    : status.state === "error" ? `Error: ${status.message}`
+    : "Not downloaded (≈2.5 GB, one time)";
+  return (
+    <Row label="On-device AI model" hint="Qwen3-4B-Instruct (Apache-2.0) via llama.cpp — no account, no API key, nothing leaves this computer.">
+      <div className="flex items-center gap-2">
+        <span className="text-[12px] text-muted">{label}</span>
+        {status?.state === "not-downloaded" || status?.state === "error" ? (
+          <button
+            onClick={() => api.setupLocalAI().catch((e) => setErr(e.message))}
+            className="rounded border border-ai/40 px-2 py-0.5 text-[12px] text-ai hover:bg-ai/10"
+          >
+            Download
+          </button>
+        ) : null}
+        {err && <span className="text-[11px] text-danger">{err}</span>}
+      </div>
+    </Row>
+  );
+}
+
 function General() {
   const s = useUI((st) => st.settings);
   const update = useUI((st) => st.updateSettings);
@@ -106,6 +146,7 @@ function General() {
       <Row label="Show AI interpretation" hint={meta?.ai.enabled ? `Provider: ${meta.ai.provider} · ${meta.ai.model}` : (meta?.ai.reason ?? "AI is optional.")}>
         <Toggle label="Show AI interpretation" on={s.showAI} onChange={(v) => update({ showAI: v })} />
       </Row>
+      {meta?.ai.provider === "local" && <LocalAIRow />}
       <Row label="Developer mode" hint="Show ingestion runs, raw records and event ids.">
         <Toggle label="Developer mode" on={s.developerMode} onChange={(v) => update({ developerMode: v })} />
       </Row>

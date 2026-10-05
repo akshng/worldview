@@ -6,6 +6,7 @@
  * Outputs (committed to the repo so the app works offline):
  *   src/data/geo/countries.json   – compact country polygons + metadata (server: reverse geocoding, search)
  *   src/data/geo/cities.json      – populated places (server: nearest-place labels, search)
+ *   src/data/geo/airports.json    – large/medium scheduled airports with IATA codes (OurAirports, public domain)
  *   public/geo/countries.geojson  – same polygons for the globe's country hover/click layer
  */
 import { writeFileSync, mkdirSync } from "node:fs";
@@ -14,6 +15,25 @@ import { join } from "node:path";
 const NE = "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson";
 const COUNTRIES_URL = `${NE}/ne_50m_admin_0_countries.geojson`;
 const PLACES_URL = `${NE}/ne_50m_populated_places_simple.geojson`;
+/** OurAirports (public domain) — large & medium airports with IATA codes. */
+const AIRPORTS_URL = "https://davidmegginson.github.io/ourairports-data/airports.csv";
+
+function parseCsvLine(line: string): string[] {
+  const out: string[] = [];
+  let cur = "", q = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (q) {
+      if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+      else if (ch === '"') q = false;
+      else cur += ch;
+    } else if (ch === '"') q = true;
+    else if (ch === ",") { out.push(cur); cur = ""; }
+    else cur += ch;
+  }
+  out.push(cur);
+  return out;
+}
 
 const MIDDLE_EAST = new Set([
   "SA", "AE", "QA", "KW", "BH", "OM", "YE", "IR", "IQ", "SY", "LB", "JO", "IL", "PS", "TR", "CY", "EG",
@@ -67,9 +87,10 @@ function macroRegion(iso2: string, continent: string, subregion: string): string
 
 async function main() {
   const root = process.cwd();
-  const [countriesRaw, placesRaw] = await Promise.all([
+  const [countriesRaw, placesRaw, airportsCsv] = await Promise.all([
     fetch(COUNTRIES_URL).then((r) => r.json()),
     fetch(PLACES_URL).then((r) => r.json()),
+    fetch(AIRPORTS_URL).then((r) => r.text()),
   ]);
 
   const countries = [];
@@ -117,7 +138,30 @@ async function main() {
     };
   });
 
+  const lines = airportsCsv.split("\n");
+  const head = parseCsvLine(lines[0]);
+  const col = (n: string) => head.indexOf(n);
+  const airports = [];
+  for (const line of lines.slice(1)) {
+    if (!line.trim()) continue;
+    const c = parseCsvLine(line);
+    const type = c[col("type")];
+    const iata = c[col("iata_code")];
+    if (!iata || !["large_airport", "medium_airport"].includes(type) || c[col("scheduled_service")] !== "yes") continue;
+    airports.push({
+      iata,
+      icao: c[col("icao_code")] || c[col("gps_code")] || null,
+      name: c[col("name")],
+      city: c[col("municipality")] || null,
+      country: c[col("iso_country")],
+      lat: round(Number(c[col("latitude_deg")]), 4),
+      lon: round(Number(c[col("longitude_deg")]), 4),
+      large: type === "large_airport",
+    });
+  }
+
   mkdirSync(join(root, "src/data/geo"), { recursive: true });
+  writeFileSync(join(root, "src/data/geo/airports.json"), JSON.stringify(airports));
   mkdirSync(join(root, "public/geo"), { recursive: true });
   writeFileSync(join(root, "src/data/geo/countries.json"), JSON.stringify(countries));
   writeFileSync(join(root, "src/data/geo/cities.json"), JSON.stringify(cities));
@@ -125,7 +169,7 @@ async function main() {
     join(root, "public/geo/countries.geojson"),
     JSON.stringify({ type: "FeatureCollection", features: publicFeatures }),
   );
-  console.log(`countries: ${countries.length}, cities: ${cities.length}`);
+  console.log(`countries: ${countries.length}, cities: ${cities.length}, airports: ${airports.length}`);
 }
 
 main().catch((e) => {

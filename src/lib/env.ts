@@ -29,7 +29,10 @@ const EnvSchema = z.object({
   OPENSKY_CLIENT_ID: z.string().optional(),
   OPENSKY_CLIENT_SECRET: z.string().optional(),
 
-  AI_PROVIDER: z.enum(["anthropic", "none"]).default("none"),
+  /** local = keyless on-device model (default); anthropic = hosted (needs AI_API_KEY); none = off */
+  AI_PROVIDER: z.enum(["local", "anthropic", "none"]).default("local"),
+  /** Override the local model (node-llama-cpp URI, e.g. hf:<user>/<repo>:<quant>) */
+  AI_LOCAL_MODEL: z.string().optional(),
   AI_API_KEY: z.string().optional(),
   AI_MODEL: z.string().optional(),
 

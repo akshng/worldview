@@ -29,6 +29,7 @@ export const EVENT_CATEGORIES = [
   "AVIATION",
   "MARITIME",
   "INFRASTRUCTURE",
+  "HEALTH",
   "OTHER",
 ] as const;
 export type EventCategory = (typeof EVENT_CATEGORIES)[number];

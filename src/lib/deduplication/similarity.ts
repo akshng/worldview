@@ -58,6 +58,8 @@ export const DEDUP_RULES: Partial<Record<EventCategory, DedupRule>> = {
   FIRE: { radiusKm: 25, windowMs: 48 * H, minTextSimilarity: 0.2 },
   DISASTER: { radiusKm: 250, windowMs: 96 * H, minTextSimilarity: 0.3 },
   SPACE: { radiusKm: 50, windowMs: 6 * H, minTextSimilarity: 0.5 },
+  // Successive outbreak reports about the same disease in the same country are one event.
+  HEALTH: { radiusKm: 400, windowMs: 60 * 24 * H, minTextSimilarity: 0.6 },
 };
 export const DEFAULT_NEWS_RULE: DedupRule = { radiusKm: 30, windowMs: 18 * H, minTextSimilarity: 0.3, strongTextRadiusKm: 800 };
 

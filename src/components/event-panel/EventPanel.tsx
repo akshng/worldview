@@ -327,11 +327,11 @@ function AIInterpretation({ ev }: { ev: WorldEvent }) {
         <p className="text-[12px] text-muted">Disabled for simulated events.</p>
       ) : meta?.ai.enabled ? (
         <button onClick={generate} disabled={busy} className="rounded border border-ai/30 px-2.5 py-1 text-[12px] text-ai hover:bg-ai/10 disabled:opacity-50">
-          {busy ? "Generating…" : "Generate interpretation"}
+          {busy ? (meta.ai.provider === "local" ? "Thinking on this Mac… (first run loads the model)" : "Generating…") : "Generate interpretation"}
         </button>
       ) : (
         <p className="text-[12px] leading-relaxed text-muted">
-          AI is not configured. Set <code className="text-fg/80">AI_PROVIDER</code> and <code className="text-fg/80">AI_API_KEY</code> in <code className="text-fg/80">.env.local</code> to enable optional interpretations.
+          AI is turned off. Set <code className="text-fg/80">AI_PROVIDER=local</code> (default, keyless) in <code className="text-fg/80">.env.local</code> to enable it.
         </p>
       )}
       {err && <p className="mt-2 text-[12px] text-danger">{err}</p>}

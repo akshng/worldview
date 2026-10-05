@@ -37,6 +37,7 @@ export const CATEGORIES: Record<EventCategory, CategoryMeta> = {
   AVIATION: c("AVIATION", "Aviation", "Aviation", "#91a7ff"),
   MARITIME: c("MARITIME", "Maritime", "Maritime", "#4263eb"),
   INFRASTRUCTURE: c("INFRASTRUCTURE", "Infrastructure", "Infrastructure", "#ced4da"),
+  HEALTH: c("HEALTH", "Health", "Health", "#ff8787"),
   OTHER: c("OTHER", "Other", "Other", "#868e96"),
 };
 

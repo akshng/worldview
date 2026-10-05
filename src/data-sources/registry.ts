@@ -10,6 +10,11 @@ import { weatherConnector } from "./weather";
 import { gdacsConnector } from "./gdacs";
 import { eonetConnector } from "./eonet";
 import { spaceConnector } from "./space";
+import { iodaConnector } from "./ioda";
+import { faaConnector } from "./faa";
+import { tsunamiConnector } from "./tsunami";
+import { whoConnector } from "./who";
+import { secConnector } from "./sec";
 import { demoConnector } from "./demo";
 
 export const CONNECTORS = [
@@ -20,6 +25,11 @@ export const CONNECTORS = [
   firmsConnector,
   gdeltConnector,
   spaceConnector,
+  tsunamiConnector,
+  faaConnector,
+  iodaConnector,
+  whoConnector,
+  secConnector,
   demoConnector,
 ] as unknown as DataSourceConnector<unknown>[];
 

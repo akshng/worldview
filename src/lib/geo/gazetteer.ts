@@ -6,6 +6,7 @@
 import "server-only";
 import countriesData from "@/data/geo/countries.json";
 import citiesData from "@/data/geo/cities.json";
+import airportsData from "@/data/geo/airports.json";
 import { bboxContains, haversineKm, pointInGeometry, type BBox, type PolygonalGeometry } from "./math";
 
 export interface Country {
@@ -33,7 +34,67 @@ export interface City {
   capital: boolean;
 }
 
+export interface Airport {
+  iata: string;
+  icao: string | null;
+  name: string;
+  city: string | null;
+  country: string;
+  lat: number;
+  lon: number;
+  large: boolean;
+}
+
 export const COUNTRIES = countriesData as unknown as Country[];
+export const AIRPORTS = airportsData as unknown as Airport[];
+const airportIndex = new Map<string, Airport>();
+for (const a of AIRPORTS) {
+  airportIndex.set(a.iata.toUpperCase(), a);
+  if (a.icao) airportIndex.set(a.icao.toUpperCase(), a);
+}
+/** Look up an airport by IATA ("BOS") or ICAO ("KBOS") code. FAA uses IATA-style codes for US airports. */
+export function airportByCode(code: string): Airport | undefined {
+  const c = code.trim().toUpperCase();
+  return airportIndex.get(c) ?? (c.length === 3 ? airportIndex.get(`K${c}`) : undefined);
+}
+
+const US_STATE_ABBR: Record<string, string> = {
+  AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA: "California", CO: "Colorado", CT: "Connecticut", DE: "Delaware",
+  DC: "District of Columbia", FL: "Florida", GA: "Georgia", HI: "Hawaii", ID: "Idaho", IL: "Illinois", IN: "Indiana", IA: "Iowa",
+  KS: "Kansas", KY: "Kentucky", LA: "Louisiana", ME: "Maine", MD: "Maryland", MA: "Massachusetts", MI: "Michigan", MN: "Minnesota",
+  MS: "Mississippi", MO: "Missouri", MT: "Montana", NE: "Nebraska", NV: "Nevada", NH: "New Hampshire", NJ: "New Jersey",
+  NM: "New Mexico", NY: "New York", NC: "North Carolina", ND: "North Dakota", OH: "Ohio", OK: "Oklahoma", OR: "Oregon",
+  PA: "Pennsylvania", RI: "Rhode Island", SC: "South Carolina", SD: "South Dakota", TN: "Tennessee", TX: "Texas", UT: "Utah",
+  VT: "Vermont", VA: "Virginia", WA: "Washington", WV: "West Virginia", WI: "Wisconsin", WY: "Wyoming", PR: "Puerto Rico",
+};
+export function usStateName(abbr: string): string | null {
+  return US_STATE_ABBR[abbr.toUpperCase()] ?? null;
+}
+
+/**
+ * Best point for "City, ST/Country" style addresses: a known city, else the
+ * centre of the state's known cities, else the country label point.
+ */
+export function locateAddress(city: string | null, stateOrCountry: string | null): { lat: number; lon: number; precision: "city" | "region" | "country"; label: string } | null {
+  const sc = (stateOrCountry ?? "").toUpperCase();
+  const state = usStateName(sc);
+  const country = state ? getCountry("US") : getCountry(sc) ?? findCountryByName(stateOrCountry ?? "");
+  if (!country) return null;
+  const cityName = city?.trim().toLowerCase();
+  if (cityName) {
+    const match = CITIES.find(
+      (c) => c.name.toLowerCase() === cityName && c.country === country.code && (!state || !c.admin1 || c.admin1.toLowerCase() === state.toLowerCase()),
+    );
+    if (match) return { lat: match.lat, lon: match.lon, precision: "city", label: `${match.name}, ${state ?? country.name}` };
+    const ap = AIRPORTS.find((a) => a.city?.toLowerCase() === cityName && a.country === country.code);
+    if (ap) return { lat: ap.lat, lon: ap.lon, precision: "city", label: `${ap.city}, ${state ?? country.name}` };
+  }
+  if (state) {
+    const cs = CITIES.filter((c) => c.country === "US" && c.admin1?.toLowerCase() === state.toLowerCase());
+    if (cs.length) return { lat: cs.reduce((s, c) => s + c.lat, 0) / cs.length, lon: cs.reduce((s, c) => s + c.lon, 0) / cs.length, precision: "region", label: `${city ? `${city}, ` : ""}${state}` };
+  }
+  return { lat: country.label[1], lon: country.label[0], precision: "country", label: `${city ? `${city}, ` : ""}${country.name}` };
+}
 export const CITIES = citiesData as unknown as City[];
 
 const byCode = new Map<string, Country>();

@@ -98,7 +98,22 @@ export function severityOf(input: Pick<ImportanceInput, "type" | "subtype" | "me
     case "AVIATION":
     case "MARITIME":
     case "INFRASTRUCTURE":
+    case "HEALTH":
     case "OTHER": {
+      // SEC filings carry an item-based materiality weight.
+      const fw = num(m, "filing_weight");
+      if (fw !== null) return { value: fw, detail: `SEC item ${str(m, "sec_items") ?? ""}`.trim() };
+      // Tsunami / outage alert levels
+      if (alertSev !== undefined) return { value: alertSev, detail: `${alert} alert` };
+      if (subtype === "internet-outage") {
+        const hours = num(m, "duration_h") ?? 1;
+        return { value: clamp01(0.3 + Math.min(hours / 24, 1) * 0.35), detail: `national internet disruption, ${hours} h` };
+      }
+      if (type === "AVIATION" && subtype) {
+        const v = subtype === "closure" || subtype === "ground-stop" ? 0.4 : subtype === "ground-delay" ? 0.3 : 0.2;
+        return { value: v, detail: subtype.replace(/-/g, " ") };
+      }
+      if (type === "HEALTH") return { value: 0.55, detail: "official outbreak report" };
       // GDELT Goldstein scale: -10 (most destabilising) … +10. Use its magnitude.
       const goldstein = num(m, "goldstein");
       const articles = num(m, "num_articles") ?? 1;
