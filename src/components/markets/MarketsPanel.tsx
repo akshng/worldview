@@ -21,6 +21,7 @@ import { MacroDashboard } from "./MacroDashboard";
 import { StockMovers } from "./StockMovers";
 import { CryptoTable } from "./CryptoTable";
 import { TickerSearch } from "./TickerSearch";
+import { Positioning } from "./Positioning";
 
 const GROUPS: Array<{ id: keyof MarketSnapshot["groups"]; title: string }> = [
   { id: "indices", title: "Equity indices" },
@@ -153,6 +154,12 @@ export function MarketsPanel() {
                   )}
                 </section>
               ))}
+            {snap && (
+              <section className="mb-5">
+                <h3 className="meta mb-2 text-faint">Futures positioning · speculators (CFTC, weekly)</h3>
+                <Positioning />
+              </section>
+            )}
             {snap && (
               <section className="mb-5">
                 <h3 className="meta mb-2 text-faint">Crypto · top 20 by market cap</h3>

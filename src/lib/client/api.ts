@@ -198,6 +198,9 @@ export const api = {
     getJSON<import("@/lib/finance/screeners").ScreenerResult>(`/api/markets/screener?list=${list}`, signal),
   searchInstruments: (q: string, signal?: AbortSignal) =>
     getJSON<{ hits: import("@/lib/finance/search").SearchHit[] }>(`/api/markets/search?q=${encodeURIComponent(q)}`, signal),
+  shortVolume: (symbol: string, signal?: AbortSignal) =>
+    getJSON<import("@/lib/finance/short-volume").ShortVolume>(`/api/markets/short-volume/${encodeURIComponent(symbol)}`, signal),
+  positioning: (signal?: AbortSignal) => getJSON<import("@/lib/finance/cot").CotReport>("/api/markets/positioning", signal),
   crypto: (signal?: AbortSignal) => getJSON<import("@/lib/finance/crypto").CryptoMarkets>("/api/markets/crypto", signal),
   macro: (signal?: AbortSignal) => getJSON<import("@/lib/finance/macro").MacroDashboard>("/api/markets/macro", signal),
   yieldCurve: (signal?: AbortSignal) => getJSON<YieldCurveResponse>("/api/markets/yield-curve", signal),

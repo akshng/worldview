@@ -22,6 +22,8 @@ WorldView connects world events to markets so you can see **what is moving and w
 | **Move since event**: change of each linked instrument from the price at the event time to now (≤ 5 trading days) | Event details → Market exposure | Yahoo Finance hourly |
 | **US economy dashboard**: CPI, core CPI, core PCE, 10-yr breakeven; unemployment, payrolls change, jobless claims, Sahm-rule recession indicator; real GDP growth, retail sales, industrial production; fed funds, 10y−2y and 10y−3m spreads, high-yield spread, financial stress index; M2, Fed balance sheet; 30-yr mortgage, housing starts; consumer sentiment; **global**: ECB deposit rate, UK and Japan overnight rates, euro-area inflation, German / UK / Japanese 10-year yields; **fiscal**: US national debt (daily), fiscal-year-to-date deficit; **crypto market**: total market cap, Bitcoin dominance, DeFi value locked, stablecoin supply; crypto Fear & Greed. Latest value, change vs previous release, period date, sparkline, link to the full series | Markets panel | FRED (St. Louis Fed, keyless `fredgraph.csv`), U.S. Treasury Fiscal Data, CoinGecko, DefiLlama, alternative.me |
 | **Bonds & credit** (Treasury 1–3 / 7–10 / 20+ yr, TIPS, IG and high-yield corporate, EM and muni bond ETFs) and **volatility** (VIX 9-day / 3-month, VVIX, oil OVX, gold GVZ) | Markets panel | Yahoo Finance |
+| **Futures positioning**: speculators' net long/short for 19 futures (S&P, Nasdaq, VIX, 2y/10y/bond, dollar, euro, yen, pound, crude, natural gas, gold, silver, copper, corn, soybeans, wheat, bitcoin) as % of open interest, weekly change, 3-year percentile, 1-year history | Markets panel | CFTC Commitments of Traders (legacy futures-only, public Socrata API; cached 6 h) |
+| **Short sale volume**: daily share of FINRA-reported volume sold short, last 10 sessions | Instrument view (US-listed symbols) | FINRA Reg SHO daily files |
 | **Crypto top 20** by market cap: price, 24 h and 7 d change, market cap, 7-day sparkline | Markets panel | CoinGecko (cached 5 min) |
 | **US stock movers**: today's top gainers, losers and most active US stocks; click for the instrument view | Markets panel | Yahoo Finance predefined screeners (unofficial, delayed; cached 5 min) |
 | **In-app price alerts** (above/below), checked every 3 minutes while the app is open; fire once per crossing | Instrument view; toasts | Delayed quotes |
@@ -62,5 +64,6 @@ Up/down uses a validated diverging pair on the dark surface — up `#3f8de8` (bl
 
 - **Analyst ratings and price targets.** Yahoo serves these only behind a session token, and WorldView doesn't work around access controls. A free-tier key from a provider such as Finnhub would enable them as an optional, server-side integration.
 - **Company fundamentals outside the US.** SEC EDGAR covers US filers only; foreign listings show prices and charts.
+- **13F fund holdings** (e.g. Berkshire, Bridgewater). SEC's filing archive requires a real contact email in the User-Agent; set `WORLDVIEW_CONTACT` to enable it once implemented.
 - **Market-wide insider trades.** SEC's "current filings" feed refuses automated clients.
 

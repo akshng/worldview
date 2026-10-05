@@ -2,6 +2,7 @@
 /** Instrument view: price chart with ranges, stats, SEC company data and related events. Information only. */
 import clsx from "clsx";
 import { useEffect, useState } from "react";
+import { ShortVolume } from "./ShortVolume";
 import { api, type InstrumentResponse } from "@/lib/client/api";
 import { useUI } from "@/lib/store/ui";
 import { DOWN, UP } from "@/lib/finance/format";
@@ -204,6 +205,7 @@ export function InstrumentDetail() {
           </section>
 
           <section>
+            {symbol && <ShortVolume symbol={symbol} />}
             <h3 className="meta mb-2 text-faint">Price alert (in-app)</h3>
             {alert && (
               <div className="mb-2 flex items-center justify-between rounded border border-line px-2 py-1 text-[12px]">

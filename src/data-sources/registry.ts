@@ -25,6 +25,10 @@ import { nhcConnector } from "./nhc";
 import { spcReportsConnector } from "./spc-reports";
 import { nifcConnector } from "./nifc";
 import { newsRssConnector } from "./news-rss";
+import { federalRegisterConnector } from "./federal-register";
+import { travelAdvisoriesConnector } from "./travel-advisories";
+import { cdcTravelConnector } from "./cdc-travel";
+import { adsbEmergencyConnector } from "./adsb-emergency";
 import { demoConnector } from "./demo";
 
 export const CONNECTORS = [
@@ -47,8 +51,12 @@ export const CONNECTORS = [
   spaceConnector,
   tsunamiConnector,
   faaConnector,
+  adsbEmergencyConnector,
   iodaConnector,
   whoConnector,
+  cdcTravelConnector,
+  travelAdvisoriesConnector,
+  federalRegisterConnector,
   secConnector,
   demoConnector,
 ] as unknown as DataSourceConnector<unknown>[];

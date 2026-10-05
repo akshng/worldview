@@ -91,6 +91,10 @@ Secrets are read only on the server (`src/lib/env.ts`, guarded by `server-only`)
 | NOAA tsunami warning centers | Tsunami warnings/advisories/statements | 3 min | none |
 | FAA NAS status | US airport ground stops, delays, closures | 5 min | none |
 | IODA (Georgia Tech) | National internet outages | 15 min | none |
+| CDC Travelers' Health notices | Outbreaks and health risks by country | 6 h | none |
+| US State Department travel advisories | Level 2–4 advisories updated in the last 30 days | 6 h | none |
+| Federal Register | US presidential documents (executive orders, proclamations, determinations) | 60 min | none |
+| adsb.lol community ADS-B | Aircraft squawking 7700 / 7600 / 7500 right now | 2 min | none |
 | WHO Disease Outbreak News | Disease outbreaks (Health) | 60 min | none |
 | SEC EDGAR 8-K | Material corporate events at company HQ | 10 min | none |
 
