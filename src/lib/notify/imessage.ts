@@ -8,6 +8,7 @@
  */
 import { execFile } from "node:child_process";
 import type { DailyBriefing } from "@/lib/briefing";
+import { briefingText } from "./text";
 
 // Recipient and text are passed as arguments, never spliced into the script.
 const SCRIPT = `on run argv
@@ -19,16 +20,6 @@ end run`;
 
 export function imessageRecipient(e: Record<string, string | undefined> = process.env): string | null {
   return e.IMESSAGE_TO?.trim() || null;
-}
-
-/** Text body: top headlines plus the AI summary (labelled as interpretation). */
-export function briefingText(b: DailyBriefing, maxChars = 1800): string {
-  const parts = ["🌍 WorldView morning briefing"];
-  const top = b.topDevelopments.slice(0, 5).map((d) => `• ${d.event.title}`);
-  parts.push(top.length ? top.join("\n") : "No major developments in the last 24 hours.");
-  if (b.aiNarrative) parts.push(`AI summary (interpretation, not verified fact):\n${b.aiNarrative.text}`);
-  const text = parts.join("\n\n");
-  return text.length > maxChars ? `${text.slice(0, maxChars - 1).trimEnd()}…` : text;
 }
 
 export function sendIMessage(to: string, text: string): Promise<void> {

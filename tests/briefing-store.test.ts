@@ -25,7 +25,8 @@ describe("saved briefings", () => {
 
 describe("ntfy push", () => {
   it("is off without a topic and sends headline-level text only", async () => {
-    const { ntfyConfig, briefingPushText } = await import("@/lib/notify/ntfy");
+    const { ntfyConfig } = await import("@/lib/notify/ntfy");
+    const { briefingText: briefingPushText } = await import("@/lib/notify/text");
     expect(ntfyConfig({})).toBeNull();
     expect(ntfyConfig({ NTFY_TOPIC: "abc", NTFY_SERVER: "https://n.example/" })).toEqual({ server: "https://n.example", topic: "abc" });
     const b = buildDailyBriefing([], Date.now());
@@ -35,7 +36,8 @@ describe("ntfy push", () => {
 
 describe("iMessage text", () => {
   it("is off without a recipient and labels the AI summary", async () => {
-    const { imessageRecipient, briefingText } = await import("@/lib/notify/imessage");
+    const { imessageRecipient } = await import("@/lib/notify/imessage");
+    const { briefingText } = await import("@/lib/notify/text");
     expect(imessageRecipient({})).toBeNull();
     const b = buildDailyBriefing([], Date.now());
     b.aiNarrative = { text: "x".repeat(5000), provider: "local", model: "m", generatedAt: new Date().toISOString() };

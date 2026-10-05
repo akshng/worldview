@@ -129,7 +129,7 @@ If the app server is already running (`WORLDVIEW_URL`), the job uses its API ins
 
 **Text it to your phone (optional, macOS).** Set `IMESSAGE_TO` to your phone number (e.g. `+15551234567`) or Apple ID email; the job sends the top headlines and the AI summary through the Messages app — no extra accounts or keys. The first send asks macOS for permission to control Messages, so run `npm run briefing:morning` once in a terminal and click Allow.
 
-**Push notification (optional).** Install the [ntfy](https://ntfy.sh) app, subscribe to a long random topic name, and set `NTFY_TOPIC` to it (`NTFY_SERVER` for a self-hosted ntfy). Topics on ntfy.sh are public to anyone who knows the name, so only a short headline-level summary is sent — pick a name that is hard to guess.
+**Push notification (optional).** Install the [ntfy](https://ntfy.sh) app, subscribe to a long random topic name, and set `NTFY_TOPIC` to it (`NTFY_SERVER` for a self-hosted ntfy). Topics on ntfy.sh are public to anyone who knows the name, so pick a name that is hard to guess. Works on Android and iPhone. The message holds only public world news (top headlines + the AI summary).
 
 ## How ingestion works
 
