@@ -34,11 +34,8 @@ const EnvSchema = z.object({
   /** Override the local model (node-llama-cpp URI, e.g. hf:<user>/<repo>:<quant>) */
   AI_LOCAL_MODEL: z.string().optional(),
   /** Unload the on-device model after this many idle minutes (0 = keep loaded) */
-  /** Optional iMessage text of the morning briefing via the Messages app (phone number or Apple ID; unset = off) */
-  IMESSAGE_TO: z.string().optional(),
-  /** Optional phone push for the morning briefing via ntfy (unset = off) */
-  NTFY_TOPIC: z.string().optional(),
-  NTFY_SERVER: z.string().url().optional(),
+  /** macOS notification when the morning briefing is ready ("false" = off) */
+  MAC_NOTIFY: z.string().optional(),
   AI_IDLE_UNLOAD_MINUTES: z.coerce.number().int().min(0).max(1440).default(5),
   AI_API_KEY: z.string().optional(),
   AI_MODEL: z.string().optional(),

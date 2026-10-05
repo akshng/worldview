@@ -60,8 +60,7 @@ cp .env.example .env.local
 | `AI_IDLE_UNLOAD_MINUTES` | `5` | Unload the local model after this many idle minutes (reloads on the next AI request); `0` = keep loaded |
 | `AI_API_KEY` / `AI_MODEL` | — / `claude-opus-5-5` | Only for `AI_PROVIDER=anthropic` |
 | `WORLDVIEW_URL` | `http://localhost:3000` | Where the morning-briefing job looks for a running server |
-| `IMESSAGE_TO` | — | Optional: text the morning briefing to this phone number / Apple ID via the Messages app (macOS) |
-| `NTFY_TOPIC` / `NTFY_SERVER` | — / `https://ntfy.sh` | Optional phone push for the morning briefing; unset topic = off |
+| `MAC_NOTIFY` | `true` | macOS notification when the morning briefing is ready; `false` = off |
 | `DATABASE_URL` | — | Storage: unset = in-memory + JSON snapshot; `pglite` = embedded Postgres (no install); `postgres://…` = PostgreSQL server |
 
 Secrets are read only on the server (`src/lib/env.ts`, guarded by `server-only`) and never sent to the browser.
@@ -127,9 +126,7 @@ This installs a LaunchAgent (`~/Library/LaunchAgents/com.worldview.morning-brief
 
 If the app server is already running (`WORLDVIEW_URL`), the job uses its API instead of opening the store itself, so two processes never write the same data.
 
-**Text it to your phone (optional, macOS).** Set `IMESSAGE_TO` to your phone number (e.g. `+15551234567`) or Apple ID email; the job sends the top headlines and the AI summary through the Messages app — no extra accounts or keys. The first send asks macOS for permission to control Messages, so run `npm run briefing:morning` once in a terminal and click Allow.
-
-**Push notification (optional).** Install the [ntfy](https://ntfy.sh) app, subscribe to a long random topic name, and set `NTFY_TOPIC` to it (`NTFY_SERVER` for a self-hosted ntfy). Topics on ntfy.sh are public to anyone who knows the name, so pick a name that is hard to guess. Works on Android and iPhone. The message holds only public world news (top headlines + the AI summary).
+**Mac notification.** When the briefing is ready a macOS notification shows the top headlines (set `MAC_NOTIFY=false` to turn it off). Click into the app's Daily briefing to read the AI summary.
 
 ## How ingestion works
 

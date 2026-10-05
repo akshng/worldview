@@ -4,7 +4,7 @@
  *   1. Refresh every active data source
  *   2. Build the daily briefing and have the AI write its summary
  *   3. Save it to DATA_DIR/briefings/YYYY-MM-DD.json (the app shows it)
- *   4. Optionally notify your phone: iMessage text (IMESSAGE_TO) and/or ntfy push (NTFY_TOPIC)
+ *   4. Show a macOS notification with the top headlines (MAC_NOTIFY=false to disable)
  *   5. Unload the AI model and exit, so nothing keeps running
  *
  * If the WorldView server is already running (WORLDVIEW_URL, default
@@ -21,18 +21,12 @@ for (const f of [".env.local", ".env"]) {
 }
 
 const log = (msg: string) => console.log(`[${new Date().toISOString()}] ${msg}`);
-async function notifyPhone(briefing: import("@/lib/briefing").DailyBriefing) {
-  const { sendBriefingPush } = await import("@/lib/notify/ntfy");
-  const { sendBriefingText } = await import("@/lib/notify/imessage");
+async function notify(briefing: import("@/lib/briefing").DailyBriefing) {
+  const { notifyBriefingOnMac } = await import("@/lib/notify/mac");
   try {
-    if (await sendBriefingText(briefing)) log("text sent (iMessage)");
+    if (await notifyBriefingOnMac(briefing)) log("Mac notification shown");
   } catch (err) {
-    log(`iMessage failed: ${err instanceof Error ? err.message : String(err)}`);
-  }
-  try {
-    if (await sendBriefingPush(briefing)) log("phone notification sent (ntfy)");
-  } catch (err) {
-    log(`phone notification failed: ${err instanceof Error ? err.message : String(err)}`);
+    log(`Mac notification failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
@@ -61,7 +55,7 @@ async function viaServer() {
     delete briefing.morning;
     const file = await saveBriefing(dataDir, { date: localDate(), generatedAt: new Date().toISOString(), trigger: "scheduled", briefing });
     log(`saved ${file} (${briefing.topDevelopments?.length ?? 0} top developments, AI summary: ${briefing.aiNarrative ? "yes" : "no"})`);
-    await notifyPhone(briefing);
+    await notify(briefing);
   } finally {
     const un = await fetch(`${serverUrl}/api/ai/unload`, { method: "POST", headers: auth }).catch(() => null);
     log(un?.ok ? "asked server to unload the AI model" : "could not ask server to unload the AI model");
@@ -105,7 +99,7 @@ async function standalone() {
 
     const file = await saveBriefing(e.DATA_DIR, { date: localDate(), generatedAt: new Date().toISOString(), trigger: "scheduled", briefing });
     log(`saved ${file}`);
-    await notifyPhone(briefing);
+    await notify(briefing);
   } finally {
     if (await getLocalProvider()?.unload()) log("AI model unloaded");
     await repo.flush?.();

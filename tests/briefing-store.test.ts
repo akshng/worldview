@@ -23,26 +23,12 @@ describe("saved briefings", () => {
   });
 });
 
-describe("ntfy push", () => {
-  it("is off without a topic and sends headline-level text only", async () => {
-    const { ntfyConfig } = await import("@/lib/notify/ntfy");
-    const { briefingText: briefingPushText } = await import("@/lib/notify/text");
-    expect(ntfyConfig({})).toBeNull();
-    expect(ntfyConfig({ NTFY_TOPIC: "abc", NTFY_SERVER: "https://n.example/" })).toEqual({ server: "https://n.example", topic: "abc" });
-    const b = buildDailyBriefing([], Date.now());
-    expect(briefingPushText(b)).toContain("No major developments");
-  });
-});
-
-describe("iMessage text", () => {
-  it("is off without a recipient and labels the AI summary", async () => {
-    const { imessageRecipient } = await import("@/lib/notify/imessage");
-    const { briefingText } = await import("@/lib/notify/text");
-    expect(imessageRecipient({})).toBeNull();
-    const b = buildDailyBriefing([], Date.now());
-    b.aiNarrative = { text: "x".repeat(5000), provider: "local", model: "m", generatedAt: new Date().toISOString() };
-    const t = briefingText(b);
-    expect(t).toContain("interpretation, not verified fact");
-    expect(t.length).toBeLessThanOrEqual(1800);
+describe("Mac notification", () => {
+  it("is on by default on macOS only and lists headlines", async () => {
+    const { macNotifyEnabled, briefingNotificationText } = await import("@/lib/notify/mac");
+    expect(macNotifyEnabled({}, "darwin")).toBe(true);
+    expect(macNotifyEnabled({ MAC_NOTIFY: "false" }, "darwin")).toBe(false);
+    expect(macNotifyEnabled({}, "linux")).toBe(false);
+    expect(briefingNotificationText(buildDailyBriefing([], Date.now()))).toContain("No major developments");
   });
 });
