@@ -17,6 +17,7 @@ import { focusEvent } from "@/components/event-feed/EventFeed";
 import type { EventSummary } from "@/types/events";
 import { QuoteTile } from "./QuoteTile";
 import { EconomicCalendar, SectorBars, YieldCurve } from "./MarketExtras";
+import { MacroDashboard } from "./MacroDashboard";
 
 const GROUPS: Array<{ id: keyof MarketSnapshot["groups"]; title: string }> = [
   { id: "indices", title: "Equity indices" },
@@ -150,6 +151,12 @@ export function MarketsPanel() {
                   )}
                 </section>
               ))}
+            {snap && (
+              <section className="mb-5">
+                <h3 className="meta mb-2 text-faint">US economy · key indicators</h3>
+                <MacroDashboard />
+              </section>
+            )}
           </div>
 
           <aside className="min-w-0 space-y-5">

@@ -194,6 +194,7 @@ export const api = {
   instrument: (symbol: string, range: string, signal?: AbortSignal) =>
     getJSON<InstrumentResponse>(`/api/markets/instrument/${encodeURIComponent(symbol)}?range=${range}`, signal),
   calendar: (signal?: AbortSignal) => getJSON<{ items: CalendarItem[]; sources: string[] }>("/api/markets/calendar?days=14", signal),
+  macro: (signal?: AbortSignal) => getJSON<import("@/lib/finance/macro").MacroDashboard>("/api/markets/macro", signal),
   yieldCurve: (signal?: AbortSignal) => getJSON<YieldCurveResponse>("/api/markets/yield-curve", signal),
   reaction: (symbols: string[], since: string, signal?: AbortSignal) =>
     getJSON<{ since: string; results: Array<{ symbol: string; changePct: number | null; fromTime: string | null }>; note: string }>(

@@ -49,6 +49,12 @@ export const INSTRUMENTS: Instrument[] = [
   { symbol: "GBPUSD=X", name: "GBP/USD", group: "fx", provider: "yahoo" },
   { symbol: "USDCNY=X", name: "USD/CNY", group: "fx", provider: "yahoo" },
   { symbol: "USDINR=X", name: "USD/INR", group: "fx", provider: "yahoo" },
+  { symbol: "AUDUSD=X", name: "AUD/USD", group: "fx", provider: "yahoo" },
+  { symbol: "USDCAD=X", name: "USD/CAD", group: "fx", provider: "yahoo" },
+  { symbol: "USDCHF=X", name: "USD/CHF", group: "fx", provider: "yahoo" },
+  { symbol: "USDMXN=X", name: "USD/MXN", group: "fx", provider: "yahoo" },
+  { symbol: "USDBRL=X", name: "USD/BRL", group: "fx", provider: "yahoo" },
+  { symbol: "USDKRW=X", name: "USD/KRW", group: "fx", provider: "yahoo" },
 
   { symbol: "CL=F", name: "WTI crude", group: "commodities", provider: "yahoo" },
   { symbol: "BZ=F", name: "Brent crude", group: "commodities", provider: "yahoo" },
@@ -59,6 +65,12 @@ export const INSTRUMENTS: Instrument[] = [
   { symbol: "ZW=F", name: "Wheat", group: "commodities", provider: "yahoo" },
   { symbol: "ZC=F", name: "Corn", group: "commodities", provider: "yahoo" },
   { symbol: "KC=F", name: "Coffee", group: "commodities", provider: "yahoo" },
+  { symbol: "ZS=F", name: "Soybeans", group: "commodities", provider: "yahoo" },
+  { symbol: "SB=F", name: "Sugar", group: "commodities", provider: "yahoo" },
+  { symbol: "CC=F", name: "Cocoa", group: "commodities", provider: "yahoo" },
+  { symbol: "PL=F", name: "Platinum", group: "commodities", provider: "yahoo" },
+  { symbol: "LE=F", name: "Live cattle", group: "commodities", provider: "yahoo" },
+  { symbol: "RB=F", name: "Gasoline (RBOB)", group: "commodities", provider: "yahoo" },
 
   { symbol: "XLK", name: "Technology", group: "sectors", provider: "yahoo" },
   { symbol: "XLF", name: "Financials", group: "sectors", provider: "yahoo" },
@@ -75,6 +87,11 @@ export const INSTRUMENTS: Instrument[] = [
   { symbol: "BTC-USD", name: "Bitcoin", group: "crypto", provider: "coinbase" },
   { symbol: "ETH-USD", name: "Ether", group: "crypto", provider: "coinbase" },
   { symbol: "SOL-USD", name: "Solana", group: "crypto", provider: "coinbase" },
+  { symbol: "XRP-USD", name: "XRP", group: "crypto", provider: "coinbase" },
+  { symbol: "DOGE-USD", name: "Dogecoin", group: "crypto", provider: "coinbase" },
+  { symbol: "ADA-USD", name: "Cardano", group: "crypto", provider: "coinbase" },
+  { symbol: "LINK-USD", name: "Chainlink", group: "crypto", provider: "coinbase" },
+  { symbol: "AVAX-USD", name: "Avalanche", group: "crypto", provider: "coinbase" },
 ];
 
 export const SYMBOL_PATTERN = /^[A-Za-z0-9.^=\-]{1,15}$/;

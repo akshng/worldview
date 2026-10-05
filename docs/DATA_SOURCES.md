@@ -12,6 +12,11 @@ All V1 connectors use official or well-established public structured feeds. No w
 | `gdelt` | [GDELT 2.0](https://www.gdeltproject.org/) event export (15-min files) | Root events with city/ADM1 geocoding, filtered by CAMEO class and article thresholds, collapsed per article/place, then deduplicated across articles | 15 min | — | News media / `MEDIA_REPORT` |
 | `gdelt-gkg` | [GDELT GKG](https://www.gdeltproject.org/) 15-minute files | News articles with their **real headlines**, classified only when a GDELT theme **and** headline wording agree, located only where the headline and the article's geocoded mentions agree (or the headline names a place with a locative cue); multi-outlet stories rank first; ≤150 per run; merged across outlets by deduplication | 15 min | — | News media / `MEDIA_REPORT` |
 | `meteoalarm` | [MeteoAlarm](https://meteoalarm.org/) feeds for 38 countries | Active orange/red warnings; placed on a named city, else a named state/province/region (Natural Earth admin-1 incl. local names), else the country centre (country precision) | 20 min | — | Official agency / `OFFICIAL_PRELIMINARY` |
+| `emsc` | [EMSC FDSN event service](https://www.seismicportal.eu/fdsn-wsevent.html) | M3+ earthquakes, past 3 days (`evtype=ke` only); merges with the USGS record of the same quake via the earthquake dedup rule (100 km, 3 min, magnitudes agree) | 5 min | — | Scientific / `OFFICIAL_PRELIMINARY` |
+| `nhc` | [NHC CurrentStorms.json](https://www.nhc.noaa.gov/) | One record per active storm, updated each advisory; storm centre (approximate precision); Saffir-Simpson category derived from max wind. Title includes "tropical cyclone" so GDACS reports of the same storm merge | 15 min | — | Official agency / `OFFICIAL_PRELIMINARY` |
+| `uk-floods` | [Environment Agency flood-monitoring API](https://environment.data.gov.uk/flood-monitoring/doc/reference) | Severity 1–3 (severe warning, warning, alert) placed at the flood area's reference point (looked up once per area, cached); a severity change supersedes the area's previous record. Times are UK local and converted to UTC | 15 min | — | Official agency / `OFFICIAL_FINAL` |
+| `usgs-volcano` | [USGS HANS API](https://volcanoes.usgs.gov/hans-public/api/volcano/) | Volcanoes above NORMAL (advisory / watch / warning) with aviation colour code; location from the volcano record (cached) | 30 min | — | Official agency / `OFFICIAL_FINAL` |
+| `copernicus-ems` | [Copernicus EMS Rapid Mapping](https://rapidmapping.emergency.copernicus.eu/) public dashboard API | Activations from the last 45 days (or still open), placed at the centroid of the mapped areas (region precision); category mapped to flood / fire / storm / quake / volcano / industrial / disaster | 60 min | — | Official agency / `OFFICIAL_PRELIMINARY` |
 | `space` | [Launch Library 2](https://thespacedevs.com/llapi) upcoming + previous | Launches within ±7 days at the launch pad | 30 min | — (15 req/h free tier) | Community database / `SCHEDULED` |
 | `tsunami` | [NOAA tsunami.gov](https://www.tsunami.gov/) Atom feeds (NTWC + PTWC) | Messages from the last 3 days at the event location | 3 min | — | Official agency / `OFFICIAL_FINAL` |
 | `faa` | [FAA NAS Status](https://nasstatus.faa.gov/) XML | Ground delay programs, ground stops, arrival/departure delays and full closures at airport coordinates (OurAirports gazetteer) | 5 min | — | Official agency / `OFFICIAL_PRELIMINARY` |
@@ -41,6 +46,8 @@ Natural Earth countries (1:50m), populated places, and admin-1 states/provinces 
 - **ReliefWeb API** now requires a pre-approved app name (returns 403 without one).
 - **Smithsonian GVP weekly volcano RSS** blocks programmatic access (403).
 - **Stooq** no longer serves quote CSVs.
+- **GeoNet (NZ) volcanic alert levels** carry no timestamp, so they can't be placed in time without inventing one.
+- **Canadian CWFIS active fires** WFS layer is no longer published under its documented name; NASA FIRMS covers Canadian fires.
 
 ## Caveats you should know
 

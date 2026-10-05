@@ -72,8 +72,13 @@ Secrets are read only on the server (`src/lib/env.ts`, guarded by `server-only`)
 | Source | Categories | Refresh | Key |
 | --- | --- | --- | --- |
 | USGS earthquake feed (M2.5+, 7 days) | Earthquake | 2 min | none |
+| EMSC (European-Mediterranean Seismological Centre) | Earthquakes M3+ worldwide, merged with USGS when both report one | 5 min | none |
 | GDACS (UN/EC disaster alerts) | Earthquake, cyclone, flood, volcano, drought, wildfire | 10 min | none |
 | NWS active alerts (severe/extreme, US) | Weather, flood | 5 min | none |
+| NOAA National Hurricane Center | Active Atlantic/Pacific hurricanes and tropical storms, per advisory | 15 min | none |
+| Environment Agency flood warnings (England) | Flood alerts, warnings, severe warnings | 15 min | none |
+| USGS Volcano Hazards Program | US volcanoes above normal alert level | 30 min | none |
+| Copernicus Emergency Management Service | Disasters worldwide with EU satellite rapid mapping (floods, fires, storms…) | 60 min | none |
 | NASA EONET open events | Storms, wildfires, volcanoes, ice, … | 20 min | none |
 | NASA FIRMS VIIRS (24 h) | Fire (clustered satellite detections) | 30 min | optional |
 | GDELT 2.0 event export | Conflict, protest, politics, crime/public safety | 15 min | none |

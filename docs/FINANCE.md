@@ -6,7 +6,7 @@ WorldView connects world events to markets so you can see **what is moving and w
 
 | Feature | Where | Data |
 | --- | --- | --- |
-| Cross-asset snapshot: 26 equity indices, US Treasury 2Y/10Y/30Y + 2s10s, FX, 9 commodities, crypto | Top bar → **Markets** | Yahoo Finance chart endpoint (unofficial, delayed), U.S. Treasury yield-curve CSV, Coinbase Exchange public candles |
+| Cross-asset snapshot: 26 equity indices, US Treasury 2Y/10Y/30Y + 2s10s, 12 FX pairs, 15 commodities, 8 cryptocurrencies | Top bar → **Markets** | Yahoo Finance chart endpoint (unofficial, delayed), U.S. Treasury yield-curve CSV, Coinbase Exchange public candles |
 | Watchlist (any Yahoo symbol: `MSFT`, `^GSPC`, `EURUSD=X`, `GC=F`) | Markets panel; saved in this browser | Same as above |
 | SEC 8-K material filings on the map, linked to the filer's ticker | Map (Business layer), watchlist "Filings for your tickers" | SEC EDGAR |
 | **Market exposure** for an event (which instruments it could plausibly affect, with live change) | Event details panel | Rule-based (below) |
@@ -19,9 +19,10 @@ WorldView connects world events to markets so you can see **what is moving and w
 | **Treasury yield curve**, latest vs one month earlier | Markets panel | U.S. Treasury |
 | **Economic calendar**: BLS (jobs, CPI, PPI, JOLTS…), BEA (GDP, PCE, trade…), Treasury auctions — scheduled dates only, no forecasts | Markets panel | BLS ICS, BEA release dates, Treasury Fiscal Data |
 | **Move since event**: change of each linked instrument from the price at the event time to now (≤ 5 trading days) | Event details → Market exposure | Yahoo Finance hourly |
+| **US economy dashboard**: CPI, core CPI, core PCE, 10-yr breakeven; unemployment, payrolls change, jobless claims, Sahm-rule recession indicator; real GDP growth, retail sales, industrial production; fed funds, 10y−2y and 10y−3m spreads, high-yield spread, financial stress index; M2, Fed balance sheet; 30-yr mortgage, housing starts; consumer sentiment; crypto Fear & Greed. Latest value, change vs previous release, period date, sparkline, link to the full series | Markets panel | FRED (St. Louis Fed, keyless `fredgraph.csv`), alternative.me |
 | **In-app price alerts** (above/below), checked every 3 minutes while the app is open; fire once per crossing | Instrument view; toasts | Delayed quotes |
 
-All upstream calls are server-side and cached (quotes 3 min, Treasury 6 h); clients share the cache.
+All upstream calls are server-side and cached (quotes 3 min, Treasury 6 h, macro 6 h); clients share the cache. Macro changes are shown in neutral ink with an arrow — a rising number isn't inherently good or bad.
 
 ## Exposure rules (`src/lib/finance/exposure.ts`)
 

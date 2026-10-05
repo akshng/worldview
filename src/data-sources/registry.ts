@@ -17,14 +17,24 @@ import { tsunamiConnector } from "./tsunami";
 import { whoConnector } from "./who";
 import { secConnector } from "./sec";
 import { meteoalarmConnector } from "./meteoalarm";
+import { emscConnector } from "./emsc";
+import { usgsVolcanoConnector } from "./usgs-volcano";
+import { cemsConnector } from "./copernicus-ems";
+import { ukFloodsConnector } from "./uk-floods";
+import { nhcConnector } from "./nhc";
 import { demoConnector } from "./demo";
 
 export const CONNECTORS = [
   usgsConnector,
+  emscConnector,
   gdacsConnector,
+  nhcConnector,
   weatherConnector,
   meteoalarmConnector,
+  ukFloodsConnector,
   eonetConnector,
+  usgsVolcanoConnector,
+  cemsConnector,
   firmsConnector,
   gdeltConnector,
   gkgConnector,
