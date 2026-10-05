@@ -196,6 +196,8 @@ export const api = {
   calendar: (signal?: AbortSignal) => getJSON<{ items: CalendarItem[]; sources: string[] }>("/api/markets/calendar?days=14", signal),
   screener: (list: "gainers" | "losers" | "active", signal?: AbortSignal) =>
     getJSON<import("@/lib/finance/screeners").ScreenerResult>(`/api/markets/screener?list=${list}`, signal),
+  searchInstruments: (q: string, signal?: AbortSignal) =>
+    getJSON<{ hits: import("@/lib/finance/search").SearchHit[] }>(`/api/markets/search?q=${encodeURIComponent(q)}`, signal),
   crypto: (signal?: AbortSignal) => getJSON<import("@/lib/finance/crypto").CryptoMarkets>("/api/markets/crypto", signal),
   macro: (signal?: AbortSignal) => getJSON<import("@/lib/finance/macro").MacroDashboard>("/api/markets/macro", signal),
   yieldCurve: (signal?: AbortSignal) => getJSON<YieldCurveResponse>("/api/markets/yield-curve", signal),

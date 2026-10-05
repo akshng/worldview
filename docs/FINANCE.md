@@ -7,7 +7,8 @@ WorldView connects world events to markets so you can see **what is moving and w
 | Feature | Where | Data |
 | --- | --- | --- |
 | Cross-asset snapshot: 26 equity indices, US Treasury 2Y/10Y/30Y + 2s10s, 12 FX pairs, 15 commodities, 8 cryptocurrencies | Top bar → **Markets** | Yahoo Finance chart endpoint (unofficial, delayed), U.S. Treasury yield-curve CSV, Coinbase Exchange public candles |
-| Watchlist (any Yahoo symbol: `MSFT`, `^GSPC`, `EURUSD=X`, `GC=F`) | Markets panel; saved in this browser | Same as above |
+| **Search any instrument worldwide** (stocks on every exchange Yahoo covers, ETFs, indices, futures, currencies, crypto, funds) with type, exchange and sector; open it or add it to the watchlist | Markets panel | Yahoo Finance search (unofficial; cached 1 h per query) |
+| Watchlist (any Yahoo symbol: `MSFT`, `7203.T`, `^GSPC`, `EURUSD=X`, `GC=F`) | Markets panel; saved in this browser | Same as above |
 | SEC 8-K material filings on the map, linked to the filer's ticker | Map (Business layer), watchlist "Filings for your tickers" | SEC EDGAR |
 | **Market exposure** for an event (which instruments it could plausibly affect, with live change) | Event details panel | Rule-based (below) |
 | **World events with market exposure** (last 24 h) | Markets panel | Rule-based |
@@ -56,3 +57,10 @@ Up/down uses a validated diverging pair on the dark surface — up `#3f8de8` (bl
 - Yahoo Finance's chart endpoint is **unofficial and delayed**; it can change or rate-limit without notice. Quotes are labelled as delayed; failures show "n/a" per tile, never stale numbers presented as live.
 - Index "daily change" is vs the previous close; closed markets show the last session.
 - Treasury yields update once per business day.
+
+## Not included (needs a key or isn't freely available)
+
+- **Analyst ratings and price targets.** Yahoo serves these only behind a session token, and WorldView doesn't work around access controls. A free-tier key from a provider such as Finnhub would enable them as an optional, server-side integration.
+- **Company fundamentals outside the US.** SEC EDGAR covers US filers only; foreign listings show prices and charts.
+- **Market-wide insider trades.** SEC's "current filings" feed refuses automated clients.
+

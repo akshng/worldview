@@ -20,6 +20,7 @@ import { EconomicCalendar, SectorBars, YieldCurve } from "./MarketExtras";
 import { MacroDashboard } from "./MacroDashboard";
 import { StockMovers } from "./StockMovers";
 import { CryptoTable } from "./CryptoTable";
+import { TickerSearch } from "./TickerSearch";
 
 const GROUPS: Array<{ id: keyof MarketSnapshot["groups"]; title: string }> = [
   { id: "indices", title: "Equity indices" },
@@ -43,7 +44,6 @@ export function MarketsPanel() {
   const [watch, setWatch] = useState<Quote[]>([]);
   const [movers, setMovers] = useState<Array<{ event: EventSummary; exposure: ExposureLink[] }>>([]);
   const [error, setError] = useState<string | null>(null);
-  const [ticker, setTicker] = useState("");
   const [summary, setSummary] = useState<{ text: string; provider: string; model: string; generatedAt: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [aiErr, setAiErr] = useState<string | null>(null);
@@ -89,11 +89,9 @@ export function MarketsPanel() {
 
   if (!open) return null;
 
-  const addTicker = () => {
-    const t = ticker.trim().toUpperCase();
+  const addTicker = (t: string) => {
     if (!/^[A-Z0-9.^=\-]{1,15}$/.test(t) || watchlist.includes(t) || watchlist.length >= 25) return;
     updateSettings({ watchlist: [...watchlist, t] });
-    setTicker("");
   };
 
   const writeSummary = async () => {
@@ -171,18 +169,8 @@ export function MarketsPanel() {
 
           <aside className="min-w-0 space-y-5">
             <section>
-              <h3 className="meta mb-2 text-faint">Watchlist</h3>
-              <div className="mb-2 flex gap-1.5">
-                <input
-                  value={ticker}
-                  onChange={(e) => setTicker(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && addTicker()}
-                  placeholder="Add ticker (e.g. MSFT, ^GSPC, EURUSD=X)"
-                  aria-label="Add ticker"
-                  className="flex-1 rounded border border-line bg-bg-elev px-2 py-1 text-[12px] placeholder:text-faint"
-                />
-                <button onClick={addTicker} className="rounded border border-line px-2 text-[12px] text-muted hover:text-fg">Add</button>
-              </div>
+              <h3 className="meta mb-2 text-faint">Search &amp; watchlist</h3>
+              <TickerSearch watchlist={watchlist} onAdd={addTicker} />
               <div className="space-y-1.5">
                 {watch.filter((q) => watchlist.includes(q.symbol)).map((q) => (
                   <QuoteTile key={q.symbol} q={q} compact onOpen={() => useUI.getState().openInstrument(q.symbol)} onRemove={() => updateSettings({ watchlist: watchlist.filter((t) => t !== q.symbol) })} />

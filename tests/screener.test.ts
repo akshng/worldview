@@ -48,3 +48,19 @@ describe("crypto markets", () => {
     expect(rows[0].spark[rows[0].spark.length - 1]).toBe(167);
   });
 });
+
+import { parseSearch } from "@/lib/finance/search";
+
+describe("instrument search", () => {
+  it("keeps valid Yahoo symbols across exchanges and labels types", () => {
+    const hits = parseSearch({ quotes: [
+      { symbol: "7203.T", shortname: "TOYOTA MOTOR CORP", exchDisp: "Tokyo Stock Exchange", quoteType: "EQUITY", isYahooFinance: true },
+      { symbol: "TM", longname: "Toyota Motor Corporation", exchDisp: "NYSE", quoteType: "EQUITY", sector: "Consumer Cyclical", isYahooFinance: true },
+      { symbol: "bad symbol!", quoteType: "EQUITY" },
+      { symbol: "AAPL250117C00150000", quoteType: "OPTION" },
+      { symbol: "XYZ", quoteType: "EQUITY", isYahooFinance: false },
+    ] });
+    expect(hits.map((h) => h.symbol)).toEqual(["7203.T", "TM"]);
+    expect(hits[1]).toMatchObject({ name: "Toyota Motor Corporation", type: "Stock", exchange: "NYSE", sector: "Consumer Cyclical" });
+  });
+});
