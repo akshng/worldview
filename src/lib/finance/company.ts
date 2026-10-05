@@ -1,0 +1,139 @@
+/**
+ * Company data from SEC EDGAR (keyless; descriptive User-Agent required):
+ * ticker → CIK, profile, recent filings, insider (Form 4) activity and
+ * reported fundamentals from XBRL company facts.
+ */
+import "server-only";
+import { userAgent } from "@/lib/env";
+
+export interface CompanyFiling {
+  form: string;
+  filed: string;
+  description: string;
+  url: string;
+}
+
+export interface Fundamental {
+  label: string;
+  value: number;
+  unit: string;
+  period: string; // e.g. "Q2 FY2026 (to 2026-03-28)"
+  priorValue: number | null; // same quarter a year earlier
+  filed: string;
+}
+
+export interface CompanyProfile {
+  cik: string;
+  name: string;
+  tickers: string[];
+  exchanges: string[];
+  industry: string | null;
+  hq: string | null;
+  fiscalYearEnd: string | null;
+  filings: CompanyFiling[];
+  insiderFilings30d: number;
+  fundamentals: Fundamental[];
+  secUrl: string;
+}
+
+const headers = () => ({ "User-Agent": userAgent(), Accept: "application/json" });
+const getJson = async (u: string) => {
+  const r = await fetch(u, { headers: headers(), signal: AbortSignal.timeout(30_000), cache: "no-store" });
+  if (!r.ok) throw new Error(`SEC HTTP ${r.status}`);
+  return r.json();
+};
+
+const g = globalThis as unknown as { __worldviewSec?: { tickers: Map<string, string> | null; tickersAt: number; profiles: Map<string, { at: number; p: CompanyProfile }> } };
+const cache = (g.__worldviewSec ??= { tickers: null, tickersAt: 0, profiles: new Map() });
+
+export async function cikForTicker(ticker: string): Promise<string | null> {
+  if (!cache.tickers || Date.now() - cache.tickersAt > 24 * 3_600_000) {
+    const d = (await getJson("https://www.sec.gov/files/company_tickers.json")) as Record<string, { cik_str: number; ticker: string }>;
+    cache.tickers = new Map(Object.values(d).map((x) => [x.ticker.toUpperCase(), String(x.cik_str).padStart(10, "0")]));
+    cache.tickersAt = Date.now();
+  }
+  return cache.tickers.get(ticker.toUpperCase().replace(".", "-")) ?? null;
+}
+
+const FACTS: Array<{ label: string; tags: string[]; unit: string }> = [
+  { label: "Revenue", tags: ["RevenueFromContractWithCustomerExcludingAssessedTax", "Revenues", "SalesRevenueNet"], unit: "USD" },
+  { label: "Net income", tags: ["NetIncomeLoss"], unit: "USD" },
+  { label: "Diluted EPS", tags: ["EarningsPerShareDiluted"], unit: "USD/shares" },
+  { label: "Operating cash flow", tags: ["NetCashProvidedByUsedInOperatingActivities"], unit: "USD" },
+];
+
+type FactRow = { start?: string; end: string; val: number; fy: number; fp: string; form: string; filed: string; frame?: string };
+
+/** Latest single-quarter value (by calendar frame CYyyyyQn) and the same quarter a year earlier. */
+export function latestQuarter(rows: FactRow[]): { cur: FactRow; prior: FactRow | null } | null {
+  const quarters = rows.filter((r) => r.frame && /^CY\d{4}Q[1-4]$/.test(r.frame));
+  if (!quarters.length) return null;
+  quarters.sort((a, b) => a.end.localeCompare(b.end));
+  const cur = quarters[quarters.length - 1];
+  const [y, q] = [Number(cur.frame!.slice(2, 6)), cur.frame!.slice(6)];
+  const prior = quarters.find((r) => r.frame === `CY${y - 1}${q}`) ?? null;
+  return { cur, prior };
+}
+
+export async function companyProfile(ticker: string): Promise<CompanyProfile | null> {
+  const cik = await cikForTicker(ticker);
+  if (!cik) return null;
+  const hit = cache.profiles.get(cik);
+  if (hit && Date.now() - hit.at < 3_600_000) return hit.p;
+
+  const [sub, facts] = await Promise.all([
+    getJson(`https://data.sec.gov/submissions/CIK${cik}.json`),
+    getJson(`https://data.sec.gov/api/xbrl/companyfacts/CIK${cik}.json`).catch(() => null),
+  ]);
+  const r = sub.filings?.recent ?? {};
+  const filings: CompanyFiling[] = [];
+  let insider = 0;
+  const cutoff = Date.now() - 30 * 86_400_000;
+  for (let i = 0; i < (r.form?.length ?? 0); i++) {
+    const form = r.form[i];
+    if (form === "4" && Date.parse(r.filingDate[i]) >= cutoff) insider++;
+    if (filings.length < 12 && ["10-K", "10-Q", "8-K", "20-F", "6-K", "S-1", "DEF 14A", "SC 13D", "SC 13G"].includes(form)) {
+      const acc = String(r.accessionNumber[i]).replace(/-/g, "");
+      filings.push({
+        form,
+        filed: r.filingDate[i],
+        description: r.primaryDocDescription?.[i] || (r.items?.[i] ? `Items ${r.items[i]}` : form),
+        url: `https://www.sec.gov/Archives/edgar/data/${Number(cik)}/${acc}/${r.primaryDocument[i]}`,
+      });
+    }
+  }
+  const fundamentals: Fundamental[] = [];
+  const gaap = facts?.facts?.["us-gaap"] ?? {};
+  for (const f of FACTS) {
+    for (const tag of f.tags) {
+      const rows = gaap[tag]?.units?.[f.unit] as FactRow[] | undefined;
+      const lq = rows && latestQuarter(rows);
+      if (!lq) continue;
+      fundamentals.push({
+        label: f.label,
+        value: lq.cur.val,
+        unit: f.unit,
+        period: `Calendar ${lq.cur.frame!.slice(6)} ${lq.cur.frame!.slice(2, 6)} (quarter ending ${lq.cur.end})`,
+        priorValue: lq.prior?.val ?? null,
+        filed: lq.cur.filed,
+      });
+      break;
+    }
+  }
+  const b = sub.addresses?.business ?? {};
+  const p: CompanyProfile = {
+    cik,
+    name: sub.name,
+    tickers: sub.tickers ?? [],
+    exchanges: sub.exchanges ?? [],
+    industry: sub.sicDescription ?? null,
+    hq: [b.city, b.stateOrCountryDescription ?? b.stateOrCountry].filter(Boolean).join(", ") || null,
+    fiscalYearEnd: sub.fiscalYearEnd ?? null,
+    filings,
+    insiderFilings30d: insider,
+    fundamentals,
+    secUrl: `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${cik}`,
+  };
+  cache.profiles.set(cik, { at: Date.now(), p });
+  return p;
+}

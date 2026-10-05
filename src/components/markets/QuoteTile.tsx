@@ -6,14 +6,18 @@ import { relativeTime } from "@/lib/time";
 import { Sparkline } from "./Sparkline";
 
 /** Stat tile: name · value · signed delta (arrow + colour, never colour alone) · sparkline. */
-export function QuoteTile({ q, onRemove, compact }: { q: Quote; onRemove?: () => void; compact?: boolean }) {
+export function QuoteTile({ q, onRemove, onOpen, compact }: { q: Quote; onRemove?: () => void; onOpen?: () => void; compact?: boolean }) {
   const ch = formatChange(q);
   const color = ch.dir > 0 ? UP : ch.dir < 0 ? DOWN : "var(--text-muted)";
   const arrow = ch.dir > 0 ? "▲" : ch.dir < 0 ? "▼" : "■";
   const range = q.spark.length ? `${q.name}: ${Math.min(...q.spark).toFixed(2)}–${Math.max(...q.spark).toFixed(2)} over recent sessions` : q.name;
   return (
     <div
-      className={clsx("group relative flex items-center justify-between gap-2 rounded border border-line px-2.5", compact ? "py-1.5" : "py-2")}
+      role={onOpen ? "button" : undefined}
+      tabIndex={onOpen ? 0 : undefined}
+      onClick={onOpen}
+      onKeyDown={(e) => onOpen && (e.key === "Enter" || e.key === " ") && onOpen()}
+      className={clsx("group relative flex items-center justify-between gap-2 rounded border border-line px-2.5", compact ? "py-1.5" : "py-2", onOpen && "cursor-pointer hover:border-line-strong hover:bg-panel-hover")}
       title={`${q.name} (${q.symbol}) · ${q.source}${q.asOf ? ` · ${relativeTime(q.asOf)}` : ""}${q.error ? ` · ${q.error}` : ""}`}
     >
       <div className="min-w-0">
@@ -27,7 +31,7 @@ export function QuoteTile({ q, onRemove, compact }: { q: Quote; onRemove?: () =>
       </div>
       {q.error ? <span className="text-[10.5px] text-faint">n/a</span> : <Sparkline values={q.spark} color={color} label={range} />}
       {onRemove && (
-        <button onClick={onRemove} aria-label={`Remove ${q.symbol}`} className="absolute -top-1.5 -right-1.5 hidden h-4 w-4 rounded-full bg-panel-solid text-[10px] text-muted ring-1 ring-line group-hover:block hover:text-fg">
+        <button onClick={(e) => { e.stopPropagation(); onRemove(); }} aria-label={`Remove ${q.symbol}`} className="absolute -top-1.5 -right-1.5 hidden h-4 w-4 rounded-full bg-panel-solid text-[10px] text-muted ring-1 ring-line group-hover:block hover:text-fg">
           ×
         </button>
       )}

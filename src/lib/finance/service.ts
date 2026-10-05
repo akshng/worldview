@@ -1,7 +1,7 @@
 /** Cached market snapshot + on-demand quotes. Each upstream is cached so polling never hammers it. */
 import "server-only";
 import { INSTRUMENTS, SYMBOL_PATTERN } from "./instruments";
-import { coinbaseQuote, treasuryQuotes, yahooQuote } from "./providers";
+import { coinbaseQuote, treasuryCurve, treasuryQuotes, yahooHistory, yahooQuote, type HistoryRange, type PriceHistory, type YieldCurve } from "./providers";
 import type { MarketSnapshot, Quote } from "./types";
 
 const QUOTE_TTL = 3 * 60_000;
@@ -77,7 +77,7 @@ export async function getMarketSnapshot(): Promise<MarketSnapshot> {
       INSTRUMENTS.filter((i) => i.provider === "treasury").map((i) => failed(i.symbol, i.name, "rates", err)),
     ),
   ]);
-  const groups: MarketSnapshot["groups"] = { indices: [], rates, fx: [], commodities: [], crypto: [] };
+  const groups: MarketSnapshot["groups"] = { indices: [], sectors: [], rates, fx: [], commodities: [], crypto: [] };
   for (const q of quotes) if (q.group !== "watchlist" && q.group !== "rates") groups[q.group].push(q);
   return { generatedAt: new Date().toISOString(), groups, disclaimer: DISCLAIMER };
 }
@@ -87,4 +87,37 @@ export async function countryIndexChanges(): Promise<Array<{ country: string; sy
   const withCountry = INSTRUMENTS.filter((i) => i.country);
   const quotes = await mapLimit(withCountry, 4, (i) => getQuote(i.symbol, i.group, i.name));
   return withCountry.map((i, k) => ({ country: i.country!, symbol: i.symbol, name: i.name, changePct: quotes[k].changePct, asOf: quotes[k].asOf }));
+}
+
+const historyCache = new Map<string, Entry<PriceHistory>>();
+export async function getHistory(symbol: string, range: HistoryRange): Promise<PriceHistory> {
+  const key = `${symbol}|${range}`;
+  let e = historyCache.get(key);
+  if (!e) historyCache.set(key, (e = { at: 0, value: null, pending: null }));
+  return cached(e, range === "1d" || range === "5d" ? 2 * 60_000 : 30 * 60_000, () => yahooHistory(symbol, range));
+}
+
+const curveEntry: Entry<YieldCurve> = { at: 0, value: null, pending: null };
+export async function getYieldCurve(): Promise<YieldCurve> {
+  return cached(curveEntry, 6 * 3_600_000, () => treasuryCurve());
+}
+
+/**
+ * Change of an instrument since a moment in time, measured from hourly closes
+ * (5 trading days available). A measurement, not an attribution of cause.
+ */
+export async function changeSince(symbol: string, sinceMs: number): Promise<{ symbol: string; from: number | null; to: number | null; changePct: number | null; fromTime: string | null } > {
+  try {
+    const h = await getHistory(symbol, "5d");
+    if (!h.points.length || h.points[h.points.length - 1][0] < sinceMs) return { symbol, from: null, to: null, changePct: null, fromTime: null };
+    // Baseline = last price at or before the event (the price when it happened); if the
+    // event predates the available history, the earliest available price.
+    let idx = -1;
+    for (let i = 0; i < h.points.length && h.points[i][0] <= sinceMs; i++) idx = i;
+    const [t0, from] = h.points[Math.max(idx, 0)];
+    const to = h.points[h.points.length - 1][1];
+    return { symbol, from, to, changePct: ((to - from) / from) * 100, fromTime: new Date(t0).toISOString() };
+  } catch {
+    return { symbol, from: null, to: null, changePct: null, fromTime: null };
+  }
 }

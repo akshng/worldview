@@ -127,3 +127,100 @@ export function parseTreasuryCsv(csv: string): TreasuryRow[] {
     return { date: `${yyyy}-${mm}-${dd}`, y2: num(c[ix("2 Yr")]), y10: num(c[ix("10 Yr")]), y30: num(c[ix("30 Yr")]) };
   }).filter((r) => /^\d{4}-\d{2}-\d{2}$/.test(r.date));
 }
+
+export const HISTORY_RANGES = {
+  "1d": { range: "1d", interval: "5m" },
+  "5d": { range: "5d", interval: "30m" },
+  "1mo": { range: "1mo", interval: "1d" },
+  "6mo": { range: "6mo", interval: "1d" },
+  "1y": { range: "1y", interval: "1d" },
+  "5y": { range: "5y", interval: "1wk" },
+} as const;
+export type HistoryRange = keyof typeof HISTORY_RANGES;
+
+export interface PriceHistory {
+  symbol: string;
+  name: string;
+  currency: string | null;
+  exchange: string | null;
+  instrumentType: string | null;
+  points: Array<[number, number]>; // [unix ms, close]
+  previousClose: number | null;
+  dayHigh: number | null;
+  dayLow: number | null;
+  fiftyTwoWeekHigh: number | null;
+  fiftyTwoWeekLow: number | null;
+  volume: number | null;
+  marketTime: string | null;
+}
+
+export async function yahooHistory(symbol: string, range: HistoryRange): Promise<PriceHistory> {
+  const { range: r, interval } = HISTORY_RANGES[range];
+  const d = await getJson(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${r}&interval=${interval}&includePrePost=false`);
+  const res = d?.chart?.result?.[0];
+  if (!res) throw new Error(d?.chart?.error?.description ?? "No data");
+  const m = res.meta ?? {};
+  const ts: number[] = res.timestamp ?? [];
+  const cl: Array<number | null> = res.indicators?.quote?.[0]?.close ?? [];
+  const points: Array<[number, number]> = [];
+  ts.forEach((t, i) => {
+    const v = cl[i];
+    if (typeof v === "number") points.push([t * 1000, v]);
+  });
+  const n = (x: unknown) => (typeof x === "number" ? x : null);
+  return {
+    symbol,
+    name: m.longName ?? m.shortName ?? symbol,
+    currency: m.currency ?? null,
+    exchange: m.fullExchangeName ?? m.exchangeName ?? null,
+    instrumentType: m.instrumentType ?? null,
+    points,
+    previousClose: n(m.previousClose) ?? n(m.chartPreviousClose),
+    dayHigh: n(m.regularMarketDayHigh),
+    dayLow: n(m.regularMarketDayLow),
+    fiftyTwoWeekHigh: n(m.fiftyTwoWeekHigh),
+    fiftyTwoWeekLow: n(m.fiftyTwoWeekLow),
+    volume: n(m.regularMarketVolume),
+    marketTime: m.regularMarketTime ? new Date(m.regularMarketTime * 1000).toISOString() : null,
+  };
+}
+
+export const CURVE_TENORS = ["1 Mo", "2 Mo", "3 Mo", "6 Mo", "1 Yr", "2 Yr", "3 Yr", "5 Yr", "7 Yr", "10 Yr", "20 Yr", "30 Yr"] as const;
+
+export interface YieldCurve {
+  latest: { date: string; yields: Array<{ tenor: string; value: number | null }> };
+  monthAgo: { date: string; yields: Array<{ tenor: string; value: number | null }> } | null;
+}
+
+export function parseCurveCsv(csv: string): Array<{ date: string; yields: Record<string, number | null> }> {
+  const lines = csv.trim().split(/\r?\n/);
+  const head = lines[0].split(",").map((h) => h.replace(/"/g, "").trim());
+  return lines.slice(1).map((l) => {
+    const c = l.split(",");
+    const [mm, dd, yyyy] = (c[0] ?? "").split("/");
+    const yields: Record<string, number | null> = {};
+    for (const t of CURVE_TENORS) {
+      const v = c[head.indexOf(t)];
+      yields[t] = v && v.trim() !== "" && !Number.isNaN(Number(v)) ? Number(v) : null;
+    }
+    return { date: `${yyyy}-${mm}-${dd}`, yields };
+  }).filter((r) => /^\d{4}-\d{2}-\d{2}$/.test(r.date)).sort((a, b) => a.date.localeCompare(b.date));
+}
+
+export async function treasuryCurve(now = new Date()): Promise<YieldCurve> {
+  const y = now.getUTCFullYear();
+  const url = (yr: number) =>
+    `https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/${yr}/all?type=daily_treasury_yield_curve&field_tdr_date_value=${yr}&page&_format=csv`;
+  const get = async (yr: number) => {
+    const r = await fetch(url(yr), { headers: { "User-Agent": userAgent() }, signal: AbortSignal.timeout(45_000), cache: "no-store" });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return parseCurveCsv(await r.text());
+  };
+  let rows = await get(y);
+  if (rows.length < 25) rows = [...(await get(y - 1)), ...rows];
+  const latest = rows[rows.length - 1];
+  const target = new Date(Date.parse(latest.date) - 30 * 86_400_000).toISOString().slice(0, 10);
+  const monthAgo = [...rows].reverse().find((r) => r.date <= target) ?? null;
+  const fmt = (r: (typeof rows)[number]) => ({ date: r.date, yields: CURVE_TENORS.map((t) => ({ tenor: t, value: r.yields[t] })) });
+  return { latest: fmt(latest), monthAgo: monthAgo ? fmt(monthAgo) : null };
+}

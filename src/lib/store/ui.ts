@@ -25,6 +25,23 @@ export interface Settings {
   developerMode: boolean;
   /** Watchlist tickers (Yahoo-style symbols) */
   watchlist: string[];
+  /** In-app price alerts (checked while the app is open) */
+  alerts: PriceAlert[];
+}
+
+export interface PriceAlert {
+  symbol: string;
+  above: number | null;
+  below: number | null;
+  /** Side that last fired, so an alert fires once per crossing */
+  fired: "above" | "below" | null;
+}
+
+export interface Toast {
+  id: number;
+  title: string;
+  body: string;
+  symbol?: string;
 }
 
 export interface FlyToRequest {
@@ -61,6 +78,9 @@ interface UIState {
   searchOpen: boolean;
   briefingOpen: boolean;
   marketsOpen: boolean;
+  /** Instrument detail view (symbol) */
+  instrument: string | null;
+  toasts: Toast[];
   settingsOpen: boolean;
   settingsTab: "general" | "map" | "sources" | "about";
 
@@ -86,6 +106,9 @@ interface UIState {
   setSearchOpen: (v: boolean) => void;
   setBriefingOpen: (v: boolean) => void;
   setMarketsOpen: (v: boolean) => void;
+  openInstrument: (symbol: string | null) => void;
+  pushToast: (t: Omit<Toast, "id">) => void;
+  dismissToast: (id: number) => void;
   openSettings: (tab?: UIState["settingsTab"]) => void;
   closeSettings: () => void;
   updateSettings: (patch: Partial<Settings>) => void;
@@ -101,6 +124,7 @@ const DEFAULT_SETTINGS: Settings = {
   showAI: true,
   developerMode: false,
   watchlist: ["SPY", "QQQ", "AAPL", "NVDA"],
+  alerts: [],
 };
 
 export const useUI = create<UIState>()(
@@ -124,6 +148,8 @@ export const useUI = create<UIState>()(
       searchOpen: false,
       briefingOpen: false,
       marketsOpen: false,
+      instrument: null,
+      toasts: [],
       settingsOpen: false,
       settingsTab: "general",
       settings: DEFAULT_SETTINGS,
@@ -154,6 +180,9 @@ export const useUI = create<UIState>()(
       setSearchOpen: (searchOpen) => set({ searchOpen }),
       setBriefingOpen: (briefingOpen) => set({ briefingOpen }),
       setMarketsOpen: (marketsOpen) => set({ marketsOpen }),
+      openInstrument: (instrument) => set({ instrument }),
+      pushToast: (t) => set((s) => ({ toasts: [...s.toasts.slice(-3), { ...t, id: Date.now() + Math.random() }] })),
+      dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
       openSettings: (tab) => set((s) => ({ settingsOpen: true, settingsTab: tab ?? s.settingsTab })),
       closeSettings: () => set({ settingsOpen: false }),
       updateSettings: (patch) => set((s) => ({ settings: { ...s.settings, ...patch } })),

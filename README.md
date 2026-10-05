@@ -95,7 +95,7 @@ Details, terms and caveats: [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md).
 - **Map modes**: Events, Heatmap, Density grid, Weather (radar loop), Fires (radiative power), Earthquakes (magnitude × depth), Conflict, Aviation (live aircraft), Maritime (live vessels)
 - Live feed, event details (facts · sources · timeline · score explanation · related events · separate AI box), country overviews, timeline replay, ⌘K search with intent parsing
 - **Daily briefing** (top-bar "Briefing"): new / developing / ongoing / resolved, today vs yesterday, regional sections, what to watch — every line links to an event; optional AI summary written only from those events
-- **Markets** (top bar): indices, Treasury yields, FX, commodities, crypto with sparklines; watchlist; world events linked to the instruments they could affect; AI market wrap — information only, not advice ([docs/FINANCE.md](docs/FINANCE.md))
+- **Markets** (top bar): indices, US sectors, Treasury yields + yield curve, FX, commodities, crypto; economic calendar; instrument view with charts, SEC fundamentals and filings; watchlist and in-app price alerts; world events linked to the instruments they could affect; AI market wrap — information only, not advice ([docs/FINANCE.md](docs/FINANCE.md))
 - **Markets map mode**: countries coloured by their main stock index's daily move
 - Real areas (warning polygons, fire footprints), uncertainty rings by location precision, and location-correction notes
 - Source health and live-layer status in Settings → Data sources
@@ -150,6 +150,10 @@ The full walkthrough is in [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md#adding-a-
 | `GET /api/markets/quote?symbols=` | Quotes for up to 25 symbols |
 | `GET /api/markets/movers` | Last-24 h events with rule-based market exposure |
 | `POST /api/markets/summary` | AI market wrap (descriptive, never advice) |
+| `GET /api/markets/instrument/:symbol?range=` | Price history + SEC company profile, fundamentals, filings, related events |
+| `GET /api/markets/calendar` | Scheduled US economic releases and Treasury auctions |
+| `GET /api/markets/yield-curve` | Treasury par yield curve (latest vs a month earlier) |
+| `GET /api/markets/reaction?symbols=&since=` | Instrument moves since a time |
 | `GET /api/geo-audit` | Developer QA of event coordinates |
 | `POST /api/ai/setup` | Start downloading/loading the local model |
 | `GET /api/layers` | Live layer status |

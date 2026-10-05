@@ -14,6 +14,13 @@ WorldView connects world events to markets so you can see **what is moving and w
 | **Markets map mode**: countries coloured by their main index's daily % change | Sidebar → View mode → Markets | Yahoo Finance |
 | **AI market wrap**: describes today's moves from the numbers shown, mentions coinciding events | Markets panel | Local on-device model (or hosted, if configured) |
 
+| **Instrument view** (click any tile/chip): price chart 1D–5Y with crosshair, day & 52-week range; for US-listed companies: industry, HQ, latest-quarter revenue / net income / diluted EPS / operating cash flow vs the same quarter a year earlier, insider (Form 4) filing count, recent filings, related WorldView events | Markets panel, exposure chips, watchlist | Yahoo Finance (prices), SEC EDGAR submissions + XBRL company facts |
+| **US sector performance** (11 SPDR sector ETFs) as a sorted diverging bar chart | Markets panel | Yahoo Finance |
+| **Treasury yield curve**, latest vs one month earlier | Markets panel | U.S. Treasury |
+| **Economic calendar**: BLS (jobs, CPI, PPI, JOLTS…), BEA (GDP, PCE, trade…), Treasury auctions — scheduled dates only, no forecasts | Markets panel | BLS ICS, BEA release dates, Treasury Fiscal Data |
+| **Move since event**: change of each linked instrument from the price at the event time to now (≤ 5 trading days) | Event details → Market exposure | Yahoo Finance hourly |
+| **In-app price alerts** (above/below), checked every 3 minutes while the app is open; fire once per crossing | Instrument view; toasts | Delayed quotes |
+
 All upstream calls are server-side and cached (quotes 3 min, Treasury 6 h); clients share the cache.
 
 ## Exposure rules (`src/lib/finance/exposure.ts`)

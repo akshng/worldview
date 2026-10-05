@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { api, type EventDetailResponse } from "@/lib/client/api";
 import { useUI } from "@/lib/store/ui";
 import { useData } from "@/lib/client/data-store";
+import { useNow } from "@/lib/client/use-now";
 import { formatUtc, relativeTime } from "@/lib/time";
 import { CATEGORIES } from "@/lib/categories";
 import { CategoryLabel, ImportanceMeter, SafeLink, SectionTitle, SimulatedBadge, StatusBadge } from "@/components/ui/primitives";
@@ -273,7 +274,7 @@ function EventBody({ ev, related, exposure, showAI, developer }: { ev: WorldEven
         </section>
       )}
 
-      {exposure.length > 0 && <MarketExposure links={exposure} />}
+      {exposure.length > 0 && <MarketExposure links={exposure} since={ev.timestamp} />}
 
       {/* AI — visually separated, never mixed with facts */}
       {showAI && <AIInterpretation ev={ev} />}
@@ -291,23 +292,36 @@ function EventBody({ ev, related, exposure, showAI, developer }: { ev: WorldEven
   );
 }
 
-function MarketExposure({ links }: { links: EventDetailResponse["marketExposure"] }) {
+function MarketExposure({ links, since }: { links: EventDetailResponse["marketExposure"]; since: string }) {
   const [quotes, setQuotes] = useState<Map<string, import("@/lib/client/api").Quote>>(new Map());
+  const [moves, setMoves] = useState<Map<string, number | null>>(new Map());
   const key = links.map((l) => l.symbol).join(",");
+  const now = useNow(60_000);
+  const recent = now - Date.parse(since) < 5 * 86_400_000 && Date.parse(since) <= now;
   useEffect(() => {
     const ctrl = new AbortController();
     api.quotes(key.split(","), ctrl.signal).then((r) => setQuotes(new Map(r.quotes.map((q) => [q.symbol, q])))).catch(() => {});
+    if (recent) api.reaction(key.split(","), since, ctrl.signal).then((r) => setMoves(new Map(r.results.map((x) => [x.symbol, x.changePct])))).catch(() => {});
     return () => ctrl.abort();
-  }, [key]);
+  }, [key, since, recent]);
   return (
     <section className="border-t border-line px-4 py-3.5">
       <SectionTitle right={<span className="meta text-faint">Rule-based · not advice</span>}>Market exposure</SectionTitle>
+      <p className="mb-2 text-[10.5px] text-faint">Moves since the event are measurements; markets move for many reasons at once.</p>
       <ul className="space-y-1.5">
         {links.map((l) => (
           <li key={l.symbol} className="flex items-start justify-between gap-3 text-[12px]">
             <div className="min-w-0">
               <div className="text-fg/90">{l.name}</div>
               <div className="text-[11px] text-faint">{l.rationale}</div>
+              {typeof moves.get(l.symbol) === "number" && (
+                <div className="text-[11px] text-muted">
+                  Since this event:{" "}
+                  <span className="tabular" style={{ color: moves.get(l.symbol)! >= 0 ? "#3f8de8" : "#e5534b" }}>
+                    {moves.get(l.symbol)! >= 0 ? "▲ +" : "▼ "}{moves.get(l.symbol)!.toFixed(2)}%
+                  </span>
+                </div>
+              )}
             </div>
             <ExposureChip link={{ ...l, name: l.symbol }} quote={quotes.get(l.symbol)} />
           </li>

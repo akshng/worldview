@@ -16,9 +16,11 @@ import { StatusBadge } from "@/components/ui/primitives";
 import { focusEvent } from "@/components/event-feed/EventFeed";
 import type { EventSummary } from "@/types/events";
 import { QuoteTile } from "./QuoteTile";
+import { EconomicCalendar, SectorBars, YieldCurve } from "./MarketExtras";
 
 const GROUPS: Array<{ id: keyof MarketSnapshot["groups"]; title: string }> = [
   { id: "indices", title: "Equity indices" },
+  { id: "sectors", title: "US sectors (SPDR ETFs)" },
   { id: "rates", title: "US Treasury yields" },
   { id: "fx", title: "Currencies" },
   { id: "commodities", title: "Commodities" },
@@ -131,11 +133,21 @@ export function MarketsPanel() {
               GROUPS.map((g) => (
                 <section key={g.id} className="mb-5">
                   <h3 className="meta mb-2 text-faint">{g.title}</h3>
-                  <div className="grid grid-cols-3 gap-2">
-                    {snap.groups[g.id].map((q) => (
-                      <QuoteTile key={q.symbol} q={q} compact />
-                    ))}
-                  </div>
+                  {g.id === "sectors" ? (
+                    <SectorBars sectors={snap.groups.sectors} />
+                  ) : (
+                    <div className="grid grid-cols-3 gap-2">
+                      {snap.groups[g.id].map((q) => (
+                        <QuoteTile key={q.symbol} q={q} compact onOpen={q.group === "rates" ? undefined : () => useUI.getState().openInstrument(q.symbol)} />
+                      ))}
+                    </div>
+                  )}
+                  {g.id === "rates" && (
+                    <div className="mt-3">
+                      <div className="meta mb-1 text-faint">Yield curve — latest vs one month earlier</div>
+                      <YieldCurve />
+                    </div>
+                  )}
                 </section>
               ))}
           </div>
@@ -156,7 +168,7 @@ export function MarketsPanel() {
               </div>
               <div className="space-y-1.5">
                 {watch.filter((q) => watchlist.includes(q.symbol)).map((q) => (
-                  <QuoteTile key={q.symbol} q={q} compact onRemove={() => updateSettings({ watchlist: watchlist.filter((t) => t !== q.symbol) })} />
+                  <QuoteTile key={q.symbol} q={q} compact onOpen={() => useUI.getState().openInstrument(q.symbol)} onRemove={() => updateSettings({ watchlist: watchlist.filter((t) => t !== q.symbol) })} />
                 ))}
                 {!watchlist.length && <p className="text-[12px] text-faint">Add tickers to follow them alongside world events.</p>}
               </div>
@@ -170,6 +182,11 @@ export function MarketsPanel() {
                   ))}
                 </div>
               )}
+            </section>
+
+            <section>
+              <h3 className="meta mb-2 text-faint">Economic calendar · next 2 weeks</h3>
+              <EconomicCalendar />
             </section>
 
             <section className="rounded-md border border-ai/25 bg-ai-soft px-3 py-2.5">
@@ -230,13 +247,17 @@ export function ExposureChip({ link, quote }: { link: ExposureLink; quote?: Quot
   const ch = quote ? formatChange(quote) : null;
   const color = ch && ch.dir > 0 ? UP : ch && ch.dir < 0 ? DOWN : "var(--text-muted)";
   return (
-    <span title={link.rationale} className={clsx("inline-flex items-center gap-1.5 rounded border border-line px-1.5 py-0.5 text-[11px]")}>
+    <button
+      onClick={() => useUI.getState().openInstrument(link.symbol)}
+      title={`${link.rationale} — open ${link.symbol}`}
+      className={clsx("inline-flex items-center gap-1.5 rounded border border-line px-1.5 py-0.5 text-[11px] hover:border-line-strong")}
+    >
       <span className="text-fg/90">{link.name}</span>
       {ch && ch.text !== "—" && (
         <span className="tabular" style={{ color }}>
           {ch.dir > 0 ? "▲" : ch.dir < 0 ? "▼" : "■"} {ch.text}
         </span>
       )}
-    </span>
+    </button>
   );
 }

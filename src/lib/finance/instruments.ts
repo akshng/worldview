@@ -60,6 +60,18 @@ export const INSTRUMENTS: Instrument[] = [
   { symbol: "ZC=F", name: "Corn", group: "commodities", provider: "yahoo" },
   { symbol: "KC=F", name: "Coffee", group: "commodities", provider: "yahoo" },
 
+  { symbol: "XLK", name: "Technology", group: "sectors", provider: "yahoo" },
+  { symbol: "XLF", name: "Financials", group: "sectors", provider: "yahoo" },
+  { symbol: "XLE", name: "Energy", group: "sectors", provider: "yahoo" },
+  { symbol: "XLV", name: "Health care", group: "sectors", provider: "yahoo" },
+  { symbol: "XLY", name: "Consumer discretionary", group: "sectors", provider: "yahoo" },
+  { symbol: "XLP", name: "Consumer staples", group: "sectors", provider: "yahoo" },
+  { symbol: "XLI", name: "Industrials", group: "sectors", provider: "yahoo" },
+  { symbol: "XLB", name: "Materials", group: "sectors", provider: "yahoo" },
+  { symbol: "XLU", name: "Utilities", group: "sectors", provider: "yahoo" },
+  { symbol: "XLRE", name: "Real estate", group: "sectors", provider: "yahoo" },
+  { symbol: "XLC", name: "Communication services", group: "sectors", provider: "yahoo" },
+
   { symbol: "BTC-USD", name: "Bitcoin", group: "crypto", provider: "coinbase" },
   { symbol: "ETH-USD", name: "Ether", group: "crypto", provider: "coinbase" },
   { symbol: "SOL-USD", name: "Solana", group: "crypto", provider: "coinbase" },

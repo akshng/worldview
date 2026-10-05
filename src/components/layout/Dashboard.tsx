@@ -20,6 +20,8 @@ import { SettingsModal } from "@/components/settings/SettingsModal";
 import { Legend } from "@/components/globe/Legend";
 import { BriefingModal } from "@/components/briefing/BriefingModal";
 import { MarketsPanel } from "@/components/markets/MarketsPanel";
+import { InstrumentDetail } from "@/components/markets/InstrumentDetail";
+import { Toasts, useAlertChecker } from "@/components/markets/Alerts";
 import { modeMeta } from "@/lib/map-modes";
 import { useLiveLayer } from "@/lib/client/use-live-layer";
 
@@ -31,6 +33,7 @@ const Globe = dynamic(() => import("@/components/globe/Globe"), {
 
 export function Dashboard() {
   useLiveData();
+  useAlertChecker();
   const events = useData((s) => s.events);
   const mode = useData((s) => s.mode);
   const loading = useData((s) => s.loading);
@@ -99,6 +102,8 @@ export function Dashboard() {
       <SettingsModal />
       <BriefingModal />
       <MarketsPanel />
+      <InstrumentDetail />
+      <Toasts />
     </div>
   );
 }

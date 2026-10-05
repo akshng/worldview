@@ -105,6 +105,56 @@ export type { DailyBriefing, BriefingItem } from "@/lib/briefing";
 import type { MarketSnapshot, Quote, ExposureLink } from "@/lib/finance/types";
 export type { MarketSnapshot, Quote, ExposureLink };
 
+export interface CalendarItem {
+  id: string;
+  at: string;
+  title: string;
+  agency: "BLS" | "BEA" | "Treasury";
+  importance: "high" | "medium" | "low";
+  url: string;
+  detail: string | null;
+}
+
+export interface YieldCurveResponse {
+  latest: { date: string; yields: Array<{ tenor: string; value: number | null }> };
+  monthAgo: { date: string; yields: Array<{ tenor: string; value: number | null }> } | null;
+}
+
+export interface InstrumentResponse {
+  symbol: string;
+  range: string;
+  history:
+    | {
+        name: string;
+        currency: string | null;
+        exchange: string | null;
+        instrumentType: string | null;
+        points: Array<[number, number]>;
+        previousClose: number | null;
+        dayHigh: number | null;
+        dayLow: number | null;
+        fiftyTwoWeekHigh: number | null;
+        fiftyTwoWeekLow: number | null;
+        volume: number | null;
+        marketTime: string | null;
+      }
+    | { error: string };
+  company: {
+    cik: string;
+    name: string;
+    tickers: string[];
+    exchanges: string[];
+    industry: string | null;
+    hq: string | null;
+    filings: Array<{ form: string; filed: string; description: string; url: string }>;
+    insiderFilings30d: number;
+    fundamentals: Array<{ label: string; value: number; unit: string; period: string; priorValue: number | null; filed: string }>;
+    secUrl: string;
+  } | null;
+  events: EventSummary[];
+  note: string;
+}
+
 async function getJSON<T>(url: string, signal?: AbortSignal): Promise<T> {
   const res = await fetch(url, { signal, cache: "no-store" });
   if (!res.ok) {
@@ -135,6 +185,15 @@ export const api = {
     getJSON<{ quotes: Quote[] }>(`/api/markets/quote?symbols=${encodeURIComponent(symbols.join(","))}`, signal),
   movers: (signal?: AbortSignal) =>
     getJSON<{ movers: Array<{ event: EventSummary; exposure: ExposureLink[] }>; note: string }>("/api/markets/movers", signal),
+  instrument: (symbol: string, range: string, signal?: AbortSignal) =>
+    getJSON<InstrumentResponse>(`/api/markets/instrument/${encodeURIComponent(symbol)}?range=${range}`, signal),
+  calendar: (signal?: AbortSignal) => getJSON<{ items: CalendarItem[]; sources: string[] }>("/api/markets/calendar?days=14", signal),
+  yieldCurve: (signal?: AbortSignal) => getJSON<YieldCurveResponse>("/api/markets/yield-curve", signal),
+  reaction: (symbols: string[], since: string, signal?: AbortSignal) =>
+    getJSON<{ since: string; results: Array<{ symbol: string; changePct: number | null; fromTime: string | null }>; note: string }>(
+      `/api/markets/reaction?symbols=${encodeURIComponent(symbols.join(","))}&since=${encodeURIComponent(since)}`,
+      signal,
+    ),
   async marketSummary() {
     const res = await fetch("/api/markets/summary", { method: "POST" });
     const body = await res.json().catch(() => ({}));

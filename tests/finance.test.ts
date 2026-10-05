@@ -49,3 +49,37 @@ describe("treasury CSV", () => {
     expect(parseTreasuryCsv(csv)[0]).toEqual({ date: "2026-10-02", y2: 4.83, y10: 5.28, y30: 5.63 });
   });
 });
+
+describe("economic calendar", async () => {
+  const { parseBlsIcs, parseBea, easternToUtc, importanceOf } = await import("@/lib/finance/calendar");
+  it("converts US-Eastern release times across DST", () => {
+    expect(easternToUtc(2026, 10, 2, 8, 30).toISOString()).toBe("2026-10-02T12:30:00.000Z"); // EDT
+    expect(easternToUtc(2026, 12, 4, 8, 30).toISOString()).toBe("2026-12-04T13:30:00.000Z"); // EST
+  });
+  it("parses BLS ICS events and flags market-moving releases", () => {
+    const ics = "BEGIN:VEVENT\r\nDTSTART;TZID=US-Eastern:20261002T083000\r\nSUMMARY:Employment Situation\r\nUID:a\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nDTSTART;TZID=US-Eastern:20261014T083000\r\nSUMMARY:Consumer Price Index\r\nUID:b\r\nEND:VEVENT";
+    const items = parseBlsIcs(ics);
+    expect(items.map((i) => [i.title, i.importance, i.at])).toEqual([
+      ["Employment Situation", "high", "2026-10-02T12:30:00.000Z"],
+      ["Consumer Price Index", "high", "2026-10-14T12:30:00.000Z"],
+    ]);
+  });
+  it("parses BEA dates and de-prioritises minor releases", () => {
+    const items = parseBea({ "Gross Domestic Product": { release_dates: ["2026-10-29T12:30:00+00:00"] }, file_last_updated: "x" });
+    expect(items[0]).toMatchObject({ agency: "BEA", importance: "high" });
+    expect(importanceOf("Travel and Tourism Satellite Account")).toBe("low");
+  });
+});
+
+describe("SEC fundamentals", async () => {
+  const { latestQuarter } = await import("@/lib/finance/company");
+  it("picks the latest calendar quarter and the same quarter a year earlier", () => {
+    const rows = [
+      { end: "2025-06-28", val: 94, fy: 2025, fp: "Q3", form: "10-Q", filed: "x", frame: "CY2025Q2" },
+      { end: "2026-06-27", val: 109, fy: 2026, fp: "Q3", form: "10-Q", filed: "y", frame: "CY2026Q2" },
+      { end: "2026-06-27", val: 300, fy: 2026, fp: "Q3", form: "10-Q", filed: "y" }, // year-to-date, no frame
+    ];
+    const lq = latestQuarter(rows)!;
+    expect([lq.cur.val, lq.prior?.val]).toEqual([109, 94]);
+  });
+});
