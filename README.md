@@ -108,6 +108,15 @@ Details, terms and caveats: [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md).
 - Source health and live-layer status in Settings → Data sources
 - Demo mode with clearly labelled simulated data
 
+## Run it as an always-on local app (macOS)
+
+```bash
+npm run build
+npm run service:install
+```
+
+WorldView then runs as a production server at http://localhost:3000 (bound to this Mac only). It starts when you log in and restarts if it crashes, so feeds keep updating in the background. After pulling changes: `npm run build && npm run service:restart`. Remove it with `npm run service:uninstall`. Log: `.data/server.log`. Don't run `npm run dev` at the same time — both use port 3000 and the same data store.
+
 ## Morning briefing
 
 A once-a-day job refreshes every active source, builds the daily briefing, has the AI (local Qwen by default) write the summary, saves it to `DATA_DIR/briefings/YYYY-MM-DD.json`, unloads the model and exits — nothing stays running. The app shows it as "Morning briefing · <time>".
@@ -157,6 +166,7 @@ The full walkthrough is in [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md#adding-a-
 | `npm test` | Unit tests (vitest) |
 | `npm run typecheck` | TypeScript check |
 | `npm run lint` | ESLint |
+| `npm run service:install` / `service:restart` / `service:uninstall` | Always-on production server on localhost:3000 (macOS LaunchAgent; build first) |
 | `npm run briefing:morning` | Prepare today's morning briefing once, then exit |
 | `npm run briefing:schedule` / `briefing:unschedule` | Install / remove the daily job (macOS LaunchAgent, default 07:30) |
 | `npm run geo:build` | Rebuild bundled Natural Earth geography |

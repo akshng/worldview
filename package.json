@@ -24,7 +24,10 @@
     "ai:setup": "node-llama-cpp pull --dir .data/models hf:unsloth/Qwen3-4B-Instruct-2507-GGUF:Q4_K_M",
     "briefing:morning": "NODE_OPTIONS=--conditions=react-server tsx scripts/morning-briefing.ts",
     "briefing:schedule": "node scripts/schedule-briefing.mjs",
-    "briefing:unschedule": "node scripts/schedule-briefing.mjs --remove"
+    "briefing:unschedule": "node scripts/schedule-briefing.mjs --remove",
+    "service:install": "node scripts/local-service.mjs install",
+    "service:restart": "node scripts/local-service.mjs restart",
+    "service:uninstall": "node scripts/local-service.mjs uninstall"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
