@@ -22,6 +22,8 @@ import { usgsVolcanoConnector } from "./usgs-volcano";
 import { cemsConnector } from "./copernicus-ems";
 import { ukFloodsConnector } from "./uk-floods";
 import { nhcConnector } from "./nhc";
+import { spcReportsConnector } from "./spc-reports";
+import { nifcConnector } from "./nifc";
 import { demoConnector } from "./demo";
 
 export const CONNECTORS = [
@@ -29,6 +31,7 @@ export const CONNECTORS = [
   emscConnector,
   gdacsConnector,
   nhcConnector,
+  spcReportsConnector,
   weatherConnector,
   meteoalarmConnector,
   ukFloodsConnector,
@@ -36,6 +39,7 @@ export const CONNECTORS = [
   usgsVolcanoConnector,
   cemsConnector,
   firmsConnector,
+  nifcConnector,
   gdeltConnector,
   gkgConnector,
   spaceConnector,

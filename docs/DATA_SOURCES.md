@@ -17,6 +17,8 @@ All V1 connectors use official or well-established public structured feeds. No w
 | `uk-floods` | [Environment Agency flood-monitoring API](https://environment.data.gov.uk/flood-monitoring/doc/reference) | Severity 1–3 (severe warning, warning, alert) placed at the flood area's reference point (looked up once per area, cached); a severity change supersedes the area's previous record. Times are UK local and converted to UTC | 15 min | — | Official agency / `OFFICIAL_FINAL` |
 | `usgs-volcano` | [USGS HANS API](https://volcanoes.usgs.gov/hans-public/api/volcano/) | Volcanoes above NORMAL (advisory / watch / warning) with aviation colour code; location from the volcano record (cached) | 30 min | — | Official agency / `OFFICIAL_FINAL` |
 | `copernicus-ems` | [Copernicus EMS Rapid Mapping](https://rapidmapping.emergency.copernicus.eu/) public dashboard API | Activations from the last 45 days (or still open), placed at the centroid of the mapped areas (region precision); category mapped to flood / fire / storm / quake / volcano / industrial / disaster | 60 min | — | Official agency / `OFFICIAL_PRELIMINARY` |
+| `spc-reports` | [SPC filtered storm reports](https://www.spc.noaa.gov/climo/reports/) CSV | Tornado / wind / hail sections for the current report day and the two before (a report day runs 12:00–11:59 UTC; times are UTC). "2 SW Town" becomes "2 mi SW of Town"; zone codes in the county column are dropped. Preliminary — may be revised | 10 min | — | Official agency / `OFFICIAL_PRELIMINARY` |
+| `nifc` | [NIFC WFIGS current incident locations](https://data-nifc.opendata.arcgis.com/) (ArcGIS) | Wildfires (`IncidentTypeCategory='WF'`, no prescribed burns) of 100+ acres not declared out; point of origin; dropped when not updated for 30 days, or 3 days once 100% contained | 30 min | — | Official agency / `OFFICIAL_PRELIMINARY` |
 | `space` | [Launch Library 2](https://thespacedevs.com/llapi) upcoming + previous | Launches within ±7 days at the launch pad | 30 min | — (15 req/h free tier) | Community database / `SCHEDULED` |
 | `tsunami` | [NOAA tsunami.gov](https://www.tsunami.gov/) Atom feeds (NTWC + PTWC) | Messages from the last 3 days at the event location | 3 min | — | Official agency / `OFFICIAL_FINAL` |
 | `faa` | [FAA NAS Status](https://nasstatus.faa.gov/) XML | Ground delay programs, ground stops, arrival/departure delays and full closures at airport coordinates (OurAirports gazetteer) | 5 min | — | Official agency / `OFFICIAL_PRELIMINARY` |
@@ -46,6 +48,9 @@ Natural Earth countries (1:50m), populated places, and admin-1 states/provinces 
 - **ReliefWeb API** now requires a pre-approved app name (returns 403 without one).
 - **Smithsonian GVP weekly volcano RSS** blocks programmatic access (403).
 - **Stooq** no longer serves quote CSVs.
+- **World Bank and IMF DataMapper APIs** time out or deny access from this environment, so country economic profiles aren't included yet.
+- **Polymarket** (prediction markets) API timed out.
+- **Nasdaq earnings calendar** API blocks non-browser clients.
 - **GeoNet (NZ) volcanic alert levels** carry no timestamp, so they can't be placed in time without inventing one.
 - **Canadian CWFIS active fires** WFS layer is no longer published under its documented name; NASA FIRMS covers Canadian fires.
 

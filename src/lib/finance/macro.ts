@@ -6,7 +6,17 @@
 import "server-only";
 import { userAgent } from "@/lib/env";
 
-export type MacroGroup = "Inflation" | "Jobs" | "Growth" | "Rates & credit" | "Money & liquidity" | "Housing" | "Sentiment";
+export type MacroGroup =
+  | "Inflation"
+  | "Jobs"
+  | "Growth"
+  | "Rates & credit"
+  | "Money & liquidity"
+  | "Housing"
+  | "Fiscal"
+  | "Global"
+  | "Crypto market"
+  | "Sentiment";
 
 interface SeriesDef {
   id: string;
@@ -14,7 +24,7 @@ interface SeriesDef {
   group: MacroGroup;
   /** How the raw series is turned into the displayed value */
   transform: "level" | "yoy" | "diff" | "thousands" | "trillions_from_millions";
-  unit: "%" | "k" | "$T" | "index" | "pp";
+  unit: "%" | "k" | "$T" | "$B" | "index" | "pp";
   /** One line on what it measures, shown on hover */
   note: string;
 }
@@ -45,6 +55,14 @@ export const MACRO_SERIES: SeriesDef[] = [
 
   { id: "MORTGAGE30US", name: "30-yr mortgage", group: "Housing", transform: "level", unit: "%", note: "Average 30-year fixed mortgage rate (Freddie Mac)" },
   { id: "HOUST", name: "Housing starts", group: "Housing", transform: "level", unit: "k", note: "New homes started, seasonally adjusted annual rate, thousands" },
+
+  { id: "ECBDFR", name: "ECB deposit rate", group: "Global", transform: "level", unit: "%", note: "European Central Bank deposit facility rate" },
+  { id: "IRSTCI01GBM156N", name: "UK overnight rate", group: "Global", transform: "level", unit: "%", note: "UK call money / interbank rate, monthly average (OECD)" },
+  { id: "IRSTCI01JPM156N", name: "Japan overnight rate", group: "Global", transform: "level", unit: "%", note: "Japan call money rate, monthly average (OECD)" },
+  { id: "CP0000EZ19M086NEST", name: "Euro area inflation", group: "Global", transform: "yoy", unit: "%", note: "Harmonised consumer prices (HICP), year over year (Eurostat)" },
+  { id: "IRLTLT01DEM156N", name: "Germany 10-yr", group: "Global", transform: "level", unit: "%", note: "German 10-year government bond yield, monthly (OECD)" },
+  { id: "IRLTLT01GBM156N", name: "UK 10-yr gilt", group: "Global", transform: "level", unit: "%", note: "UK 10-year government bond yield, monthly (OECD)" },
+  { id: "IRLTLT01JPM156N", name: "Japan 10-yr", group: "Global", transform: "level", unit: "%", note: "Japan 10-year government bond yield, monthly (OECD)" },
 
   { id: "UMCSENT", name: "Consumer sentiment", group: "Sentiment", transform: "level", unit: "index", note: "University of Michigan consumer sentiment" },
 ];
@@ -174,6 +192,150 @@ export function parseFearGreed(j: { data?: Array<{ value: string; value_classifi
   };
 }
 
+const getJson = async (url: string) => {
+  const res = await fetch(url, { headers: { "User-Agent": userAgent(), Accept: "application/json" }, signal: AbortSignal.timeout(30_000), cache: "no-store" });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+};
+
+/** Build an indicator from a dated series that needs no FRED transform. */
+export function seriesIndicator(
+  meta: Pick<MacroIndicator, "id" | "name" | "group" | "unit" | "note" | "source" | "sourceUrl">,
+  series: Observation[],
+): MacroIndicator | null {
+  if (!series.length) return null;
+  const s = [...series].sort((a, b) => a.date.localeCompare(b.date));
+  const last = s[s.length - 1], prev = s[s.length - 2];
+  return {
+    ...meta,
+    value: round(last.value),
+    previous: prev ? round(prev.value) : null,
+    change: prev ? round(last.value - prev.value) : null,
+    asOf: last.date,
+    spark: sparkOf(s).map(round),
+  };
+}
+
+const TREASURY = "https://api.fiscaldata.treasury.gov/services/api/fiscal_service";
+
+/** Total public debt outstanding (daily), in $ trillions. */
+export function parseDebtToPenny(j: { data?: Array<{ record_date: string; tot_pub_debt_out_amt: string }> }): Observation[] {
+  return (j.data ?? []).map((r) => ({ date: r.record_date, value: Number(r.tot_pub_debt_out_amt) / 1e12 })).filter((o) => Number.isFinite(o.value));
+}
+
+/**
+ * Fiscal-year-to-date deficit (positive = deficit) from MTS table 1, in $ billions.
+ * Each statement has two "Year-to-Date" rows — the previous fiscal year's total, then
+ * the current year so far — so keep the later row (highest print order) per date.
+ */
+export function parseMtsYtd(j: {
+  data?: Array<{ record_date: string; classification_desc: string; current_month_dfct_sur_amt: string; print_order_nbr?: string }>;
+}): Observation[] {
+  const best = new Map<string, { order: number; value: number }>();
+  for (const r of j.data ?? []) {
+    if (r.classification_desc !== "Year-to-Date") continue;
+    const value = Number(r.current_month_dfct_sur_amt) / 1e9;
+    const order = Number(r.print_order_nbr ?? 0);
+    const prev = best.get(r.record_date);
+    if (Number.isFinite(value) && (!prev || order > prev.order)) best.set(r.record_date, { order, value });
+  }
+  return [...best].map(([date, { value }]) => ({ date, value }));
+}
+
+const day = (unixSeconds: number | string) => new Date(Number(unixSeconds) * 1000).toISOString().slice(0, 10);
+
+async function loadExternal(): Promise<{ indicators: MacroIndicator[]; failed: string[] }> {
+  const fiscal = { source: "U.S. Treasury Fiscal Data", group: "Fiscal" as const };
+  const crypto = { group: "Crypto market" as const };
+  let cg: Promise<{ data?: Record<string, any> }> | null = null; // eslint-disable-line @typescript-eslint/no-explicit-any
+  const coingecko = () => (cg ??= getJson("https://api.coingecko.com/api/v3/global"));
+  const tasks: Array<[string, () => Promise<MacroIndicator | null>]> = [
+    [
+      "US_DEBT",
+      async () =>
+        seriesIndicator(
+          { ...fiscal, id: "US_DEBT", name: "US national debt", unit: "$T", note: "Total public debt outstanding (Debt to the Penny)", sourceUrl: "https://fiscaldata.treasury.gov/datasets/debt-to-the-penny/" },
+          parseDebtToPenny(await getJson(`${TREASURY}/v2/accounting/od/debt_to_penny?sort=-record_date&page%5Bsize%5D=260&fields=record_date,tot_pub_debt_out_amt`)),
+        ),
+    ],
+    [
+      "US_DEFICIT_FYTD",
+      async () =>
+        seriesIndicator(
+          { ...fiscal, id: "US_DEFICIT_FYTD", name: "Deficit, fiscal YTD", unit: "$B", note: "Federal deficit so far this fiscal year (from Oct 1); the year resets each October. Monthly Treasury Statement", sourceUrl: "https://fiscaldata.treasury.gov/datasets/monthly-treasury-statement/" },
+          parseMtsYtd(await getJson(`${TREASURY}/v1/accounting/mts/mts_table_1?filter=classification_desc:eq:Year-to-Date&sort=-record_date&page%5Bsize%5D=48&fields=record_date,classification_desc,current_month_dfct_sur_amt,print_order_nbr`)),
+        ),
+    ],
+    [
+      "CRYPTO_MCAP",
+      async () => {
+        const d = (await coingecko()).data;
+        const v = d?.total_market_cap?.usd;
+        if (typeof v !== "number") return null;
+        const pct = d.market_cap_change_percentage_24h_usd;
+        return {
+          ...crypto,
+          id: "CRYPTO_MCAP",
+          name: "Crypto market cap",
+          unit: "$T",
+          note: "Total value of all tracked cryptocurrencies; change is over the last 24 hours",
+          value: round(v / 1e12),
+          previous: typeof pct === "number" ? round(v / (1 + pct / 100) / 1e12) : null,
+          change: typeof pct === "number" ? round((v - v / (1 + pct / 100)) / 1e12) : null,
+          asOf: d.updated_at ? day(d.updated_at) : null,
+          spark: [],
+          source: "CoinGecko",
+          sourceUrl: "https://www.coingecko.com/en/global-charts",
+        };
+      },
+    ],
+    [
+      "BTC_DOMINANCE",
+      async () => {
+        const d = (await coingecko()).data;
+        const v = d?.market_cap_percentage?.btc;
+        if (typeof v !== "number") return null;
+        return { ...crypto, id: "BTC_DOMINANCE", name: "Bitcoin dominance", unit: "%", note: "Bitcoin's share of total crypto market cap", value: round(v), previous: null, change: null, asOf: d.updated_at ? day(d.updated_at) : null, spark: [], source: "CoinGecko", sourceUrl: "https://www.coingecko.com/en/global-charts" };
+      },
+    ],
+    [
+      "DEFI_TVL",
+      async () =>
+        seriesIndicator(
+          { ...crypto, id: "DEFI_TVL", name: "DeFi value locked", unit: "$B", note: "Total value locked in decentralised-finance protocols across all chains", source: "DefiLlama", sourceUrl: "https://defillama.com/" },
+          ((await getJson("https://api.llama.fi/v2/historicalChainTvl")) as Array<{ date: number; tvl: number }>).slice(-400).map((r) => ({ date: day(r.date), value: r.tvl / 1e9 })),
+        ),
+    ],
+    [
+      "STABLECOINS",
+      async () =>
+        seriesIndicator(
+          { ...crypto, id: "STABLECOINS", name: "Stablecoin supply", unit: "$B", note: "Circulating supply of USD-pegged stablecoins", source: "DefiLlama", sourceUrl: "https://defillama.com/stablecoins" },
+          ((await getJson("https://stablecoins.llama.fi/stablecoincharts/all")) as Array<{ date: string; totalCirculatingUSD?: { peggedUSD?: number } }>)
+            .slice(-400)
+            .filter((r) => typeof r.totalCirculatingUSD?.peggedUSD === "number")
+            .map((r) => ({ date: day(r.date), value: r.totalCirculatingUSD!.peggedUSD! / 1e9 })),
+        ),
+    ],
+  ];
+  const indicators: MacroIndicator[] = [];
+  const failed: string[] = [];
+  await Promise.all(
+    tasks.map(async ([id, run]) => {
+      try {
+        const m = await run();
+        if (m) indicators.push(m);
+        else failed.push(id);
+      } catch {
+        failed.push(id);
+      }
+    }),
+  );
+  return { indicators, failed };
+}
+
+const EXTERNAL_ORDER = ["US_DEBT", "US_DEFICIT_FYTD", "CRYPTO_MCAP", "BTC_DOMINANCE", "DEFI_TVL", "STABLECOINS"];
+
 const TTL = 6 * 3_600_000;
 const g = globalThis as unknown as { __worldviewMacro?: { at: number; value: MacroDashboard; pending: Promise<MacroDashboard> | null } };
 
@@ -194,6 +356,9 @@ async function load(): Promise<MacroDashboard> {
       }
     }),
   );
+  const ext = await loadExternal();
+  indicators.push(...ext.indicators);
+  failed.push(...ext.failed);
   try {
     const res = await fetch("https://api.alternative.me/fng/?limit=60", { headers: { "User-Agent": userAgent() }, signal: AbortSignal.timeout(15_000), cache: "no-store" });
     const fng = res.ok ? parseFearGreed(await res.json()) : null;
@@ -202,7 +367,7 @@ async function load(): Promise<MacroDashboard> {
   } catch {
     failed.push("CRYPTO_FNG");
   }
-  const order = [...MACRO_SERIES.map((d) => d.id), "CRYPTO_FNG"];
+  const order = [...MACRO_SERIES.map((d) => d.id), ...EXTERNAL_ORDER, "CRYPTO_FNG"];
   indicators.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
   return { indicators, generatedAt: new Date().toISOString(), failed };
 }

@@ -76,6 +76,8 @@ Secrets are read only on the server (`src/lib/env.ts`, guarded by `server-only`)
 | GDACS (UN/EC disaster alerts) | Earthquake, cyclone, flood, volcano, drought, wildfire | 10 min | none |
 | NWS active alerts (severe/extreme, US) | Weather, flood | 5 min | none |
 | NOAA National Hurricane Center | Active Atlantic/Pacific hurricanes and tropical storms, per advisory | 15 min | none |
+| NOAA Storm Prediction Center | US tornado, damaging-wind and hail reports (last 3 days) | 10 min | none |
+| NIFC wildfire incidents | Named US wildfires 100+ acres with size, containment, personnel | 30 min | none |
 | Environment Agency flood warnings (England) | Flood alerts, warnings, severe warnings | 15 min | none |
 | USGS Volcano Hazards Program | US volcanoes above normal alert level | 30 min | none |
 | Copernicus Emergency Management Service | Disasters worldwide with EU satellite rapid mapping (floods, fires, storms…) | 60 min | none |

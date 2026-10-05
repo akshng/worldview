@@ -8,7 +8,7 @@ import { api } from "@/lib/client/api";
 import type { MacroDashboard as Dashboard, MacroIndicator } from "@/lib/finance/macro";
 import { Sparkline } from "./Sparkline";
 
-const GROUP_ORDER: MacroIndicator["group"][] = ["Inflation", "Jobs", "Growth", "Rates & credit", "Money & liquidity", "Housing", "Sentiment"];
+const GROUP_ORDER: MacroIndicator["group"][] = ["Inflation", "Jobs", "Growth", "Rates & credit", "Money & liquidity", "Fiscal", "Housing", "Global", "Crypto market", "Sentiment"];
 
 export function formatMacro(v: number | null, unit: MacroIndicator["unit"]): string {
   if (v === null) return "—";
@@ -21,6 +21,8 @@ export function formatMacro(v: number | null, unit: MacroIndicator["unit"]): str
       return `${Math.round(v).toLocaleString("en-US")}k`;
     case "$T":
       return `$${v.toFixed(2)}T`;
+    case "$B":
+      return `$${Math.round(v).toLocaleString("en-US")}B`;
     default:
       return v.toFixed(1);
   }
@@ -28,7 +30,7 @@ export function formatMacro(v: number | null, unit: MacroIndicator["unit"]): str
 
 /** Change rounded to the precision it is shown at, so "−0.0" never appears. */
 function roundedDelta(d: number, unit: MacroIndicator["unit"]): number {
-  const f = unit === "%" ? 10 : unit === "k" ? 1 : 100;
+  const f = unit === "%" ? 10 : unit === "k" || unit === "$B" ? 1 : 100;
   return Math.round(d * f) / f;
 }
 
@@ -37,7 +39,7 @@ function formatDelta(raw: number | null, unit: MacroIndicator["unit"]): string {
   const d = roundedDelta(raw, unit);
   const sign = d > 0 ? "+" : d < 0 ? "−" : "±";
   const a = Math.abs(d);
-  const body = unit === "%" ? `${a.toFixed(1)} pt` : unit === "k" ? `${Math.round(a).toLocaleString("en-US")}k` : unit === "$T" ? `$${a.toFixed(2)}T` : a.toFixed(2);
+  const body = unit === "%" ? `${a.toFixed(1)} pt` : unit === "k" ? `${Math.round(a).toLocaleString("en-US")}k` : unit === "$T" ? `$${a.toFixed(2)}T` : unit === "$B" ? `$${Math.round(a).toLocaleString("en-US")}B` : a.toFixed(2);
   return `${sign}${body}`;
 }
 
@@ -103,7 +105,7 @@ export function MacroDashboard() {
         );
       })}
       <p className="text-[10.5px] text-faint">
-        Source: FRED, Federal Reserve Bank of St. Louis (official US statistics; dates are the period each value covers) · Crypto Fear &amp; Greed: alternative.me.
+        Sources: FRED, Federal Reserve Bank of St. Louis (dates are the period each value covers) · U.S. Treasury Fiscal Data · CoinGecko · DefiLlama · alternative.me. Hover a tile for its source.
         Change is versus the previous release. Click a tile for the full series.
       </p>
     </div>

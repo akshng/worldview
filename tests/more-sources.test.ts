@@ -96,3 +96,59 @@ describe("NHC", () => {
     expect(valid(r.candidates)).toBe(true);
   });
 });
+
+import { parseSpc, spcPlace, spcTime } from "@/data-sources/spc-reports/parser";
+import { reportDay } from "@/data-sources/spc-reports/client";
+import { parseNifc } from "@/data-sources/nifc/parser";
+
+describe("SPC storm reports", () => {
+  it("maps report-day times to UTC (before 12Z is the next day)", () => {
+    expect(spcTime("260930", "2030")?.toISOString()).toBe("2026-09-30T20:30:00.000Z");
+    expect(spcTime("260930", "0115")?.toISOString()).toBe("2026-10-01T01:15:00.000Z");
+    expect(reportDay(Date.parse("2026-10-01T05:00:00Z"))).toBe("260930");
+  });
+  it("formats places", () => {
+    expect(spcPlace("3 SSW Ash Valley", "Pawnee", "KS")).toBe("3 mi SSW of Ash Valley, Pawnee County, KS");
+    expect(spcPlace("2 SW Rock Harbor", "FLC087", "FL")).toBe("2 mi SW of Rock Harbor, FL");
+  });
+  it("parses the three sections", () => {
+    const csv = [
+      "Time,F_Scale,Location,County,State,Lat,Lon,Comments",
+      "2030,EF1,3 SW Sanford,Pawnee,KS,38.15,-99.35,Brief tornado, photos. (DDC)",
+      "Time,Speed,Location,County,State,Lat,Lon,Comments",
+      "2100,65,Hays,Ellis,KS,38.88,-99.32,Trees down. (DDC)",
+      "Time,Size,Location,County,State,Lat,Lon,Comments",
+      "0130,175,Dodge City,Ford,KS,37.75,-100.02,(DDC)",
+    ].join("\n");
+    const r = parseSpc({ days: [{ day: "260930", csv }] }, ctx);
+    expect(r.candidates.map((c) => c.subtype)).toEqual(["tornado", "severe-wind", "hail"]);
+    expect(r.candidates[0].title).toBe("Tornado report (EF1) — 3 mi SW of Sanford, Pawnee County, KS");
+    expect(r.candidates[0].summary).toContain("Brief tornado, photos.");
+    expect(r.candidates[2].metrics).toMatchObject({ hail_in: 1.75 });
+    expect(r.candidates[2].timestamp).toBe("2026-10-01T01:30:00.000Z");
+    expect(valid(r.candidates)).toBe(true);
+  });
+});
+
+describe("NIFC wildfires", () => {
+  const base = {
+    IncidentName: "LITTLE GIANT", IncidentSize: 172902, PercentContained: 93, FireDiscoveryDateTime: Date.parse("2026-07-16T00:00:00Z"),
+    ModifiedOnDateTime_dt: now - 86_400_000, FireOutDateTime: null, POOState: "US-WA", POOCounty: "Chelan", POOCity: null,
+    TotalIncidentPersonnel: 373, FireCause: "Natural", UniqueFireIdentifier: "2026-WAOWF-260406", IrwinID: "{091081ED}",
+  };
+  it("parses active fires and drops stale fully-contained ones", () => {
+    const r = parseNifc(
+      {
+        features: [
+          { geometry: { type: "Point", coordinates: [-120.85, 48.02] }, properties: base },
+          { geometry: { type: "Point", coordinates: [-120.2, 44.8] }, properties: { ...base, IrwinID: "{X}", PercentContained: 100, ModifiedOnDateTime_dt: now - 10 * 86_400_000 } },
+        ],
+      },
+      ctx,
+    );
+    expect(r.candidates).toHaveLength(1);
+    expect(r.candidates[0].title).toBe("Little Giant Fire — 172,902 acres, 93% contained (WA)");
+    expect(r.candidates[0].source.externalId).toBe("091081ED");
+    expect(valid(r.candidates)).toBe(true);
+  });
+});

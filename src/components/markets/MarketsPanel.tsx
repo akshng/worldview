@@ -18,6 +18,7 @@ import type { EventSummary } from "@/types/events";
 import { QuoteTile } from "./QuoteTile";
 import { EconomicCalendar, SectorBars, YieldCurve } from "./MarketExtras";
 import { MacroDashboard } from "./MacroDashboard";
+import { StockMovers } from "./StockMovers";
 
 const GROUPS: Array<{ id: keyof MarketSnapshot["groups"]; title: string }> = [
   { id: "indices", title: "Equity indices" },
@@ -189,6 +190,11 @@ export function MarketsPanel() {
                   ))}
                 </div>
               )}
+            </section>
+
+            <section>
+              <h3 className="meta mb-2 text-faint">US stock movers today</h3>
+              <StockMovers />
             </section>
 
             <section>
