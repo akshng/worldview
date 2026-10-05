@@ -4,7 +4,7 @@
  *   1. Refresh every active data source
  *   2. Build the daily briefing and have the AI write its summary
  *   3. Save it to DATA_DIR/briefings/YYYY-MM-DD.json (the app shows it)
- *   4. Optionally push a short notification to your phone (NTFY_TOPIC)
+ *   4. Optionally notify your phone: iMessage text (IMESSAGE_TO) and/or ntfy push (NTFY_TOPIC)
  *   5. Unload the AI model and exit, so nothing keeps running
  *
  * If the WorldView server is already running (WORLDVIEW_URL, default
@@ -23,6 +23,12 @@ for (const f of [".env.local", ".env"]) {
 const log = (msg: string) => console.log(`[${new Date().toISOString()}] ${msg}`);
 async function notifyPhone(briefing: import("@/lib/briefing").DailyBriefing) {
   const { sendBriefingPush } = await import("@/lib/notify/ntfy");
+  const { sendBriefingText } = await import("@/lib/notify/imessage");
+  try {
+    if (await sendBriefingText(briefing)) log("text sent (iMessage)");
+  } catch (err) {
+    log(`iMessage failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
   try {
     if (await sendBriefingPush(briefing)) log("phone notification sent (ntfy)");
   } catch (err) {

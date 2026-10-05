@@ -32,3 +32,15 @@ describe("ntfy push", () => {
     expect(briefingPushText(b)).toContain("No major developments");
   });
 });
+
+describe("iMessage text", () => {
+  it("is off without a recipient and labels the AI summary", async () => {
+    const { imessageRecipient, briefingText } = await import("@/lib/notify/imessage");
+    expect(imessageRecipient({})).toBeNull();
+    const b = buildDailyBriefing([], Date.now());
+    b.aiNarrative = { text: "x".repeat(5000), provider: "local", model: "m", generatedAt: new Date().toISOString() };
+    const t = briefingText(b);
+    expect(t).toContain("interpretation, not verified fact");
+    expect(t.length).toBeLessThanOrEqual(1800);
+  });
+});
