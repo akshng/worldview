@@ -51,13 +51,16 @@ cp .env.example .env.local
 | `DATA_DIR` | `.data` | Local store location (`live-store.json` / `demo-store.json`) |
 | `RETENTION_DAYS` | `8` | How long events are kept |
 | `WORLDVIEW_CONTACT` | — | Contact appended to the User-Agent (api.weather.gov requests one) |
-| `ADMIN_TOKEN` | — | If set, `POST /api/ingest/:source` requires `Authorization: Bearer <token>`; otherwise only localhost may trigger |
+| `ADMIN_TOKEN` | — | If set, `POST /api/ingest/:source` and `POST /api/ai/unload` require `Authorization: Bearer <token>`; otherwise only localhost may trigger |
 | `NASA_FIRMS_MAP_KEY` | — | Optional FIRMS API key; without it the public 24 h VIIRS file is used |
 | `OPENSKY_CLIENT_ID` / `OPENSKY_CLIENT_SECRET` | — | Optional OpenSky API client (raises the anonymous aviation quota) |
 | `AISSTREAM_API_KEY` | — | Free key from aisstream.io — required for the Maritime map mode |
 | `AI_PROVIDER` | `local` | `local` = keyless on-device model (no account), `anthropic` = hosted Claude, `none` = off |
 | `AI_LOCAL_MODEL` | Qwen3-4B-Instruct Q4_K_M | Override the on-device model (node-llama-cpp URI) |
+| `AI_IDLE_UNLOAD_MINUTES` | `5` | Unload the local model after this many idle minutes (reloads on the next AI request); `0` = keep loaded |
 | `AI_API_KEY` / `AI_MODEL` | — / `claude-opus-5-5` | Only for `AI_PROVIDER=anthropic` |
+| `WORLDVIEW_URL` | `http://localhost:3000` | Where the morning-briefing job looks for a running server |
+| `NTFY_TOPIC` / `NTFY_SERVER` | — / `https://ntfy.sh` | Optional phone push for the morning briefing; unset topic = off |
 | `DATABASE_URL` | — | Storage: unset = in-memory + JSON snapshot; `pglite` = embedded Postgres (no install); `postgres://…` = PostgreSQL server |
 
 Secrets are read only on the server (`src/lib/env.ts`, guarded by `server-only`) and never sent to the browser.
@@ -96,12 +99,34 @@ Details, terms and caveats: [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md).
 - 3D globe with clustering, day/night terminator, three basemaps (dark vector, NASA Blue Marble, night lights)
 - **Map modes**: Events, Heatmap, Density grid, Weather (radar loop), Fires (radiative power), Earthquakes (magnitude × depth), Conflict, Aviation (live aircraft), Maritime (live vessels)
 - Live feed, event details (facts · sources · timeline · score explanation · related events · separate AI box), country overviews, timeline replay, ⌘K search with intent parsing
-- **Daily briefing** (top-bar "Briefing"): new / developing / ongoing / resolved, today vs yesterday, regional sections, what to watch — every line links to an event; optional AI summary written only from those events
+- **Daily briefing** (top-bar "Briefing"): new / developing / ongoing / resolved, today vs yesterday, regional sections, what to watch — every line links to an event; optional AI summary written only from those events. Can be prepared automatically every morning ([below](#morning-briefing))
 - **Markets** (top bar): indices, US sectors, Treasury yields + yield curve, FX, commodities, crypto; economic calendar; instrument view with charts, SEC fundamentals and filings; watchlist and in-app price alerts; world events linked to the instruments they could affect; AI market wrap — information only, not advice ([docs/FINANCE.md](docs/FINANCE.md))
 - **Markets map mode**: countries coloured by their main stock index's daily move
 - Real areas (warning polygons, fire footprints), uncertainty rings by location precision, and location-correction notes
 - Source health and live-layer status in Settings → Data sources
 - Demo mode with clearly labelled simulated data
+
+## Morning briefing
+
+A once-a-day job refreshes every active source, builds the daily briefing, has the AI (local Qwen by default) write the summary, saves it to `DATA_DIR/briefings/YYYY-MM-DD.json`, unloads the model and exits — nothing stays running. The app shows it as "Morning briefing · <time>".
+
+```bash
+npm run briefing:schedule            # daily at 07:30 (macOS)
+```
+
+```bash
+npm run briefing:schedule -- 6:45    # custom time (24 h, local)
+```
+
+```bash
+npm run briefing:unschedule
+```
+
+This installs a LaunchAgent (`~/Library/LaunchAgents/com.worldview.morning-briefing.plist`). If the Mac is asleep at that time it runs on wake; if it is powered off it doesn't run. Log: `.data/briefings/morning.log`. Run it now with `launchctl kickstart gui/$(id -u)/com.worldview.morning-briefing`, or once in the foreground with `npm run briefing:morning`. On Linux, add a cron line instead: `30 7 * * * cd /path/to/worldinter && npm run briefing:morning`.
+
+If the app server is already running (`WORLDVIEW_URL`), the job uses its API instead of opening the store itself, so two processes never write the same data.
+
+**Phone notification (optional).** Install the [ntfy](https://ntfy.sh) app, subscribe to a long random topic name, and set `NTFY_TOPIC` to it (`NTFY_SERVER` for a self-hosted ntfy). Topics on ntfy.sh are public to anyone who knows the name, so only a short headline-level summary is sent — pick a name that is hard to guess.
 
 ## How ingestion works
 
@@ -130,6 +155,8 @@ The full walkthrough is in [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md#adding-a-
 | `npm test` | Unit tests (vitest) |
 | `npm run typecheck` | TypeScript check |
 | `npm run lint` | ESLint |
+| `npm run briefing:morning` | Prepare today's morning briefing once, then exit |
+| `npm run briefing:schedule` / `briefing:unschedule` | Install / remove the daily job (macOS LaunchAgent, default 07:30) |
 | `npm run geo:build` | Rebuild bundled Natural Earth geography |
 
 ## API
@@ -146,7 +173,7 @@ The full walkthrough is in [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md#adding-a-
 | `GET /api/sources` | Source health + recent ingestion runs |
 | `POST /api/ingest/:source` | Trigger a run (localhost or `ADMIN_TOKEN`) |
 | `GET /api/stream` | Server-Sent Events change notifications |
-| `GET /api/briefing` | Daily briefing structure (+ cached AI summary) |
+| `GET /api/briefing` | Daily briefing structure (+ cached AI summary; falls back to today's saved morning summary, flagged in `morning: {date, generatedAt, trigger}`) |
 | `POST /api/briefing/narrative` | Generate the AI briefing summary (if configured) |
 | `GET /api/markets` | Cross-asset snapshot (cached) |
 | `GET /api/markets/quote?symbols=` | Quotes for up to 25 symbols |
@@ -158,6 +185,7 @@ The full walkthrough is in [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md#adding-a-
 | `GET /api/markets/reaction?symbols=&since=` | Instrument moves since a time |
 | `GET /api/geo-audit` | Developer QA of event coordinates |
 | `POST /api/ai/setup` | Start downloading/loading the local model |
+| `POST /api/ai/unload` | Free the local model's memory (localhost or `ADMIN_TOKEN`) |
 | `GET /api/layers` | Live layer status |
 | `GET /api/layers/:id` | Cached live layer snapshot (`weather-radar`, `aviation`, `maritime`) |
 | `GET /api/meta` | Mode and AI availability (no secrets) |

@@ -30,8 +30,10 @@ type Runtime = {
   context: Awaited<ReturnType<Runtime["model"]["createContext"]>>;
 };
 
-const g = globalThis as unknown as { __worldviewLocalAI?: { status: LocalModelState; runtime: Promise<Runtime> | null; queue: Promise<unknown> } };
-const shared = (g.__worldviewLocalAI ??= { status: { state: "not-downloaded" }, runtime: null, queue: Promise.resolve() });
+const g = globalThis as unknown as {
+  __worldviewLocalAI?: { status: LocalModelState; runtime: Promise<Runtime> | null; queue: Promise<unknown>; idleTimer: NodeJS.Timeout | null; busy: number };
+};
+const shared = (g.__worldviewLocalAI ??= { status: { state: "not-downloaded" }, runtime: null, queue: Promise.resolve(), idleTimer: null, busy: 0 });
 
 const COMMAND_JSON_SCHEMA = {
   type: "object",
@@ -51,7 +53,37 @@ export class LocalProvider implements AIProvider {
   constructor(
     private readonly modelUri: string,
     private readonly modelsDir: string,
+    /** Unload the model after this many idle minutes (0 = keep loaded). */
+    private readonly idleUnloadMinutes = 5,
   ) {}
+
+  /** Free the model's memory/GPU now. It reloads automatically on the next AI request. */
+  async unload(): Promise<boolean> {
+    if (shared.idleTimer) clearTimeout(shared.idleTimer);
+    shared.idleTimer = null;
+    const pending = shared.runtime;
+    if (!pending) return false;
+    shared.runtime = null;
+    try {
+      const rt = await pending;
+      await rt.context.dispose();
+      await rt.model.dispose();
+      await rt.llama.dispose();
+    } catch {
+      /* already gone */
+    }
+    shared.status = { state: this.isDownloaded() ? "downloaded" : "not-downloaded" };
+    return true;
+  }
+
+  private scheduleIdleUnload() {
+    if (!this.idleUnloadMinutes) return;
+    if (shared.idleTimer) clearTimeout(shared.idleTimer);
+    shared.idleTimer = setTimeout(() => {
+      if (shared.busy === 0) void this.unload();
+    }, this.idleUnloadMinutes * 60_000);
+    shared.idleTimer.unref?.();
+  }
 
   get model(): string {
     return this.modelUri.replace(/^hf:/, "").split("/").pop() ?? this.modelUri;
@@ -99,6 +131,8 @@ export class LocalProvider implements AIProvider {
 
   /** Run one chat completion. Calls are serialised: one local context, one request at a time. */
   private run<T>(fn: (rt: Runtime, session: InstanceType<typeof import("node-llama-cpp").LlamaChatSession>) => Promise<T>, systemPrompt: string): Promise<T> {
+    shared.busy++;
+    if (shared.idleTimer) clearTimeout(shared.idleTimer);
     const job = shared.queue.then(async () => {
       const rt = await this.ensureReady();
       const { LlamaChatSession } = await import("node-llama-cpp");
@@ -111,6 +145,10 @@ export class LocalProvider implements AIProvider {
       }
     });
     shared.queue = job.catch(() => undefined);
+    void job.finally(() => {
+      shared.busy--;
+      this.scheduleIdleUnload();
+    }).catch(() => undefined);
     return job;
   }
 

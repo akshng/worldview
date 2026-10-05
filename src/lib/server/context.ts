@@ -74,7 +74,8 @@ function ctx(): Ctx {
   return g.__worldviewCtx;
 }
 
-async function openRepo(): Promise<EventRepository> {
+/** The repository without starting scheduled ingestion (for one-shot scripts). */
+export async function openRepo(): Promise<EventRepository> {
   return ctx().repo;
 }
 

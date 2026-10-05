@@ -44,6 +44,26 @@ Inspect source health and recent runs:
 curl -s http://localhost:3000/api/sources
 ```
 
+Run the morning briefing job once in the foreground (uses the running server if there is one):
+
+```bash
+npm run briefing:morning
+```
+
+Schedule it daily, trigger the scheduled job now, and follow its log (see the README's "Morning briefing" section):
+
+```bash
+npm run briefing:schedule
+```
+
+```bash
+launchctl kickstart gui/$(id -u)/com.worldview.morning-briefing
+```
+
+```bash
+tail -f .data/briefings/morning.log
+```
+
 ## Data modes
 
 - **Live** (default): real public feeds only. Store: `.data/live-store.json`.

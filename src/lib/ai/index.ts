@@ -25,7 +25,7 @@ export function getAIProvider(): AIProvider | null {
   if (provider !== undefined) return provider;
   const e = env();
   if (e.AI_PROVIDER === "anthropic" && e.AI_API_KEY) provider = new AnthropicProvider(e.AI_API_KEY, e.AI_MODEL || DEFAULT_ANTHROPIC_MODEL);
-  else if (e.AI_PROVIDER === "local") provider = new LocalProvider(e.AI_LOCAL_MODEL || DEFAULT_LOCAL_MODEL, defaultModelsDir(e.DATA_DIR));
+  else if (e.AI_PROVIDER === "local") provider = new LocalProvider(e.AI_LOCAL_MODEL || DEFAULT_LOCAL_MODEL, defaultModelsDir(e.DATA_DIR), e.AI_IDLE_UNLOAD_MINUTES);
   else provider = null;
   return provider;
 }

@@ -50,6 +50,11 @@ export interface EventRepository {
   recordRun(run: IngestionRun): Promise<void>;
   listRuns(params?: { dataSourceId?: string; limit?: number }): Promise<IngestionRun[]>;
 
+  /** Write any buffered state to disk now (memory repository). */
+  flush?(): Promise<void>;
+  /** Release connections (Postgres repository). */
+  close?(): Promise<void>;
+
   /** Monotonic change counter (drives realtime notifications / client cache-busting). */
   version(): number;
 }

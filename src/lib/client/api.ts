@@ -173,7 +173,13 @@ export const api = {
     getJSON<EventsResponse>(`/api/events?${new URLSearchParams(params)}`, signal),
   event: (id: string, signal?: AbortSignal) => getJSON<EventDetailResponse>(`/api/events/${encodeURIComponent(id)}`, signal),
   country: (code: string, signal?: AbortSignal) => getJSON<CountryResponse>(`/api/countries/${encodeURIComponent(code)}`, signal),
-  briefing: (signal?: AbortSignal) => getJSON<import("@/lib/briefing").DailyBriefing>("/api/briefing", signal),
+  briefing: (signal?: AbortSignal) =>
+    getJSON<
+      import("@/lib/briefing").DailyBriefing & {
+        /** Today's scheduled morning briefing, if the daily job has run */
+        morning?: { date: string; generatedAt: string; trigger: "scheduled" | "manual" } | null;
+      }
+    >("/api/briefing", signal),
   async briefingNarrative(): Promise<NonNullable<import("@/lib/briefing").DailyBriefing["aiNarrative"]>> {
     const res = await fetch("/api/briefing/narrative", { method: "POST" });
     const body = await res.json().catch(() => ({}));

@@ -32,7 +32,7 @@ src/
   data-sources/           One folder per connector (types/client/parser/index) + registry.ts
   lib/
     ai/                   Provider abstraction (Anthropic implementation), optional
-    briefing/             Daily briefing structure (scaffold)
+    briefing/             Daily briefing structure + saved morning briefings (DATA_DIR/briefings)
     client/               Browser API client, data store, live-data hook
     config/               App naming
     db/                   EventRepository interface, memory implementation, schema.sql
@@ -83,7 +83,9 @@ docs/
 
 ## AI
 
-`src/lib/ai/` defines `AIProvider` with two implementations: **LocalProvider** (default — keyless, on-device Qwen3-4B-Instruct via node-llama-cpp/llama.cpp with Metal; JSON-schema grammar for structured output; requests serialised on one context; model downloaded once to `DATA_DIR/models`) and an Anthropic implementation (official SDK, server-side key, `claude-opus-5-5` by default, server-side refusal fallbacks enabled). Implemented: `interpretEvent` (event panel), `writeBriefing` (briefing summary written only from the briefing's events, cached ≤3 h) and `parseCommand` (search: natural-language question → schema-validated filters via structured outputs; the place *name* is resolved by the app's gazetteer, so the model never supplies coordinates or events). Output is stored in `aiInterpretation` with provider/model/timestamp and rendered in a visually distinct "AI interpretation — not verified fact" box. The prompt instructs the model not to invent facts and to hedge. The planned functions (`summarizeEvent`, `classifyEvent`, `extractLocation`, `extractEntities`, `clusterEvents`, `calculateImportance`, `generate*Briefing`) are declared in `FutureAICapabilities`. AI is disabled for simulated events.
+`src/lib/ai/` defines `AIProvider` with two implementations: **LocalProvider** (default — keyless, on-device Qwen3-4B-Instruct via node-llama-cpp/llama.cpp with Metal; JSON-schema grammar for structured output; requests serialised on one context; model downloaded once to `DATA_DIR/models`; unloaded after `AI_IDLE_UNLOAD_MINUTES` idle and reloaded on the next request) and an Anthropic implementation (official SDK, server-side key, `claude-opus-5-5` by default, server-side refusal fallbacks enabled). Implemented: `interpretEvent` (event panel), `writeBriefing` (briefing summary written only from the briefing's events, cached ≤3 h) and `parseCommand` (search: natural-language question → schema-validated filters via structured outputs; the place *name* is resolved by the app's gazetteer, so the model never supplies coordinates or events). Output is stored in `aiInterpretation` with provider/model/timestamp and rendered in a visually distinct "AI interpretation — not verified fact" box. The prompt instructs the model not to invent facts and to hedge. The planned functions (`summarizeEvent`, `classifyEvent`, `extractLocation`, `extractEntities`, `clusterEvents`, `calculateImportance`, `generate*Briefing`) are declared in `FutureAICapabilities`. AI is disabled for simulated events.
+
+**Morning briefing.** `scripts/morning-briefing.ts` is a run-once job (scheduled by `scripts/schedule-briefing.mjs` as a macOS LaunchAgent): refresh all active sources → `buildDailyBriefing` → `writeBriefing` → save `DATA_DIR/briefings/YYYY-MM-DD.json` → unload the model → exit. If a server is reachable at `WORLDVIEW_URL` it goes through `POST /api/briefing/narrative`, `GET /api/briefing` and `POST /api/ai/unload` instead, so only one process ever writes the store. `GET /api/briefing` falls back to today's saved narrative and reports it in a `morning` field. Optional ntfy push (`src/lib/notify/ntfy.ts`, `NTFY_TOPIC`) sends only a short headline-level summary, since ntfy.sh topics are public to anyone who knows the name.
 
 ## Security
 
@@ -91,4 +93,4 @@ docs/
 - All API input validated with zod; unknown params ignored; errors return JSON without stack traces.
 - Upstream text is stripped of HTML (`plainText`) and rendered as React text — no `dangerouslySetInnerHTML` anywhere. Map popups use `setDOMContent` with `textContent`.
 - Only `http(s)` URLs are stored (schema-enforced) and links open with `rel="noopener noreferrer nofollow"`.
-- Manual ingestion is restricted to localhost or `ADMIN_TOKEN`.
+- Manual ingestion and `POST /api/ai/unload` are restricted to localhost or `ADMIN_TOKEN`.

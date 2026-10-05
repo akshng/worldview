@@ -33,6 +33,7 @@ export function BriefingModal() {
   const [data, setData] = useState<DailyBriefing | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [narrative, setNarrative] = useState<DailyBriefing["aiNarrative"]>(null);
+  const [morningAt, setMorningAt] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
@@ -44,6 +45,7 @@ export function BriefingModal() {
       .then((b) => {
         setData(b);
         setNarrative(b.aiNarrative);
+        setMorningAt(b.morning?.trigger === "scheduled" ? b.morning.generatedAt : null);
         setError(null);
       })
       .catch((e) => e.name !== "AbortError" && setError(e.message));
@@ -114,6 +116,9 @@ export function BriefingModal() {
                 <>
                   <p className="text-[13px] leading-relaxed whitespace-pre-line text-fg/85">{narrative.text}</p>
                   <div className="meta mt-2 normal-case tracking-normal text-faint">
+                    {morningAt && Date.parse(narrative.generatedAt) <= Date.parse(morningAt)
+                      ? `Morning briefing · ${new Date(morningAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} · `
+                      : ""}
                     {narrative.provider} · {narrative.model} · {relativeTime(narrative.generatedAt)} — written only from the events listed below
                   </div>
                 </>

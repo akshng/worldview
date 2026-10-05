@@ -14,7 +14,10 @@
     "prebuild": "node scripts/copy-maplibre-worker.mjs",
     "postinstall": "node scripts/copy-maplibre-worker.mjs",
     "geo:build": "tsx scripts/build-geo-data.ts",
-    "ai:setup": "node-llama-cpp pull --dir .data/models hf:unsloth/Qwen3-4B-Instruct-2507-GGUF:Q4_K_M"
+    "ai:setup": "node-llama-cpp pull --dir .data/models hf:unsloth/Qwen3-4B-Instruct-2507-GGUF:Q4_K_M",
+    "briefing:morning": "NODE_OPTIONS=--conditions=react-server tsx scripts/morning-briefing.ts",
+    "briefing:schedule": "node scripts/schedule-briefing.mjs",
+    "briefing:unschedule": "node scripts/schedule-briefing.mjs --remove"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
