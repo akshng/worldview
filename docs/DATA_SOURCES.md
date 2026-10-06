@@ -42,6 +42,25 @@ All V1 connectors use official or well-established public structured feeds. No w
 
 Top bar → **Planet**: daily CO₂ at Mauna Loa (NOAA GML), monthly global land+ocean temperature anomaly (NOAA NCEI), daily Arctic sea-ice extent (NSIDC), Oceanic Niño Index (NOAA CPC), planetary Kp index, current R/S/G space-weather scales and M/X-class flares in the last 7 days (NOAA SWPC), plus a table of asteroid close approaches within 0.05 au in the next 30 days (JPL SBDB close-approach API; size range estimated from absolute magnitude for albedo 0.25–0.05). Each tile states what its change compares against (a year earlier, previous month, previous season, 3 hours earlier). Cached 3 h.
 
+## Trends panel (`src/lib/trends`)
+
+Top bar → **Trends** (`GET /api/trends`): what people are searching for, reading and sharing, as an attention signal next to world events. Trends are **not events**: they never enter the event store, and the panel says they are attention signals, not verified events. All sources are keyless; the whole set is cached 15 minutes, and when a source fails the last good copy is served (listed as "last successful fetch"). A source with no data at all is listed as unavailable — nothing is filled in.
+
+| Source | Endpoint | Coverage | Notes |
+| --- | --- | --- | --- |
+| Google Trends trending searches | `trends.google.com/trending/rss?geo=XX` | 41 countries, 10 terms each | Approximate traffic bucket (e.g. "2000+") and up to 3 linked news headlines per term. Fetched 6 countries at a time. "Trending in several countries" groups terms by case/accent/punctuation-folded title, so it only matches identical spellings (e.g. team names, events), not translations. `?geo=XX` returns one country (used by the country overview) |
+| Wikipedia most-read articles | Wikimedia REST `metrics/pageviews/top/{lang}.wikipedia/all-access/{yyyy}/{mm}/{dd}` | 12 editions: en, es, de, fr, ja, ru, it, zh, pt, pl, ar, nl | Yesterday (UTC), or the day before if not yet published. Main pages and non-article namespaces are removed using each wiki's siteinfo (cached 24 h) with built-in localised names as a fallback. Counts can include automated traffic Wikimedia didn't filter. Wikimedia rate-limits bursts, so editions are fetched two at a time and a 429 is retried once after `Retry-After` |
+| Bluesky trending topics | `public.api.bsky.app/xrpc/app.bsky.unspecced.getTrends` (falls back to `getTrendingTopics`) | Network-wide | Topic, description, post count, status, category. The `actors` (post authors) field is discarded. The endpoint is "unspecced" and may change |
+| Mastodon trends | `mastodon.social/api/v1/trends/tags`, `/trends/links` | One large server, not the whole fediverse | Usage summed over the last two daily buckets. Link author fields are discarded |
+| Hacker News front page | `hn.algolia.com/api/v1/search?tags=front_page` | Technology | Title, link, points, comments; submitter names are discarded |
+
+**Not included**
+
+- **X/Twitter**: X has no free or keyless API for trends, and third-party trend scrapers (trends24, getdaytrends, …) are deliberately not used.
+- **Reddit**: `www.reddit.com/r/worldnews/hot.json` returns 403 to unauthenticated clients, the API requires OAuth, and `reddit.com/robots.txt` disallows all automated access (`User-agent: * / Disallow: /`).
+
+Privacy: only aggregate trends and public post/article titles are kept. No user handles, avatars, author names or other data about individuals are stored or shown.
+
 ## Live layers (`src/layers/`)
 
 Live layers are continuously changing observations visualised in map modes. They are **not events**: they never enter the event store, scoring or deduplication. Each is fetched on demand through `/api/layers/:id` and cached server-side for its TTL, so upstream quotas are only used while someone is looking, and every client shares one cached copy. If an upstream fetch fails, the last good snapshot is served with `stale: true` (shown in the legend).
