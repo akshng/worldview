@@ -10,10 +10,59 @@ import { sparkOf } from "@/lib/finance/macro";
 export type PlanetGroup = "Climate" | "Space weather";
 export type PlanetIndicator = Omit<MacroIndicator, "group"> & { group: PlanetGroup };
 
+export interface CloseApproach {
+  designation: string;
+  /** Close-approach time, UTC ("2026-Oct-31 02:35") */
+  when: string;
+  /** Nominal distance in lunar distances (Earth–Moon ≈ 384,400 km) */
+  distanceLd: number;
+  distanceKm: number;
+  velocityKms: number;
+  /** Size range estimated from absolute magnitude H for albedo 0.25–0.05, metres */
+  sizeM: [number, number] | null;
+}
+
 export interface PlanetDashboard {
   indicators: PlanetIndicator[];
+  approaches: CloseApproach[];
   generatedAt: string;
   failed: string[];
+}
+
+const AU_KM = 149_597_870.7;
+const LD_KM = 384_400;
+
+/** Diameter (m) from absolute magnitude H and geometric albedo p: D = 1329 km / √p · 10^(−H/5). */
+export function sizeFromH(h: number): [number, number] {
+  const d = (p: number) => (1329 / Math.sqrt(p)) * 10 ** (-h / 5) * 1000;
+  return [Math.round(d(0.25)), Math.round(d(0.05))];
+}
+
+/** JPL SBDB close-approach API rows → approaches. */
+export function parseCad(j: { fields?: string[]; data?: string[][] }): CloseApproach[] {
+  const fields = j.fields ?? [];
+  const at = (row: string[], k: string) => row[fields.indexOf(k)];
+  return (j.data ?? [])
+    .map((row) => {
+      const au = Number(at(row, "dist"));
+      const h = Number(at(row, "h"));
+      return {
+        designation: at(row, "des"),
+        when: at(row, "cd"),
+        distanceLd: round((au * AU_KM) / LD_KM, 2),
+        distanceKm: Math.round(au * AU_KM),
+        velocityKms: round(Number(at(row, "v_rel")), 1),
+        sizeM: Number.isFinite(h) ? sizeFromH(h) : null,
+      };
+    })
+    .filter((a) => a.designation && Number.isFinite(a.distanceKm));
+}
+
+/** Flare class string ("M1.1", "X2.3") → peak X-ray flux in W/m². */
+export function flareFlux(cls: string | null | undefined): number | null {
+  const m = cls?.match(/^([ABCMX])(\d+(?:\.\d+)?)$/);
+  if (!m) return null;
+  return { A: 1e-8, B: 1e-7, C: 1e-6, M: 1e-5, X: 1e-4 }[m[1] as "A"] * Number(m[2]);
 }
 
 const round = (v: number, d = 2) => Math.round(v * 10 ** d) / 10 ** d;
@@ -173,6 +222,22 @@ async function load(): Promise<PlanetDashboard> {
       },
     ],
     [
+      "SOLAR_FLARES",
+      async () => {
+        const rows = (await get("https://services.swpc.noaa.gov/json/goes/primary/xray-flares-7-day.json", "json")) as Array<{ max_class?: string | null; max_time?: string; begin_time?: string }>;
+        const flares = rows.map((r) => ({ cls: r.max_class ?? null, t: r.max_time && r.max_time !== "Unk" ? r.max_time : r.begin_time })).filter((r) => flareFlux(r.cls) !== null);
+        const big = flares.filter((r) => /^[MX]/.test(r.cls!));
+        const largest = [...flares].sort((a, b) => flareFlux(b.cls)! - flareFlux(a.cls)!)[0];
+        return {
+          id: "SOLAR_FLARES", name: "M/X-class solar flares (7 days)", group: "Space weather", unit: "index",
+          note: "Count of strong solar flares (M and X class, GOES X-ray) in the last 7 days. X-class flares can cause radio blackouts on the sunlit side of Earth",
+          value: big.length, previous: null, change: null, asOf: largest?.t ? `${largest.t.slice(0, 16).replace("T", " ")} UTC` : null, spark: [],
+          label: largest ? `largest ${largest.cls}` : "none",
+          source: "NOAA SWPC (GOES X-ray)", sourceUrl: "https://www.swpc.noaa.gov/products/goes-x-ray-flux",
+        };
+      },
+    ],
+    [
       "SWPC_SCALES",
       async () => {
         const j = (await get("https://services.swpc.noaa.gov/products/noaa-scales.json", "json")) as Record<string, { DateStamp: string; R?: { Scale: string | null; Text?: string }; S?: { Scale: string | null }; G?: { Scale: string | null } }>;
@@ -204,7 +269,13 @@ async function load(): Promise<PlanetDashboard> {
   );
   const order = tasks.map(([id]) => id);
   indicators.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
-  return { indicators, generatedAt: new Date().toISOString(), failed };
+  let approaches: CloseApproach[] = [];
+  try {
+    approaches = parseCad(await get("https://ssd-api.jpl.nasa.gov/cad.api?dist-max=0.05&date-min=now&date-max=%2B30&sort=dist", "json")).slice(0, 12);
+  } catch {
+    failed.push("CLOSE_APPROACHES");
+  }
+  return { indicators, approaches, generatedAt: new Date().toISOString(), failed };
 }
 
 const TTL = 3 * 3_600_000;

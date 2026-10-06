@@ -46,6 +46,36 @@ export function PlanetPanel() {
           {err && <p className="text-[12px] text-danger">{err}</p>}
           {!data && !err && <p className="text-[12px] text-muted">Loading…</p>}
           {data && <IndicatorGrid indicators={data.indicators} groups={["Climate", "Space weather"]} />}
+          {data && data.approaches.length > 0 && (
+            <div>
+              <div className="mb-1 text-[11px] text-faint">Asteroid close approaches · next 30 days (within 0.05 au)</div>
+              <table className="w-full text-[12px]">
+                <thead>
+                  <tr className="text-left text-[10.5px] text-faint">
+                    <th className="py-1 font-normal">Object</th>
+                    <th className="py-1 font-normal">Closest approach (UTC)</th>
+                    <th className="py-1 text-right font-normal" title="Lunar distances: 1 LD ≈ 384,400 km">Distance</th>
+                    <th className="py-1 text-right font-normal">Speed</th>
+                    <th className="py-1 text-right font-normal" title="Estimated from brightness; true size depends on how reflective the object is">Est. size</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.approaches.map((a) => (
+                    <tr key={a.designation + a.when} className="border-t border-line">
+                      <td className="py-1">
+                        <a className="hover:text-accent" href={`https://ssd.jpl.nasa.gov/tools/sbdb_lookup.html#/?sstr=${encodeURIComponent(a.designation)}`} target="_blank" rel="noreferrer">{a.designation}</a>
+                      </td>
+                      <td className="tabular py-1 text-muted">{a.when}</td>
+                      <td className="tabular py-1 text-right" title={`${a.distanceKm.toLocaleString("en-US")} km`}>{a.distanceLd} LD</td>
+                      <td className="tabular py-1 text-right text-muted">{a.velocityKms} km/s</td>
+                      <td className="tabular py-1 text-right text-muted">{a.sizeM ? `${a.sizeM[0]}–${a.sizeM[1]} m` : "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="mt-1 text-[10.5px] text-faint">NASA JPL Small-Body Database close-approach data. Distances are nominal predictions; impact-risk assessments are published separately by NASA JPL Sentry.</p>
+            </div>
+          )}
           {data && data.failed.length > 0 && <p className="text-[11px] text-warn">Unavailable right now: {data.failed.join(", ")}</p>}
           <p className="text-[10.5px] text-faint">
             Sources: NOAA Global Monitoring Laboratory (CO₂), NOAA NCEI (global temperature), NSIDC Sea Ice Index, NOAA Climate Prediction Center (ONI), NOAA Space Weather

@@ -6,7 +6,7 @@ WorldView connects world events to markets so you can see **what is moving and w
 
 | Feature | Where | Data |
 | --- | --- | --- |
-| Cross-asset snapshot: 26 equity indices, US Treasury 2Y/10Y/30Y + 2s10s, 12 FX pairs, 15 commodities, 8 cryptocurrencies | Top bar → **Markets** | Yahoo Finance chart endpoint (unofficial, delayed), U.S. Treasury yield-curve CSV, Coinbase Exchange public candles |
+| Cross-asset snapshot: 45 equity indices (40 countries on the markets map), US Treasury 2Y/10Y/30Y + 2s10s, 20 FX pairs incl. emerging markets, 15 commodities, 8 cryptocurrencies | Top bar → **Markets** | Yahoo Finance chart endpoint (unofficial, delayed), U.S. Treasury yield-curve CSV, Coinbase Exchange public candles |
 | **Search any instrument worldwide** (stocks on every exchange Yahoo covers, ETFs, indices, futures, currencies, crypto, funds) with type, exchange and sector; open it or add it to the watchlist | Markets panel | Yahoo Finance search (unofficial; cached 1 h per query) |
 | Watchlist (any Yahoo symbol: `MSFT`, `7203.T`, `^GSPC`, `EURUSD=X`, `GC=F`) | Markets panel; saved in this browser | Same as above |
 | SEC 8-K material filings on the map, linked to the filer's ticker | Map (Business layer), watchlist "Filings for your tickers" | SEC EDGAR |

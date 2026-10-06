@@ -32,6 +32,7 @@ import { adsbEmergencyConnector } from "./adsb-emergency";
 import { wikipediaEventsConnector } from "./wikipedia-events";
 import { airQualityConnector } from "./air-quality";
 import { fdicFailuresConnector } from "./fdic-failures";
+import { fireballsConnector } from "./fireballs";
 import { demoConnector } from "./demo";
 
 export const CONNECTORS = [
@@ -53,6 +54,7 @@ export const CONNECTORS = [
   newsRssConnector,
   wikipediaEventsConnector,
   spaceConnector,
+  fireballsConnector,
   tsunamiConnector,
   faaConnector,
   adsbEmergencyConnector,

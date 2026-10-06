@@ -27,6 +27,7 @@ All V1 connectors use official or well-established public structured feeds. No w
 | `wikipedia-events` | [Portal:Current events](https://en.wikipedia.org/wiki/Portal:Current_events) day pages (`action=raw`), last 3 days | Items that cite a source; section → category. Placed on a cued place, else the first place mentioned (link targets are used, so `[[Vienna, Georgia|Vienna]]` isn't Vienna, Austria), else the parent topic line; events "in the Caribbean Sea" etc. are placed at sea (approximate). Date only (12:00 UTC). CC BY-SA; links to the cited article | 30 min | — | Community database / `MEDIA_REPORT` |
 | `air-quality` | [Open-Meteo air-quality API](https://open-meteo.com/en/docs/air-quality-api) (Copernicus CAMS global model) | Current US AQI for the ~200 gazetteer cities of 2M+ (batched 50 per request); only AQI ≥ 151 becomes an event, one per city per day. Modelled, labelled as such | 60 min | — | Scientific / `OFFICIAL_PRELIMINARY` |
 | `fdic-failures` | [FDIC BankFind failures API](https://api.fdic.gov/banks/docs/) | Failures in the last 2 years, placed at the bank's city (gazetteer); assets, deposits, acquirer, DIF cost. Date only | 12 h | — | Official agency / `OFFICIAL_FINAL` |
+| `fireballs` | [JPL CNEOS fireball API](https://ssd-api.jpl.nasa.gov/doc/fireball.html) | Events with a reported location in the last 12 months; signed lat/lon from N/S/E/W; approximate precision. Published days to weeks after the event | 6 h | — | Official agency / `MEASUREMENT` |
 | `space` | [Launch Library 2](https://thespacedevs.com/llapi) upcoming + previous | Launches within ±7 days at the launch pad | 30 min | — (15 req/h free tier) | Community database / `SCHEDULED` |
 | `tsunami` | [NOAA tsunami.gov](https://www.tsunami.gov/) Atom feeds (NTWC + PTWC) | Messages from the last 3 days at the event location | 3 min | — | Official agency / `OFFICIAL_FINAL` |
 | `faa` | [FAA NAS Status](https://nasstatus.faa.gov/) XML | Ground delay programs, ground stops, arrival/departure delays and full closures at airport coordinates (OurAirports gazetteer) | 5 min | — | Official agency / `OFFICIAL_PRELIMINARY` |
@@ -37,7 +38,7 @@ All V1 connectors use official or well-established public structured feeds. No w
 
 ## Planet panel (`src/lib/planet`)
 
-Top bar → **Planet**: daily CO₂ at Mauna Loa (NOAA GML), monthly global land+ocean temperature anomaly (NOAA NCEI), daily Arctic sea-ice extent (NSIDC), Oceanic Niño Index (NOAA CPC), planetary Kp index and current R/S/G space-weather scales (NOAA SWPC). Each tile states what its change compares against (a year earlier, previous month, previous season, 3 hours earlier). Cached 3 h.
+Top bar → **Planet**: daily CO₂ at Mauna Loa (NOAA GML), monthly global land+ocean temperature anomaly (NOAA NCEI), daily Arctic sea-ice extent (NSIDC), Oceanic Niño Index (NOAA CPC), planetary Kp index, current R/S/G space-weather scales and M/X-class flares in the last 7 days (NOAA SWPC), plus a table of asteroid close approaches within 0.05 au in the next 30 days (JPL SBDB close-approach API; size range estimated from absolute magnitude for albedo 0.25–0.05). Each tile states what its change compares against (a year earlier, previous month, previous season, 3 hours earlier). Cached 3 h.
 
 ## Live layers (`src/layers/`)
 

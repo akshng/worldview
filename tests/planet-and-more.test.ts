@@ -89,3 +89,29 @@ describe("planet indicators", () => {
     expect(yearAgo([{ date: "2025-09-01", value: 1 }], "2026-10-04")).toBeNull();
   });
 });
+
+import { flareFlux, parseCad, sizeFromH } from "@/lib/planet";
+import { parseFireballs } from "@/data-sources/fireballs";
+
+describe("space data", () => {
+  it("converts flare classes and asteroid sizes", () => {
+    expect(flareFlux("M1.1")).toBeCloseTo(1.1e-5);
+    expect(flareFlux("X2")).toBeCloseTo(2e-4);
+    expect(flareFlux("Unk")).toBeNull();
+    const [small, large] = sizeFromH(29.83);
+    expect(small).toBeGreaterThan(2);
+    expect(large).toBeLessThan(20);
+  });
+  it("parses close approaches into lunar distances", () => {
+    const [a] = parseCad({ fields: ["des", "cd", "dist", "v_rel", "h"], data: [["2025 UK9", "2026-Oct-31 02:35", "0.0021032915876806", "7.83", "29.83"]] });
+    expect(a).toMatchObject({ designation: "2025 UK9", distanceLd: 0.82, velocityKms: 7.8 });
+  });
+  it("parses fireballs with signed coordinates", () => {
+    const r = parseFireballs(
+      { fields: ["date", "energy", "impact-e", "lat", "lat-dir", "lon", "lon-dir", "alt", "vel"], data: [["2026-09-15 11:26:13", "2.2", "0.079", "37.6", "S", "161.6", "W", "37.0", null]] },
+      ctx,
+    );
+    expect(r.candidates[0]).toMatchObject({ type: "SPACE", latitude: -37.6, longitude: -161.6, timestamp: "2026-09-15T11:26:13.000Z" });
+    expect(valid(r.candidates)).toBe(true);
+  });
+});
