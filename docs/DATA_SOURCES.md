@@ -49,7 +49,35 @@ Top bar → **Planet**: daily CO₂ at Mauna Loa (NOAA GML), monthly global land
 
 ## Public cameras (`src/layers/cameras`)
 
-Map button **CAM** shows ~7,000 traffic and road-weather cameras that operators publish as open data (TfL London, NYC DOT, Caltrans, Hong Kong Transport Department, Fintraffic, Singapore LTA). Click one to see its latest image (refreshed on the operator's cadence) or, where offered, a video clip (TfL MP4) or live stream (Caltrans HLS, via hls.js). Media loads directly from the operator. Only operator-published public cameras are included — never private or unsecured devices. The camera list is cached 6 h.
+Map button **CAM** shows ~18,000 traffic and road-weather cameras that transport agencies publish as open data. Click one to see its latest image (refreshed on the operator's cadence) or, where offered, a video clip (TfL MP4) or live stream (Caltrans and Iowa DOT HLS, via hls.js). Media loads directly from the operator. The camera list is cached 6 h; coordinates are rounded to 5 decimals (~1 m) to keep the payload around 3 MB. Each source loads independently, so one failing feed is listed as unavailable without breaking the layer.
+
+**Rules for adding a camera source**
+
+- Only cameras an operator (transport, road or weather agency) publishes for public viewing. Never Insecam-style directories, unprotected IP cameras, search-engine-found devices or residential cameras.
+- Keyless only: no API keys, accounts or "request access" APIs.
+- Image and video URLs must be https (a feed's http link is only upgraded when the operator's host serves the same image over https).
+- Respect the operator's terms; skip any source whose terms forbid automated use or that sits behind bot protection.
+- Spot-check that image URLs actually return images before adding a source.
+
+| Source (id) | Endpoint | Cameras (Oct 2026) | Licence / terms |
+| --- | --- | --- | --- |
+| Transport for London JamCams (`tfl`) | `api.tfl.gov.uk/Place/Type/JamCam` | ~790 | TfL open data (OGL); image + MP4 clip |
+| NYC DOT (`nyc`) | `webcams.nyctmc.org/api/cameras` | ~970 | NYC DOT public cameras |
+| Caltrans CCTV (`caltrans`) | `cwwp2.dot.ca.gov/data/dN/cctv/cctvStatusDNN.json` (12 districts) | ~3,400 | Caltrans public data; image + HLS |
+| Hong Kong Transport Department (`hk`) | `static.data.gov.hk/td/traffic-snapshot-images/...` (UTF-16 TSV) | ~1,010 | DATA.GOV.HK terms |
+| Fintraffic weathercams (`fi`) | `tie.digitraffic.fi/api/weathercam/v1/stations` | ~810 | CC BY 4.0 |
+| Singapore LTA (`sg`) | `api.data.gov.sg/v1/transport/traffic-images` | ~10 (feed currently small) | Singapore Open Data Licence |
+| Spain DGT (`dgt`) | `nap.dgt.es/datex2/v3/dgt/DevicePublication/camaras_datex2_v37.xml` (DATEX II) | ~1,950 | DGT National Access Point, reuse with attribution (Ley 37/2007) |
+| Illinois DOT Gateway (`il`) | ArcGIS `TrafficCamerasTM_Public` (IDOT, paged 1,000 at a time) | ~3,760 | CC BY-SA 2.0; snapshots flagged `TooOld` (>30 min) are skipped |
+| WSDOT (`wsdot`) | ArcGIS `data.wsdot.wa.gov/.../TravelInfoCamerasWeather/FeatureServer/0` | ~1,700 | WSDOT public data, "low volume" use; only WSDOT- and ODOT TripCheck-hosted frames are kept |
+| Iowa DOT (`ia`) | ArcGIS `Traffic_Cameras_View` | ~1,260 (~700 with HLS) | CC BY 4.0 |
+| DriveBC (`bc`) | `www.drivebc.ca/api/webcams/` | ~975 | Open Government Licence – British Columbia; only cameras that are on and not stale |
+| Vegagerðin, Iceland (`is`) | `gagnaveita.vegagerdin.is/api/vefmyndavelar2014_1` | ~500 | Vegagerðin open data, free reuse without conditions |
+| City of Toronto (`to`) | Toronto Open Data `traffic-camera-list-4326.geojson` | ~340 | City of Toronto Open Data portal terms |
+| City of Calgary (`cgy`) | `data.calgary.ca/resource/k7p9-kppz.json` | ~215 | Open Government Licence – City of Calgary |
+| Kentucky Transportation Cabinet (`ky`) | ArcGIS `trafficCamerasCur_Prd` | ~245 | KYTC public layer (no warranty); https TRIMARC snapshots only |
+
+**Checked and not added** (Oct 2026): IBI-based 511 systems (Ontario, Alberta, Georgia, Florida, Wisconsin, Pennsylvania, Idaho, Nevada, Utah, Louisiana, Alaska) — `/api/v2/get/cameras` needs a key; WSDOT Traveler API — needs an access code (the public ArcGIS layer is used instead); Oregon TripCheck API — needs registration; NZTA traffic cameras — API access is by request to InfoConnect; Norway Statens vegvesen — DATEX node requires registration; Québec 511 — images behind Cloudflare bot protection; NSW Live Traffic — image URLs return an error page; Taiwan freeway CCTV — endpoint unreachable; Maryland CHART — video only, no still images; Newfoundland and Labrador — no licence stated.
 
 ## Trends panel (`src/lib/trends`)
 
