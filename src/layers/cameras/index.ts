@@ -41,6 +41,9 @@ export const CAMERA_SOURCES: CameraSource[] = [
   { id: "to", name: "City of Toronto traffic cameras", region: "Toronto, Canada", homepage: "https://open.toronto.ca/dataset/traffic-cameras/", license: "City of Toronto Open Data portal terms", refreshSec: 120 },
   { id: "cgy", name: "City of Calgary traffic cameras", region: "Calgary, Canada", homepage: "https://data.calgary.ca/Transportation-Transit/Traffic-Cameras/k7p9-kppz", license: "Open Government Licence – City of Calgary", refreshSec: 120 },
   { id: "ky", name: "KYTC traffic cameras", region: "Kentucky, US", homepage: "https://maps.kytc.ky.gov/trafficcameras/", license: "Kentucky Transportation Cabinet public camera layer (no warranty)", refreshSec: 120 },
+  { id: "qld", name: "QLDTraffic webcams", region: "Queensland, Australia", homepage: "https://www.data.qld.gov.au/dataset/qldtraffic-geojson-api", license: "Queensland Department of Transport and Main Roads, CC BY 4.0", refreshSec: 60 },
+  { id: "atx", name: "City of Austin traffic cameras", region: "Austin, Texas, US", homepage: "https://data.austintexas.gov/Transportation-and-Mobility/Traffic-Cameras/b4k4-adkb", license: "City of Austin open data, Public Domain", refreshSec: 300 },
+  { id: "sd", name: "SD511 road cameras", region: "South Dakota, US", homepage: "https://www.sd511.org/", license: "South Dakota DOT SD511 public camera feed (no warranty)", refreshSec: 300 },
 ];
 const IDX = Object.fromEntries(CAMERA_SOURCES.map((s, i) => [s.id, i]));
 
@@ -277,6 +280,51 @@ export function kyRows(fc: { features?: Array<GeoFeature<{ description?: string 
   return rows;
 }
 
+/** QLDTraffic webcams (GeoJSON, keyless open-data feed). */
+export function qldRows(fc: { features?: Array<GeoFeature<{ id?: number; description?: string; image_url?: string }>> }): CameraRow[] {
+  const rows: CameraRow[] = [];
+  for (const f of fc.features ?? []) {
+    const p = f.properties;
+    const [lon, lat] = lonLat(f.geometry);
+    const img = https(p.image_url);
+    if (!img || !ok(lat, lon)) continue;
+    rows.push([`qld:${p.id ?? fileId(img)}`, (p.description ?? "").trim() || "QLDTraffic webcam", lon, lat, IDX.qld, img, null, null]);
+  }
+  return rows;
+}
+
+/** City of Austin camera inventory (Socrata): only cameras the city lists as turned on. */
+export function atxRows(list: Array<{ camera_id?: string; location_name?: string; camera_status?: string; screenshot_address?: string; location?: GeoPoint }>): CameraRow[] {
+  const rows: CameraRow[] = [];
+  for (const c of list ?? []) {
+    const img = https(c.screenshot_address);
+    const [lon, lat] = lonLat(c.location);
+    if (c.camera_status !== "TURNED_ON" || !img || !ok(lat, lon)) continue;
+    rows.push([`atx:${c.camera_id ?? fileId(img)}`, titleCase((c.location_name ?? "").trim()).replace(/\s+\/\s+/g, " / ") || "Austin traffic camera", lon, lat, IDX.atx, img, null, null]);
+  }
+  return rows;
+}
+
+/** SD511 camera sites: each site lists several views (directions, road surface). */
+export function sdRows(fc: { features?: Array<GeoFeature<{ name?: string; route?: string; cameras?: Array<{ id?: string; name?: string; image?: string }> }>> }): CameraRow[] {
+  const rows: CameraRow[] = [];
+  const seen = new Set<string>();
+  for (const f of fc.features ?? []) {
+    const p = f.properties;
+    const [lon, lat] = lonLat(f.geometry);
+    if (!ok(lat, lon)) continue;
+    const site = [p.route, p.name].filter(Boolean).join(" ").trim() || "SD511 camera";
+    for (const c of p.cameras ?? []) {
+      const img = https(c.image);
+      if (!img || seen.has(img)) continue;
+      seen.add(img);
+      const m = /camera_images\/([^/]+)\/([^/]+)\//.exec(img);
+      rows.push([`sd:${m ? `${m[1]}:${m[2]}` : fileId(img)}`, c.name ? `${site}: ${c.name.trim()}` : site, lon, lat, IDX.sd, img, null, null]);
+    }
+  }
+  return rows;
+}
+
 /** All features of an ArcGIS layer as WGS84 GeoJSON, following the server's page size. */
 async function arcgisFeatures<T>(layerUrl: string, outFields: string, ctx: LayerContext, orderBy = "OBJECTID", maxPages = 10): Promise<{ features: T[] }> {
   const features: T[] = [];
@@ -303,7 +351,7 @@ export const camerasLayer: LiveLayerProvider<CamerasData> = {
   id: "cameras",
   name: "Public cameras",
   description:
-    "Traffic and road-weather cameras published as open data by transport agencies in London, New York City, California, Washington, Illinois, Iowa, Kentucky, British Columbia, Toronto, Calgary, Spain, Iceland, Finland, Hong Kong and Singapore.",
+    "Traffic and road-weather cameras published as open data by transport agencies in London, New York City, California, Washington, Illinois, Iowa, Kentucky, Texas (Austin), South Dakota, British Columbia, Toronto, Calgary, Spain, Iceland, Finland, Queensland, Hong Kong and Singapore.",
   homepage: "https://tfl.gov.uk/info-for/open-data-users/",
   attribution: CAMERA_SOURCES.map((s) => s.name).join(" · "),
   // The camera list changes rarely; images are fetched live by the browser.
@@ -342,6 +390,9 @@ export const camerasLayer: LiveLayerProvider<CamerasData> = {
       ["to", async () => toRows(await getJson(TORONTO_CAMERAS, ctx))],
       ["cgy", async () => cgyRows(await getJson("https://data.calgary.ca/resource/k7p9-kppz.json?$limit=5000", ctx))],
       ["ky", async () => kyRows(await arcgisFeatures(ARCGIS.ky, "OBJECTID,name,description,snapshot", ctx))],
+      ["qld", async () => qldRows(await getJson("https://data.qldtraffic.qld.gov.au/webcameras.geojson", ctx))],
+      ["atx", async () => atxRows(await getJson("https://data.austintexas.gov/resource/b4k4-adkb.json?$select=camera_id,location_name,camera_status,screenshot_address,location&$limit=5000", ctx))],
+      ["sd", async () => sdRows(await getJson("https://sd.cdn.iteris-atis.com/geojson/icons/metadata/icons.cameras.geojson", ctx))],
     ];
     const results = await Promise.allSettled(tasks.map(([, run]) => run()));
     const rows: CameraRow[] = [];
