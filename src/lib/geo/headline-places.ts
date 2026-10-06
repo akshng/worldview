@@ -139,3 +139,52 @@ export function usStateInText(text: string): HeadlinePlace | null {
   }
   return null;
 }
+
+/** Approximate centres of widely reported seas, gulfs and straits (for events at sea). */
+const SEAS: Array<{ name: string; lat: number; lon: number }> = [
+  { name: "Caribbean Sea", lat: 15.0, lon: -75.0 },
+  { name: "Mediterranean Sea", lat: 35.0, lon: 18.0 },
+  { name: "Red Sea", lat: 20.0, lon: 38.5 },
+  { name: "South China Sea", lat: 12.0, lon: 113.0 },
+  { name: "East China Sea", lat: 29.0, lon: 125.0 },
+  { name: "Black Sea", lat: 43.4, lon: 34.0 },
+  { name: "Baltic Sea", lat: 58.0, lon: 20.0 },
+  { name: "North Sea", lat: 56.0, lon: 3.0 },
+  { name: "Arabian Sea", lat: 15.0, lon: 65.0 },
+  { name: "Gulf of Aden", lat: 12.5, lon: 48.0 },
+  { name: "Persian Gulf", lat: 26.5, lon: 52.0 },
+  { name: "Strait of Hormuz", lat: 26.6, lon: 56.3 },
+  { name: "Gulf of Mexico", lat: 25.0, lon: -90.0 },
+  { name: "Taiwan Strait", lat: 24.5, lon: 119.5 },
+  { name: "Sea of Japan", lat: 40.0, lon: 135.0 },
+  { name: "Bay of Bengal", lat: 15.0, lon: 88.0 },
+  { name: "Gulf of Guinea", lat: 2.0, lon: 3.0 },
+  { name: "English Channel", lat: 50.2, lon: -1.0 },
+  { name: "Strait of Malacca", lat: 4.0, lon: 100.5 },
+  { name: "Bab-el-Mandeb", lat: 12.6, lon: 43.3 },
+  { name: "Sea of Azov", lat: 46.0, lon: 36.5 },
+  { name: "Aegean Sea", lat: 39.0, lon: 25.0 },
+];
+const SEA_RES = SEAS.map((sea) => ({ sea, re: new RegExp(`(^|[^a-z])${sea.name.toLowerCase().replace(/-/g, "[- ]")}([^a-z]|$)`, "i") }));
+
+export interface SeaPlace {
+  name: string;
+  lat: number;
+  lon: number;
+  cued: boolean;
+  index: number;
+}
+
+/** A sea, gulf or strait named in the text. */
+export function seaInText(text: string): SeaPlace | null {
+  const lower = ` ${text.toLowerCase()} `;
+  let best: SeaPlace | null = null;
+  for (const { sea, re } of SEA_RES) {
+    const m = re.exec(lower);
+    if (!m) continue;
+    const idx = m.index + m[1].length;
+    const place = { name: sea.name, lat: sea.lat, lon: sea.lon, cued: CUE.test(lower.slice(Math.max(0, idx - 40), idx)), index: idx };
+    if (!best || place.index < best.index) best = place;
+  }
+  return best;
+}

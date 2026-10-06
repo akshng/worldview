@@ -23,8 +23,8 @@ interface SeriesDef {
   name: string;
   group: MacroGroup;
   /** How the raw series is turned into the displayed value */
-  transform: "level" | "yoy" | "diff" | "thousands" | "trillions_from_millions";
-  unit: "%" | "k" | "$T" | "$B" | "index" | "pp";
+  transform: "level" | "yoy" | "diff" | "thousands" | "trillions_from_millions" | "millions_from_thousands";
+  unit: "%" | "k" | "M" | "$" | "$T" | "$B" | "index" | "pp" | "ppm" | "Mkm²" | "°C";
   /** One line on what it measures, shown on hover */
   note: string;
 }
@@ -33,15 +33,20 @@ export const MACRO_SERIES: SeriesDef[] = [
   { id: "CPIAUCSL", name: "CPI inflation", group: "Inflation", transform: "yoy", unit: "%", note: "Consumer prices, % change from a year earlier" },
   { id: "CPILFESL", name: "Core CPI", group: "Inflation", transform: "yoy", unit: "%", note: "CPI excluding food and energy, year over year" },
   { id: "PCEPILFE", name: "Core PCE", group: "Inflation", transform: "yoy", unit: "%", note: "The Fed's preferred inflation gauge, year over year" },
+  { id: "PPIFIS", name: "Producer prices (PPI)", group: "Inflation", transform: "yoy", unit: "%", note: "Producer Price Index for final demand, year over year" },
+  { id: "GASREGW", name: "Gasoline price", group: "Inflation", transform: "level", unit: "$", note: "US regular gasoline, average retail price per gallon (weekly, EIA)" },
   { id: "T10YIE", name: "10-yr breakeven", group: "Inflation", transform: "level", unit: "%", note: "Inflation the bond market expects over 10 years" },
 
   { id: "UNRATE", name: "Unemployment rate", group: "Jobs", transform: "level", unit: "%", note: "Share of the labour force without a job" },
   { id: "PAYEMS", name: "Payrolls change", group: "Jobs", transform: "diff", unit: "k", note: "Jobs added in the month (nonfarm payrolls), thousands" },
   { id: "ICSA", name: "Jobless claims", group: "Jobs", transform: "thousands", unit: "k", note: "New weekly unemployment insurance claims, thousands" },
+  { id: "JTSJOL", name: "Job openings", group: "Jobs", transform: "level", unit: "k", note: "Job openings (JOLTS), thousands" },
+  { id: "CIVPART", name: "Participation rate", group: "Jobs", transform: "level", unit: "%", note: "Share of working-age population in the labour force" },
   { id: "SAHMREALTIME", name: "Sahm rule", group: "Jobs", transform: "level", unit: "pp", note: "Recession signal: historically, readings ≥ 0.50 have coincided with the start of US recessions" },
 
   { id: "A191RL1Q225SBEA", name: "Real GDP growth", group: "Growth", transform: "level", unit: "%", note: "Quarterly growth, seasonally adjusted annual rate" },
   { id: "RSAFS", name: "Retail sales", group: "Growth", transform: "yoy", unit: "%", note: "Retail and food services sales, year over year" },
+  { id: "TOTALSA", name: "Vehicle sales", group: "Growth", transform: "level", unit: "M", note: "Light vehicle sales, seasonally adjusted annual rate, millions" },
   { id: "INDPRO", name: "Industrial production", group: "Growth", transform: "yoy", unit: "%", note: "Factory, mining and utility output, year over year" },
 
   { id: "DFF", name: "Fed funds rate", group: "Rates & credit", transform: "level", unit: "%", note: "Effective federal funds rate (overnight)" },
@@ -54,6 +59,8 @@ export const MACRO_SERIES: SeriesDef[] = [
   { id: "WALCL", name: "Fed balance sheet", group: "Money & liquidity", transform: "trillions_from_millions", unit: "$T", note: "Total assets held by the Federal Reserve" },
 
   { id: "MORTGAGE30US", name: "30-yr mortgage", group: "Housing", transform: "level", unit: "%", note: "Average 30-year fixed mortgage rate (Freddie Mac)" },
+  { id: "CSUSHPINSA", name: "Home prices (Case-Shiller)", group: "Housing", transform: "yoy", unit: "%", note: "S&P CoreLogic Case-Shiller US National Home Price Index, year over year" },
+  { id: "DRCCLACBS", name: "Credit card delinquency", group: "Housing", transform: "level", unit: "%", note: "Delinquency rate on credit card loans at commercial banks (quarterly)" },
   { id: "HOUST", name: "Housing starts", group: "Housing", transform: "level", unit: "k", note: "New homes started, seasonally adjusted annual rate, thousands" },
 
   { id: "ECBDFR", name: "ECB deposit rate", group: "Global", transform: "level", unit: "%", note: "European Central Bank deposit facility rate" },
@@ -84,6 +91,8 @@ export interface MacroIndicator {
   sourceUrl: string;
   /** Text label for categorical readings (Fear & Greed) */
   label?: string | null;
+  /** What `change` compares against, when not the previous release (e.g. "vs a year earlier") */
+  changeBasis?: string;
 }
 
 export interface MacroDashboard {
@@ -114,6 +123,8 @@ export function transformSeries(obs: Observation[], t: SeriesDef["transform"]): 
       return obs.map((o) => ({ date: o.date, value: o.value / 1000 }));
     case "trillions_from_millions":
       return obs.map((o) => ({ date: o.date, value: o.value / 1e6 }));
+    case "millions_from_thousands":
+      return obs.map((o) => ({ date: o.date, value: o.value / 1000 }));
     case "diff":
       return obs.slice(1).map((o, i) => ({ date: o.date, value: o.value - obs[i].value }));
     case "yoy": {

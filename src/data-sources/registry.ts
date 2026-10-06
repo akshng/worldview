@@ -29,6 +29,9 @@ import { federalRegisterConnector } from "./federal-register";
 import { travelAdvisoriesConnector } from "./travel-advisories";
 import { cdcTravelConnector } from "./cdc-travel";
 import { adsbEmergencyConnector } from "./adsb-emergency";
+import { wikipediaEventsConnector } from "./wikipedia-events";
+import { airQualityConnector } from "./air-quality";
+import { fdicFailuresConnector } from "./fdic-failures";
 import { demoConnector } from "./demo";
 
 export const CONNECTORS = [
@@ -48,6 +51,7 @@ export const CONNECTORS = [
   gdeltConnector,
   gkgConnector,
   newsRssConnector,
+  wikipediaEventsConnector,
   spaceConnector,
   tsunamiConnector,
   faaConnector,
@@ -55,9 +59,11 @@ export const CONNECTORS = [
   iodaConnector,
   whoConnector,
   cdcTravelConnector,
+  airQualityConnector,
   travelAdvisoriesConnector,
   federalRegisterConnector,
   secConnector,
+  fdicFailuresConnector,
   demoConnector,
 ] as unknown as DataSourceConnector<unknown>[];
 

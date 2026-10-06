@@ -20,6 +20,7 @@ import { SettingsModal } from "@/components/settings/SettingsModal";
 import { Legend } from "@/components/globe/Legend";
 import { BriefingModal } from "@/components/briefing/BriefingModal";
 import { MarketsPanel } from "@/components/markets/MarketsPanel";
+import { PlanetPanel } from "@/components/planet/PlanetPanel";
 import { InstrumentDetail } from "@/components/markets/InstrumentDetail";
 import { Toasts, useAlertChecker } from "@/components/markets/Alerts";
 import { modeMeta } from "@/lib/map-modes";
@@ -102,6 +103,7 @@ export function Dashboard() {
       <SettingsModal />
       <BriefingModal />
       <MarketsPanel />
+      <PlanetPanel />
       <InstrumentDetail />
       <Toasts />
     </div>

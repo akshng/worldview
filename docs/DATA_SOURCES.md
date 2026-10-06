@@ -24,6 +24,9 @@ All V1 connectors use official or well-established public structured feeds. No w
 | `travel-advisories` | [State Department travel advisory RSS](https://travel.state.gov/_res/rss/TAsTWs.xml) | Level 2–4 advisories whose update date is within 30 days, at the country's label point; a level change supersedes the old level's record | 6 h | — | Official agency / `OFFICIAL_FINAL` |
 | `cdc-travel` | [CDC Travelers' Health notices RSS](https://wwwnc.cdc.gov/travel/notices) | "Level N - Disease in Country" notices from the last 120 days; global notices (no single country) are skipped. HEALTH dedup merges them with WHO / news reports of the same outbreak | 6 h | — | Official agency / `OFFICIAL_FINAL` |
 | `adsb-emergency` | [adsb.lol](https://adsb.lol/) `/v2/sqk/{7700,7600,7500}` | Aircraft with a position seen in the last 2 minutes; one record per aircraft, code and UTC hour. Labelled as the broadcast code, not a confirmed incident | 2 min | — | Community database / `MEASUREMENT` |
+| `wikipedia-events` | [Portal:Current events](https://en.wikipedia.org/wiki/Portal:Current_events) day pages (`action=raw`), last 3 days | Items that cite a source; section → category. Placed on a cued place, else the first place mentioned (link targets are used, so `[[Vienna, Georgia|Vienna]]` isn't Vienna, Austria), else the parent topic line; events "in the Caribbean Sea" etc. are placed at sea (approximate). Date only (12:00 UTC). CC BY-SA; links to the cited article | 30 min | — | Community database / `MEDIA_REPORT` |
+| `air-quality` | [Open-Meteo air-quality API](https://open-meteo.com/en/docs/air-quality-api) (Copernicus CAMS global model) | Current US AQI for the ~200 gazetteer cities of 2M+ (batched 50 per request); only AQI ≥ 151 becomes an event, one per city per day. Modelled, labelled as such | 60 min | — | Scientific / `OFFICIAL_PRELIMINARY` |
+| `fdic-failures` | [FDIC BankFind failures API](https://api.fdic.gov/banks/docs/) | Failures in the last 2 years, placed at the bank's city (gazetteer); assets, deposits, acquirer, DIF cost. Date only | 12 h | — | Official agency / `OFFICIAL_FINAL` |
 | `space` | [Launch Library 2](https://thespacedevs.com/llapi) upcoming + previous | Launches within ±7 days at the launch pad | 30 min | — (15 req/h free tier) | Community database / `SCHEDULED` |
 | `tsunami` | [NOAA tsunami.gov](https://www.tsunami.gov/) Atom feeds (NTWC + PTWC) | Messages from the last 3 days at the event location | 3 min | — | Official agency / `OFFICIAL_FINAL` |
 | `faa` | [FAA NAS Status](https://nasstatus.faa.gov/) XML | Ground delay programs, ground stops, arrival/departure delays and full closures at airport coordinates (OurAirports gazetteer) | 5 min | — | Official agency / `OFFICIAL_PRELIMINARY` |
@@ -31,6 +34,10 @@ All V1 connectors use official or well-established public structured feeds. No w
 | `who` | [WHO Disease Outbreak News](https://www.who.int/emergencies/disease-outbreak-news) | Reports from the last 45 days at the affected country; successive reports on one outbreak merge into one event | 60 min | — | Official agency / `OFFICIAL_FINAL` |
 | `sec` | [SEC EDGAR](https://www.sec.gov/edgar) latest 8-K filings + company profiles | Filings with material items (bankruptcy, cyber incident, restatement, M&A, earnings, delisting, leadership) at the company's registered business address | 10 min | — (descriptive User-Agent) | Official / `OFFICIAL_FINAL` (the filing itself) |
 | `demo` | Built-in generator | Simulated events — **demo mode only** | 5 min | — | Synthetic / `SYNTHETIC` |
+
+## Planet panel (`src/lib/planet`)
+
+Top bar → **Planet**: daily CO₂ at Mauna Loa (NOAA GML), monthly global land+ocean temperature anomaly (NOAA NCEI), daily Arctic sea-ice extent (NSIDC), Oceanic Niño Index (NOAA CPC), planetary Kp index and current R/S/G space-weather scales (NOAA SWPC). Each tile states what its change compares against (a year earlier, previous month, previous season, 3 hours earlier). Cached 3 h.
 
 ## Live layers (`src/layers/`)
 

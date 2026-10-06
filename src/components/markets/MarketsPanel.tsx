@@ -16,7 +16,7 @@ import { StatusBadge } from "@/components/ui/primitives";
 import { focusEvent } from "@/components/event-feed/EventFeed";
 import type { EventSummary } from "@/types/events";
 import { QuoteTile } from "./QuoteTile";
-import { EconomicCalendar, SectorBars, YieldCurve } from "./MarketExtras";
+import { EconomicCalendar, SectorBars, TreasuryAuctions, YieldCurve } from "./MarketExtras";
 import { MacroDashboard } from "./MacroDashboard";
 import { StockMovers } from "./StockMovers";
 import { CryptoTable } from "./CryptoTable";
@@ -204,6 +204,11 @@ export function MarketsPanel() {
             <section>
               <h3 className="meta mb-2 text-faint">Economic calendar · next 2 weeks</h3>
               <EconomicCalendar />
+            </section>
+
+            <section>
+              <h3 className="meta mb-2 text-faint">Treasury auctions · recent results</h3>
+              <TreasuryAuctions />
             </section>
 
             <section className="rounded-md border border-ai/25 bg-ai-soft px-3 py-2.5">

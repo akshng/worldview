@@ -91,6 +91,9 @@ Secrets are read only on the server (`src/lib/env.ts`, guarded by `server-only`)
 | NOAA tsunami warning centers | Tsunami warnings/advisories/statements | 3 min | none |
 | FAA NAS status | US airport ground stops, delays, closures | 5 min | none |
 | IODA (Georgia Tech) | National internet outages | 15 min | none |
+| Wikipedia Current Events portal | Human-curated daily world events, each linked to the news report it cites | 30 min | none |
+| Copernicus CAMS air quality (via Open-Meteo) | Cities of 2M+ with modelled US AQI ≥ 151 (unhealthy or worse) | 60 min | none |
+| FDIC failed bank list | US bank failures (last 2 years) | 12 h | none |
 | CDC Travelers' Health notices | Outbreaks and health risks by country | 6 h | none |
 | US State Department travel advisories | Level 2–4 advisories updated in the last 30 days | 6 h | none |
 | Federal Register | US presidential documents (executive orders, proclamations, determinations) | 60 min | none |

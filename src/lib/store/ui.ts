@@ -78,6 +78,7 @@ interface UIState {
   searchOpen: boolean;
   briefingOpen: boolean;
   marketsOpen: boolean;
+  planetOpen: boolean;
   /** Instrument detail view (symbol) */
   instrument: string | null;
   toasts: Toast[];
@@ -106,6 +107,7 @@ interface UIState {
   setSearchOpen: (v: boolean) => void;
   setBriefingOpen: (v: boolean) => void;
   setMarketsOpen: (v: boolean) => void;
+  setPlanetOpen: (v: boolean) => void;
   openInstrument: (symbol: string | null) => void;
   pushToast: (t: Omit<Toast, "id">) => void;
   dismissToast: (id: number) => void;
@@ -148,6 +150,7 @@ export const useUI = create<UIState>()(
       searchOpen: false,
       briefingOpen: false,
       marketsOpen: false,
+      planetOpen: false,
       instrument: null,
       toasts: [],
       settingsOpen: false,
@@ -180,6 +183,7 @@ export const useUI = create<UIState>()(
       setSearchOpen: (searchOpen) => set({ searchOpen }),
       setBriefingOpen: (briefingOpen) => set({ briefingOpen }),
       setMarketsOpen: (marketsOpen) => set({ marketsOpen }),
+      setPlanetOpen: (planetOpen) => set({ planetOpen }),
       openInstrument: (instrument) => set({ instrument }),
       pushToast: (t) => set((s) => ({ toasts: [...s.toasts.slice(-3), { ...t, id: Date.now() + Math.random() }] })),
       dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),

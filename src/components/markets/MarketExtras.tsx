@@ -102,3 +102,41 @@ export function EconomicCalendar() {
     </div>
   );
 }
+
+/** Recent U.S. Treasury auction results. */
+export function TreasuryAuctions() {
+  const [rows, setRows] = useState<import("@/lib/finance/auctions").AuctionResult[] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    api.auctions().then((r) => setRows(r.auctions)).catch((e) => setErr(e.message));
+  }, []);
+  if (err) return <p className="text-[12px] text-warn">Auction results unavailable: {err}</p>;
+  if (!rows) return <p className="text-[12px] text-muted">Loading…</p>;
+  return (
+    <div>
+      <table className="w-full text-[12px]">
+        <thead>
+          <tr className="text-left text-[10.5px] text-faint">
+            <th className="py-1 font-normal">Date</th>
+            <th className="py-1 font-normal">Security</th>
+            <th className="py-1 text-right font-normal">Rate</th>
+            <th className="py-1 text-right font-normal" title="Bids received ÷ amount accepted">Bid/cover</th>
+            <th className="py-1 text-right font-normal" title="Share taken by indirect bidders (often a proxy for foreign demand)">Indirect</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.slice(0, 10).map((r, i) => (
+            <tr key={`${r.date}-${r.term}-${i}`} className="border-t border-line">
+              <td className="tabular py-1 text-muted">{r.date.slice(5)}</td>
+              <td className="py-1">{r.term} {r.security.toLowerCase()}</td>
+              <td className="tabular py-1 text-right">{r.rate?.toFixed(3) ?? "—"}%</td>
+              <td className="tabular py-1 text-right">{r.bidToCover?.toFixed(2) ?? "—"}</td>
+              <td className="tabular py-1 text-right text-muted">{r.indirectPct !== null ? `${r.indirectPct}%` : "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="mt-1 text-[10.5px] text-faint">U.S. Treasury Fiscal Data. Rate is the auction&apos;s high yield (bills: high investment rate).</p>
+    </div>
+  );
+}
