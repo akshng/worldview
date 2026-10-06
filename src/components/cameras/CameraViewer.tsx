@@ -67,7 +67,7 @@ function Viewer({ cam }: { cam: Cam }) {
   const src = tick ? `${imageUrl}${sep}t=${tick}` : imageUrl;
 
   return (
-    <div className="glass absolute top-3 left-3 z-20 w-[380px] overflow-hidden rounded-lg shadow-2xl shadow-black/60" role="dialog" aria-label={`Camera: ${name}`}>
+    <div className="glass absolute top-[76px] left-3 z-20 w-[min(380px,calc(100%-24px))] overflow-hidden rounded-lg shadow-2xl shadow-black/60" role="dialog" aria-label={`Camera: ${name}`}>
       <div className="flex items-start justify-between gap-2 px-3 pt-2.5 pb-2">
         <div className="min-w-0">
           <div className="meta flex items-center gap-1.5" style={{ color: "#2ec4b6" }}>

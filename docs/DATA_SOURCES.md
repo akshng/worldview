@@ -42,6 +42,15 @@ All V1 connectors use official or well-established public structured feeds. No w
 
 Top bar → **Planet**: daily CO₂ at Mauna Loa (NOAA GML), monthly global land+ocean temperature anomaly (NOAA NCEI), daily Arctic sea-ice extent (NSIDC), Oceanic Niño Index (NOAA CPC), planetary Kp index, current R/S/G space-weather scales and M/X-class flares in the last 7 days (NOAA SWPC), plus a table of asteroid close approaches within 0.05 au in the next 30 days (JPL SBDB close-approach API; size range estimated from absolute magnitude for albedo 0.25–0.05). Each tile states what its change compares against (a year earlier, previous month, previous season, 3 hours earlier). Cached 3 h.
 
+## Map views
+
+- **Satellite** (map button **SAT**, or Settings → Map style): NASA Blue Marble for the whole globe, then EOX **Sentinel-2 cloudless 2024** (10 m) from zoom 4 — keyless WMTS tiles, CC BY-NC-SA 4.0 (non-commercial use with attribution).
+- **States and provinces**: `npm run geo:regions` builds `public/geo/regions.geojson` from Natural Earth 10m admin-1 (4,596 regions, simplified to ~2 km; ~1.4 MB gzipped). It loads the first time the map is zoomed past level 3; from there, hover and click switch from countries to states/provinces (markets mode stays per-country). The region panel counts the events currently on the map whose location falls inside the boundary.
+
+## Public cameras (`src/layers/cameras`)
+
+Map button **CAM** shows ~7,000 traffic and road-weather cameras that operators publish as open data (TfL London, NYC DOT, Caltrans, Hong Kong Transport Department, Fintraffic, Singapore LTA). Click one to see its latest image (refreshed on the operator's cadence) or, where offered, a video clip (TfL MP4) or live stream (Caltrans HLS, via hls.js). Media loads directly from the operator. Only operator-published public cameras are included — never private or unsecured devices. The camera list is cached 6 h.
+
 ## Live layers (`src/layers/`)
 
 Live layers are continuously changing observations visualised in map modes. They are **not events**: they never enter the event store, scoring or deduplication. Each is fetched on demand through `/api/layers/:id` and cached server-side for its TTL, so upstream quotas are only used while someone is looking, and every client shares one cached copy. If an upstream fetch fails, the last good snapshot is served with `stale: true` (shown in the legend).

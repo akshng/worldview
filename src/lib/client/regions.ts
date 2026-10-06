@@ -12,7 +12,7 @@ export type RegionFeature = { type: "Feature"; id: number; properties: RegionPro
 export type RegionCollection = { type: "FeatureCollection"; features: RegionFeature[] };
 
 /** Zoom at which the map switches from countries to states/provinces. */
-export const REGION_ZOOM = 3.2;
+export const REGION_ZOOM = 3;
 
 let pending: Promise<RegionCollection> | null = null;
 let byId: Map<number, RegionFeature> | null = null;

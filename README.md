@@ -135,6 +135,12 @@ npm run service:install
 
 WorldView then runs as a production server at http://localhost:3000 (bound to this Mac only). It starts when you log in and restarts if it crashes, so feeds keep updating in the background. After pulling changes: `npm run build && npm run service:restart`. Remove it with `npm run service:uninstall`. Log: `.data/server.log`. Don't run `npm run dev` at the same time — both use port 3000 and the same data store.
 
+## Map tools
+
+- **SAT** — satellite view (NASA Blue Marble, then 10 m Sentinel-2 imagery when zoomed in).
+- **CAM** — ~7,000 public traffic/road-weather cameras (London, New York City, California, Hong Kong, Finland, Singapore); click for the live image or video.
+- **Zoom in** past continent level and the map switches from countries to states/provinces — hover to highlight, click for that region's events.
+
 ## Morning briefing
 
 A once-a-day job refreshes every active source, builds the daily briefing, has the AI (local Qwen by default) write the summary, saves it to `DATA_DIR/briefings/YYYY-MM-DD.json`, unloads the model and exits — nothing stays running. The app shows it as "Morning briefing · <time>".
