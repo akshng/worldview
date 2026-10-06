@@ -27,6 +27,10 @@ interface SeriesDef {
   unit: "%" | "k" | "M" | "$" | "$T" | "$B" | "index" | "pp" | "ppm" | "Mkm²" | "°C";
   /** One line on what it measures, shown on hover */
   note: string;
+  /** FRED series to fetch when `id` is a derived name (defaults to `id`) */
+  fred?: string;
+  /** Subtract this FRED series (same dates) — for spreads such as Italy − Germany */
+  minus?: string;
 }
 
 export const MACRO_SERIES: SeriesDef[] = [
@@ -50,6 +54,7 @@ export const MACRO_SERIES: SeriesDef[] = [
   { id: "INDPRO", name: "Industrial production", group: "Growth", transform: "yoy", unit: "%", note: "Factory, mining and utility output, year over year" },
 
   { id: "DFF", name: "Fed funds rate", group: "Rates & credit", transform: "level", unit: "%", note: "Effective federal funds rate (overnight)" },
+  { id: "SOFR", name: "SOFR", group: "Rates & credit", transform: "level", unit: "%", note: "Secured Overnight Financing Rate — the benchmark overnight repo rate (NY Fed, daily)" },
   { id: "T10Y2Y", name: "10y − 2y spread", group: "Rates & credit", transform: "level", unit: "pp", note: "Below zero = inverted yield curve" },
   { id: "T10Y3M", name: "10y − 3m spread", group: "Rates & credit", transform: "level", unit: "pp", note: "Below zero = inverted yield curve" },
   { id: "BAMLH0A0HYM2", name: "High-yield spread", group: "Rates & credit", transform: "level", unit: "pp", note: "Extra yield on junk bonds over Treasuries — rises when credit stress rises" },
@@ -57,6 +62,8 @@ export const MACRO_SERIES: SeriesDef[] = [
 
   { id: "M2SL", name: "M2 money supply", group: "Money & liquidity", transform: "yoy", unit: "%", note: "Broad money, year over year" },
   { id: "WALCL", name: "Fed balance sheet", group: "Money & liquidity", transform: "trillions_from_millions", unit: "$T", note: "Total assets held by the Federal Reserve" },
+  { id: "WRESBAL", name: "Bank reserves", group: "Money & liquidity", transform: "trillions_from_millions", unit: "$T", note: "Reserve balances banks hold at the Federal Reserve (weekly)" },
+  { id: "RRPONTSYD", name: "Fed reverse repo", group: "Money & liquidity", transform: "level", unit: "$B", note: "Overnight reverse repurchase agreements at the New York Fed — cash parked by money funds (daily)" },
 
   { id: "MORTGAGE30US", name: "30-yr mortgage", group: "Housing", transform: "level", unit: "%", note: "Average 30-year fixed mortgage rate (Freddie Mac)" },
   { id: "CSUSHPINSA", name: "Home prices (Case-Shiller)", group: "Housing", transform: "yoy", unit: "%", note: "S&P CoreLogic Case-Shiller US National Home Price Index, year over year" },
@@ -70,6 +77,22 @@ export const MACRO_SERIES: SeriesDef[] = [
   { id: "IRLTLT01DEM156N", name: "Germany 10-yr", group: "Global", transform: "level", unit: "%", note: "German 10-year government bond yield, monthly (OECD)" },
   { id: "IRLTLT01GBM156N", name: "UK 10-yr gilt", group: "Global", transform: "level", unit: "%", note: "UK 10-year government bond yield, monthly (OECD)" },
   { id: "IRLTLT01JPM156N", name: "Japan 10-yr", group: "Global", transform: "level", unit: "%", note: "Japan 10-year government bond yield, monthly (OECD)" },
+  { id: "IRLTLT01FRM156N", name: "France 10-yr", group: "Global", transform: "level", unit: "%", note: "French 10-year government bond yield, monthly (OECD)" },
+  { id: "IRLTLT01ITM156N", name: "Italy 10-yr", group: "Global", transform: "level", unit: "%", note: "Italian 10-year government bond yield, monthly (OECD)" },
+  { id: "IRLTLT01ESM156N", name: "Spain 10-yr", group: "Global", transform: "level", unit: "%", note: "Spanish 10-year government bond yield, monthly (OECD)" },
+  { id: "IT_DE_10Y", fred: "IRLTLT01ITM156N", minus: "IRLTLT01DEM156N", name: "Italy − Germany 10-yr", group: "Global", transform: "level", unit: "pp", note: "Italian minus German 10-year yield, monthly — a gauge of euro-area sovereign risk" },
+  { id: "IRLTLT01CHM156N", name: "Switzerland 10-yr", group: "Global", transform: "level", unit: "%", note: "Swiss 10-year government bond yield, monthly (OECD)" },
+  { id: "IRLTLT01CAM156N", name: "Canada 10-yr", group: "Global", transform: "level", unit: "%", note: "Canadian 10-year government bond yield, monthly (OECD)" },
+  { id: "IRLTLT01AUM156N", name: "Australia 10-yr", group: "Global", transform: "level", unit: "%", note: "Australian 10-year government bond yield, monthly (OECD)" },
+  { id: "IRLTLT01KRM156N", name: "Korea 10-yr", group: "Global", transform: "level", unit: "%", note: "South Korean 10-year government bond yield, monthly (OECD)" },
+  { id: "IRLTLT01MXM156N", name: "Mexico 10-yr", group: "Global", transform: "level", unit: "%", note: "Mexican 10-year government bond yield, monthly (OECD)" },
+  { id: "IRLTLT01ZAM156N", name: "South Africa 10-yr", group: "Global", transform: "level", unit: "%", note: "South African 10-year government bond yield, monthly (OECD)" },
+  { id: "ECBMRRFR", name: "ECB main refi rate", group: "Global", transform: "level", unit: "%", note: "European Central Bank main refinancing operations rate" },
+  { id: "IUDSOIA", name: "SONIA (UK)", group: "Global", transform: "level", unit: "%", note: "Sterling Overnight Index Average, the Bank of England's benchmark overnight rate (daily)" },
+  { id: "IRSTCI01CAM156N", name: "Canada overnight rate", group: "Global", transform: "level", unit: "%", note: "Canada call money / interbank rate, monthly average (OECD)" },
+  { id: "IRSTCI01AUM156N", name: "Australia overnight rate", group: "Global", transform: "level", unit: "%", note: "Australia call money / interbank rate, monthly average (OECD)" },
+  { id: "IRSTCI01KRM156N", name: "Korea overnight rate", group: "Global", transform: "level", unit: "%", note: "Korea call money / interbank rate, monthly average (OECD)" },
+  { id: "DTWEXBGS", name: "Broad dollar index", group: "Global", transform: "level", unit: "index", note: "Fed's trade-weighted US dollar index against 26 currencies (Jan 2006 = 100, daily)" },
 
   { id: "UMCSENT", name: "Consumer sentiment", group: "Sentiment", transform: "level", unit: "index", note: "University of Michigan consumer sentiment" },
 ];
@@ -167,8 +190,19 @@ export function toIndicator(def: SeriesDef, obs: Observation[]): MacroIndicator 
     asOf: last?.date ?? null,
     spark: sparkOf(s).map(round),
     source: "FRED, Federal Reserve Bank of St. Louis",
-    sourceUrl: `https://fred.stlouisfed.org/series/${def.id}`,
+    sourceUrl: `https://fred.stlouisfed.org/series/${def.fred ?? def.id}`,
   };
+}
+
+/** a − b on the dates both series have (for yield spreads). */
+export function diffSeries(a: Observation[], b: Observation[]): Observation[] {
+  const byDate = new Map(b.map((o) => [o.date, o.value]));
+  return a.filter((o) => byDate.has(o.date)).map((o) => ({ date: o.date, value: o.value - byDate.get(o.date)! }));
+}
+
+async function fetchDef(def: SeriesDef, since: string): Promise<Observation[]> {
+  const [a, b] = await Promise.all([fetchFred(def.fred ?? def.id, since), def.minus ? fetchFred(def.minus, since) : Promise.resolve(null)]);
+  return b ? diffSeries(a, b) : a;
 }
 
 async function fetchFred(id: string, since: string): Promise<Observation[]> {
@@ -253,6 +287,21 @@ export function parseMtsYtd(j: {
   return [...best].map(([date, { value }]) => ({ date, value }));
 }
 
+/**
+ * Treasury General Account closing balance from the Daily Treasury Statement, in $ billions.
+ * Since 2022 the closing balance is reported in `open_today_bal` (`close_today_bal` is "null").
+ */
+export function parseTga(j: { data?: Array<{ record_date: string; account_type: string; open_today_bal?: string; close_today_bal?: string }> }): Observation[] {
+  return (j.data ?? [])
+    .filter((r) => r.account_type === "Treasury General Account (TGA) Closing Balance")
+    .map((r) => {
+      const close = Number(r.close_today_bal);
+      const v = r.close_today_bal && r.close_today_bal !== "null" && Number.isFinite(close) ? close : Number(r.open_today_bal);
+      return { date: r.record_date, value: v / 1000 };
+    })
+    .filter((o) => Number.isFinite(o.value) && o.value > 0);
+}
+
 const day = (unixSeconds: number | string) => new Date(Number(unixSeconds) * 1000).toISOString().slice(0, 10);
 
 async function loadExternal(): Promise<{ indicators: MacroIndicator[]; failed: string[] }> {
@@ -275,6 +324,22 @@ async function loadExternal(): Promise<{ indicators: MacroIndicator[]; failed: s
         seriesIndicator(
           { ...fiscal, id: "US_DEFICIT_FYTD", name: "Deficit, fiscal YTD", unit: "$B", note: "Federal deficit so far this fiscal year (from Oct 1); the year resets each October. Monthly Treasury Statement", sourceUrl: "https://fiscaldata.treasury.gov/datasets/monthly-treasury-statement/" },
           parseMtsYtd(await getJson(`${TREASURY}/v1/accounting/mts/mts_table_1?filter=classification_desc:eq:Year-to-Date&sort=-record_date&page%5Bsize%5D=48&fields=record_date,classification_desc,current_month_dfct_sur_amt,print_order_nbr`)),
+        ),
+    ],
+    [
+      "US_TGA",
+      async () =>
+        seriesIndicator(
+          {
+            id: "US_TGA",
+            name: "Treasury cash (TGA)",
+            group: "Money & liquidity",
+            unit: "$B",
+            note: "The Treasury's cash balance at the Fed (Daily Treasury Statement). Rises drain bank reserves; falls add them",
+            source: "U.S. Treasury Fiscal Data",
+            sourceUrl: "https://fiscaldata.treasury.gov/datasets/daily-treasury-statement/",
+          },
+          parseTga(await getJson(`${TREASURY}/v1/accounting/dts/operating_cash_balance?sort=-record_date&page%5Bsize%5D=300&fields=record_date,account_type,open_today_bal,close_today_bal&filter=${encodeURIComponent("account_type:eq:Treasury General Account (TGA) Closing Balance")}`)),
         ),
     ],
     [
@@ -345,7 +410,7 @@ async function loadExternal(): Promise<{ indicators: MacroIndicator[]; failed: s
   return { indicators, failed };
 }
 
-const EXTERNAL_ORDER = ["US_DEBT", "US_DEFICIT_FYTD", "CRYPTO_MCAP", "BTC_DOMINANCE", "DEFI_TVL", "STABLECOINS"];
+const EXTERNAL_ORDER = ["US_TGA", "US_DEBT","US_DEFICIT_FYTD", "CRYPTO_MCAP", "BTC_DOMINANCE", "DEFI_TVL", "STABLECOINS"];
 
 const TTL = 6 * 3_600_000;
 const g = globalThis as unknown as { __worldviewMacro?: { at: number; value: MacroDashboard; pending: Promise<MacroDashboard> | null } };
@@ -360,7 +425,7 @@ async function load(): Promise<MacroDashboard> {
     Array.from({ length: 4 }, async () => {
       for (let def = queue.shift(); def; def = queue.shift()) {
         try {
-          indicators.push(toIndicator(def, await fetchFred(def.id, since)));
+          indicators.push(toIndicator(def, await fetchDef(def, since)));
         } catch {
           failed.push(def.id);
         }

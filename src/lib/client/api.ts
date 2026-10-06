@@ -149,6 +149,8 @@ export interface InstrumentResponse {
     filings: Array<{ form: string; filed: string; description: string; url: string }>;
     insiderFilings30d: number;
     fundamentals: Array<{ label: string; value: number; unit: string; period: string; priorValue: number | null; filed: string }>;
+    balanceSheet?: import("@/lib/finance/company").BalanceItem[];
+    revenueHistory?: import("@/lib/finance/company").QuarterValue[];
     secUrl: string;
   } | null;
   events: EventSummary[];
@@ -203,6 +205,10 @@ export const api = {
   ipos: (signal?: AbortSignal) => getJSON<{ filings: import("@/lib/finance/ipos").Registration[]; source: string }>("/api/markets/ipos", signal),
   predictions: (signal?: AbortSignal) => getJSON<import("@/lib/finance/prediction-markets").PredictionMarkets>("/api/markets/predictions", signal),
   auctions: (signal?: AbortSignal) => getJSON<{ auctions: import("@/lib/finance/auctions").AuctionResult[]; source: string }>("/api/markets/auctions", signal),
+  earnings: (signal?: AbortSignal) => getJSON<import("@/lib/finance/earnings").EarningsFeed>("/api/markets/earnings", signal),
+  termStructure: (signal?: AbortSignal) => getJSON<import("@/lib/finance/term-structure").TermStructure>("/api/markets/term-structure", signal),
+  dividends: (symbol: string, signal?: AbortSignal) =>
+    getJSON<import("@/lib/finance/dividends").Dividends>(`/api/markets/dividends/${encodeURIComponent(symbol)}`, signal),
   planet: (signal?: AbortSignal) => getJSON<import("@/lib/planet").PlanetDashboard>("/api/planet", signal),
   trends: (signal?: AbortSignal) => getJSON<import("@/lib/trends").Trends>("/api/trends", signal),
   countryTrends: (geo: string, signal?: AbortSignal) =>

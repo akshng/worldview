@@ -23,6 +23,8 @@ import { CryptoTable } from "./CryptoTable";
 import { TickerSearch } from "./TickerSearch";
 import { Positioning } from "./Positioning";
 import { PredictionMarkets } from "./PredictionMarkets";
+import { TermStructure } from "./TermStructure";
+import { EarningsReleases } from "./EarningsReleases";
 
 const GROUPS: Array<{ id: keyof MarketSnapshot["groups"]; title: string }> = [
   { id: "indices", title: "Equity indices" },
@@ -157,6 +159,12 @@ export function MarketsPanel() {
               ))}
             {snap && (
               <section className="mb-5">
+                <h3 className="meta mb-2 text-faint">Futures curves · term structure</h3>
+                <TermStructure />
+              </section>
+            )}
+            {snap && (
+              <section className="mb-5">
                 <h3 className="meta mb-2 text-faint">Prediction markets · implied probabilities</h3>
                 <PredictionMarkets />
               </section>
@@ -206,6 +214,11 @@ export function MarketsPanel() {
             <section>
               <h3 className="meta mb-2 text-faint">US stock movers today</h3>
               <StockMovers />
+            </section>
+
+            <section>
+              <h3 className="meta mb-2 text-faint">Earnings released · last 7 days</h3>
+              <EarningsReleases />
             </section>
 
             <section>

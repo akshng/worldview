@@ -33,7 +33,28 @@ export interface CompanyProfile {
   filings: CompanyFiling[];
   insiderFilings30d: number;
   fundamentals: Fundamental[];
+  /** Latest reported balance-sheet items (point-in-time) */
+  balanceSheet: BalanceItem[];
+  /** Quarterly revenue, oldest → newest (up to 12 quarters) */
+  revenueHistory: QuarterValue[];
   secUrl: string;
+}
+
+export interface BalanceItem {
+  label: string;
+  value: number;
+  unit: "USD" | "shares";
+  /** Date the value is as of (YYYY-MM-DD) */
+  asOf: string;
+  form: string;
+}
+
+export interface QuarterValue {
+  /** Quarter end date */
+  end: string;
+  value: number;
+  /** Fourth quarter derived as annual total − the three reported quarters (10-Ks don't report Q4 alone) */
+  derived: boolean;
 }
 
 const headers = () => ({ "User-Agent": userAgent(), Accept: "application/json" });
@@ -60,6 +81,18 @@ const FACTS: Array<{ label: string; tags: string[]; unit: string }> = [
   { label: "Net income", tags: ["NetIncomeLoss"], unit: "USD" },
   { label: "Diluted EPS", tags: ["EarningsPerShareDiluted"], unit: "USD/shares" },
   { label: "Operating cash flow", tags: ["NetCashProvidedByUsedInOperatingActivities"], unit: "USD" },
+  { label: "R&D expense", tags: ["ResearchAndDevelopmentExpense", "ResearchAndDevelopmentExpenseExcludingAcquiredInProcessCost"], unit: "USD" },
+];
+
+const REVENUE_TAGS = FACTS[0].tags;
+
+const BALANCE: Array<{ label: string; tags: string[]; unit: BalanceItem["unit"]; taxonomy?: "dei" }> = [
+  { label: "Total assets", tags: ["Assets"], unit: "USD" },
+  { label: "Total liabilities", tags: ["Liabilities"], unit: "USD" },
+  { label: "Shareholders' equity", tags: ["StockholdersEquity", "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"], unit: "USD" },
+  { label: "Cash & equivalents", tags: ["CashAndCashEquivalentsAtCarryingValue", "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents"], unit: "USD" },
+  { label: "Long-term debt", tags: ["LongTermDebtNoncurrent", "LongTermDebt"], unit: "USD" },
+  { label: "Shares outstanding", tags: ["EntityCommonStockSharesOutstanding"], unit: "shares", taxonomy: "dei" },
 ];
 
 type FactRow = { start?: string; end: string; val: number; fy: number; fp: string; form: string; filed: string; frame?: string };
@@ -73,6 +106,49 @@ export function latestQuarter(rows: FactRow[]): { cur: FactRow; prior: FactRow |
   const [y, q] = [Number(cur.frame!.slice(2, 6)), cur.frame!.slice(6)];
   const prior = quarters.find((r) => r.frame === `CY${y - 1}${q}`) ?? null;
   return { cur, prior };
+}
+
+/** Most recent point-in-time value from a periodic report (balance-sheet items have no start date). */
+export function latestInstant(rows: FactRow[]): FactRow | null {
+  let best: FactRow | null = null;
+  for (const r of rows) {
+    if (r.start || !/^(10-K|10-Q|20-F|40-F)/.test(r.form)) continue;
+    if (!best || r.end > best.end || (r.end === best.end && r.filed > best.filed)) best = r;
+  }
+  return best;
+}
+
+const spanDays = (a: string, b: string) => (Date.parse(b) - Date.parse(a)) / 86_400_000;
+
+/**
+ * Single-quarter values by period end (latest filing wins). Missing fourth quarters
+ * are derived from the 10-K annual total minus the three quarters inside it.
+ */
+export function quarterlyHistory(rows: FactRow[], max = 12): QuarterValue[] {
+  const q = new Map<string, { row: FactRow; derived: boolean }>();
+  const annual = new Map<string, FactRow>();
+  for (const r of rows) {
+    if (!r.start) continue;
+    const len = spanDays(r.start, r.end);
+    if (len >= 80 && len <= 100) {
+      const prev = q.get(r.end);
+      if (!prev || r.filed > prev.row.filed) q.set(r.end, { row: r, derived: false });
+    } else if (len >= 350 && len <= 380 && /^10-K/.test(r.form)) {
+      const prev = annual.get(r.end);
+      if (!prev || r.filed > prev.filed) annual.set(r.end, r);
+    }
+  }
+  for (const a of annual.values()) {
+    if (q.has(a.end)) continue;
+    const inside = [...q.values()].filter((x) => !x.derived && x.row.start! >= a.start! && x.row.end < a.end);
+    if (inside.length !== 3) continue;
+    const lastEnd = inside.map((x) => x.row.end).sort().at(-1)!;
+    q.set(a.end, { row: { ...a, start: lastEnd, val: a.val - inside.reduce((s, x) => s + x.row.val, 0) }, derived: true });
+  }
+  return [...q.values()]
+    .sort((a, b) => a.row.end.localeCompare(b.row.end))
+    .slice(-max)
+    .map((x) => ({ end: x.row.end, value: x.row.val, derived: x.derived }));
 }
 
 export async function companyProfile(ticker: string): Promise<CompanyProfile | null> {
@@ -120,6 +196,19 @@ export async function companyProfile(ticker: string): Promise<CompanyProfile | n
       break;
     }
   }
+  const balanceSheet: BalanceItem[] = [];
+  for (const item of BALANCE) {
+    const tax = item.taxonomy === "dei" ? (facts?.facts?.dei ?? {}) : gaap;
+    for (const tag of item.tags) {
+      const rows = tax[tag]?.units?.[item.unit] as FactRow[] | undefined;
+      const r = rows && latestInstant(rows);
+      if (!r) continue;
+      balanceSheet.push({ label: item.label, value: r.val, unit: item.unit, asOf: r.end, form: r.form });
+      break;
+    }
+  }
+  // Revenue tags change over the years (e.g. SalesRevenueNet → the ASC 606 tag); merge them.
+  const revenueHistory = quarterlyHistory(REVENUE_TAGS.flatMap((t) => (gaap[t]?.units?.USD as FactRow[] | undefined) ?? []));
   const b = sub.addresses?.business ?? {};
   const p: CompanyProfile = {
     cik,
@@ -132,6 +221,8 @@ export async function companyProfile(ticker: string): Promise<CompanyProfile | n
     filings,
     insiderFilings30d: insider,
     fundamentals,
+    balanceSheet,
+    revenueHistory,
     secUrl: `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${cik}`,
   };
   cache.profiles.set(cik, { at: Date.now(), p });
