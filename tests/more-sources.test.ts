@@ -178,7 +178,7 @@ describe("news RSS", () => {
     expect(placeFor("New study on sleep", "Researchers said nothing about places.")).toBeNull();
   });
   it("skips unlocatable and stale items and dedupes links", () => {
-    const outlet = { id: "bbc", name: "BBC News", url: "u", homepage: "h" };
+    const outlet = { id: "bbc", name: "BBC News", url: "u", homepage: "h", region: "global" as const };
     const fresh = new Date(now - 3_600_000).toUTCString();
     const r = parseNewsRss(
       {

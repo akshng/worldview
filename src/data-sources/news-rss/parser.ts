@@ -1,5 +1,5 @@
 import type { EventCandidateInput, EventCategory } from "@/types/events";
-import { placesInText, usStateInText, type HeadlinePlace } from "@/lib/geo/headline-places";
+import { demonymInText, homePlaceInText, placesInText, usStateInText, type HeadlinePlace } from "@/lib/geo/headline-places";
 import { THEME_RULES } from "../gdelt-gkg/parser";
 import { plainText, safeUrl, type ParseContext, type ParseResult } from "../types";
 import type { NewsRssRaw } from "./types";
@@ -36,15 +36,21 @@ export function classifyHeadline(title: string): { type: EventCategory; subtype:
  * names (city, then US state, then country). The summary is used only when the headline
  * names no place at all, and then only a cued one.
  */
-export function placeFor(title: string, description: string): { place: HeadlinePlace; fromTitle: boolean } | null {
+export function placeFor(title: string, description: string, home?: string): { place: HeadlinePlace; fromTitle: boolean } | null {
   const inTitle = placesInText(title);
   const state = usStateInText(title);
-  const cued = inTitle.find((p) => p.cued) ?? (state?.cued ? state : undefined);
-  const t = cued ?? inTitle.find((p) => p.city) ?? state ?? inTitle[0];
+  // For an outlet with a home country: a town or province of that country it names ("Punjab" in Dawn).
+  const local = home ? homePlaceInText(title, home) : null;
+  const cued = inTitle.find((p) => p.cued) ?? (state?.cued ? state : undefined) ?? (local?.cued ? local : undefined);
+  const t = cued ?? inTitle.find((p) => p.city) ?? local ?? state ?? inTitle[0];
   // A US state beats a bare "US"/"America" mention.
   if (t && !(state && !t.city && t.country.code === "US")) return { place: t, fromTitle: true };
   if (state) return { place: state, fromTitle: true };
-  const d = placesInText(description).find((p) => p.cued);
+  // "Bulgarian PM says …": the one nationality named, when no place is.
+  const nat = demonymInText(title);
+  if (nat) return { place: nat, fromTitle: true };
+  const homeInDesc = home ? homePlaceInText(description, home) : null;
+  const d = placesInText(description).find((p) => p.cued) ?? (homeInDesc?.cued ? homeInDesc : undefined);
   return d ? { place: d, fromTitle: false } : null;
 }
 
@@ -72,7 +78,7 @@ export function parseNewsRss(raw: NewsRssRaw, ctx: ParseContext): ParseResult {
         continue;
       }
       const description = plainText(it.description, 300);
-      const located = placeFor(title, description);
+      const located = placeFor(title, description, outlet.home);
       if (!located) {
         skipped++; // no place we can name — don't guess
         continue;
