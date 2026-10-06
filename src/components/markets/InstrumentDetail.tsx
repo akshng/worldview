@@ -3,6 +3,7 @@
 import clsx from "clsx";
 import { useEffect, useState } from "react";
 import { ShortVolume } from "./ShortVolume";
+import { BalanceSheet, Dividends, RevenueHistory } from "./CompanyExtras";
 import { api, type InstrumentResponse } from "@/lib/client/api";
 import { useUI } from "@/lib/store/ui";
 import { DOWN, UP } from "@/lib/finance/format";
@@ -181,6 +182,8 @@ export function InstrumentDetail() {
                   </table>
                 )}
                 {d.company.fundamentals[0] && <p className="mt-1 text-[10.5px] text-faint">{d.company.fundamentals[0].period}; from XBRL financial data in SEC filings.</p>}
+                <RevenueHistory quarters={d.company.revenueHistory ?? []} />
+                <BalanceSheet items={d.company.balanceSheet ?? []} />
                 <div className="mt-3 text-[12px]">
                   <span className="text-muted">Insider (Form 4) filings, last 30 days: </span>
                   <span className="tabular">{d.company.insiderFilings30d}</span>
@@ -206,6 +209,7 @@ export function InstrumentDetail() {
 
           <section>
             {symbol && <ShortVolume symbol={symbol} />}
+            {symbol && <Dividends symbol={symbol} />}
             <h3 className="meta mb-2 text-faint">Price alert (in-app)</h3>
             {alert && (
               <div className="mb-2 flex items-center justify-between rounded border border-line px-2 py-1 text-[12px]">

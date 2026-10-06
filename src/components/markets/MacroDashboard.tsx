@@ -22,7 +22,8 @@ export function formatMacro(v: number | null, unit: MacroIndicator["unit"]): str
     case "$T":
       return `$${v.toFixed(2)}T`;
     case "$B":
-      return `$${Math.round(v).toLocaleString("en-US")}B`;
+      // Small balances (e.g. the Fed reverse repo near zero) would otherwise read "$0B".
+      return Math.abs(v) < 10 ? `$${v.toFixed(2)}B` : `$${Math.round(v).toLocaleString("en-US")}B`;
     case "ppm":
       return `${v.toFixed(1)} ppm`;
     case "$":
@@ -40,7 +41,7 @@ export function formatMacro(v: number | null, unit: MacroIndicator["unit"]): str
 
 /** Change rounded to the precision it is shown at, so "−0.0" never appears. */
 function roundedDelta(d: number, unit: MacroIndicator["unit"]): number {
-  const f = unit === "%" || unit === "ppm" ? 10 : unit === "k" || unit === "$B" ? 1 : 100;
+  const f = unit === "%" || unit === "ppm" ? 10 : unit === "k" || (unit === "$B" && Math.abs(d) >= 10) ? 1 : 100;
   return Math.round(d * f) / f;
 }
 
@@ -49,7 +50,7 @@ function formatDelta(raw: number | null, unit: MacroIndicator["unit"]): string {
   const d = roundedDelta(raw, unit);
   const sign = d > 0 ? "+" : d < 0 ? "−" : "±";
   const a = Math.abs(d);
-  const body = unit === "%" ? `${a.toFixed(1)} pt` : unit === "k" ? `${Math.round(a).toLocaleString("en-US")}k` : unit === "$T" ? `$${a.toFixed(2)}T` : unit === "$B" ? `$${Math.round(a).toLocaleString("en-US")}B` : unit === "ppm" ? `${a.toFixed(1)} ppm` : unit === "$" ? `$${a.toFixed(2)}` : unit === "M" ? `${a.toFixed(1)}M` : unit === "°C" ? `${a.toFixed(2)}°C` : a.toFixed(2);
+  const body = unit === "%" ? `${a.toFixed(1)} pt` : unit === "k" ? `${Math.round(a).toLocaleString("en-US")}k` : unit === "$T" ? `$${a.toFixed(2)}T` : unit === "$B" ? (a < 10 ? `$${a.toFixed(2)}B` : `$${Math.round(a).toLocaleString("en-US")}B`) : unit === "ppm" ? `${a.toFixed(1)} ppm` : unit === "$" ? `$${a.toFixed(2)}` : unit === "M" ? `${a.toFixed(1)}M` : unit === "°C" ? `${a.toFixed(2)}°C` : a.toFixed(2);
   return `${sign}${body}`;
 }
 
