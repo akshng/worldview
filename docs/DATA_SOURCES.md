@@ -49,7 +49,7 @@ Top bar → **Planet**: daily CO₂ at Mauna Loa (NOAA GML), monthly global land
 
 ## Public cameras (`src/layers/cameras`)
 
-Map button **CAM** shows ~18,000 traffic and road-weather cameras that transport agencies publish as open data. Click one to see its latest image (refreshed on the operator's cadence) or, where offered, a video clip (TfL MP4) or live stream (Caltrans and Iowa DOT HLS, via hls.js). Media loads directly from the operator. The camera list is cached 6 h; coordinates are rounded to 5 decimals (~1 m) to keep the payload around 3 MB. Each source loads independently, so one failing feed is listed as unavailable without breaking the layer.
+Map button **CAM** shows ~18,000 traffic and road-weather cameras that transport agencies publish as open data. Clicking a camera goes live straight away: its live stream (HLS) or video clip (MP4) if it has one, otherwise its still image re-fetched on the operator's own cadence (every 3 s – 5 min). Nothing streams unless a viewer is open: the feed pauses (and the HLS download stops) while the tab is hidden, and closing the viewer removes it entirely. If a stream fails, the viewer falls back to the still image. Media loads directly from the operator. The camera list is cached 6 h; coordinates are rounded to 5 decimals (~1 m) to keep the payload around 3 MB. Each source loads independently, so one failing feed is listed as unavailable without breaking the layer.
 
 **Rules for adding a camera source**
 

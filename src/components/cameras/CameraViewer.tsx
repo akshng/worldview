@@ -1,8 +1,10 @@
 "use client";
 /**
- * Viewer for one public camera: the operator's latest still image (refreshed on
- * the operator's schedule) or its video stream (MP4 clip / HLS live stream).
- * Media loads directly from the operator's servers.
+ * Viewer for one public camera. Live first: opens straight into the camera's
+ * video (HLS live stream / MP4 clip) when it has one, otherwise a still image
+ * re-fetched on the operator's cadence. Nothing streams unless the viewer is open
+ * and the page is visible; closing it stops the feed. Media loads directly from
+ * the operator's servers.
  */
 import { useEffect, useRef, useState } from "react";
 import { useUI } from "@/lib/store/ui";
@@ -12,78 +14,145 @@ type Cam = NonNullable<ReturnType<typeof useUI.getState>["selectedCamera"]>;
 
 export function CameraViewer() {
   const cam = useUI((s) => s.selectedCamera);
-  // Keyed by camera so each camera starts fresh (still image, no errors).
+  // Keyed by camera so each camera starts fresh.
   return cam ? <Viewer key={cam.row[0]} cam={cam} /> : null;
+}
+
+/** True while the page is visible (tab in front, window not minimised). */
+function usePageVisible(): boolean {
+  const [visible, setVisible] = useState(() => typeof document === "undefined" || document.visibilityState === "visible");
+  useEffect(() => {
+    const on = () => setVisible(document.visibilityState === "visible");
+    document.addEventListener("visibilitychange", on);
+    return () => document.removeEventListener("visibilitychange", on);
+  }, []);
+  return visible;
+}
+
+/** How often to re-fetch a still: the operator's cadence, between 3 s and 5 min. */
+const stillEvery = (sec: number) => Math.min(300, Math.max(3, sec));
+
+function ago(ms: number): string {
+  const s = Math.max(0, Math.round(ms / 1000));
+  return s < 60 ? `${s}s ago` : `${Math.round(s / 60)} min ago`;
 }
 
 function Viewer({ cam }: { cam: Cam }) {
   const close = () => useUI.getState().selectCamera(null);
+  const [, name, lon, lat, , imageUrl, videoUrl, videoKind] = cam.row;
+  // Live first: open straight into video when the camera has it.
+  const [mode, setMode] = useState<"image" | "video">(videoUrl ? "video" : "image");
   const [tick, setTick] = useState(0);
-  const [mode, setMode] = useState<"image" | "video">("image");
   const [imgError, setImgError] = useState(false);
   const [videoError, setVideoError] = useState<string | null>(null);
+  const [loadedAt, setLoadedAt] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const watching = usePageVisible();
   const video = useRef<HTMLVideoElement>(null);
+  const hlsRef = useRef<{ stopLoad: () => void; startLoad: (pos?: number) => void; liveSyncPosition?: number | null } | null>(null);
   const id = cam.row[0];
+  const every = stillEvery(cam.source.refreshSec);
 
-  // Refresh the still on the operator's update cadence (at least every 15 s, at most every 5 min).
+  // A camera whose stream fails falls back to its auto-refreshing still image.
+  const failVideo = (msg: string) => {
+    setVideoError(msg);
+    setMode("image");
+  };
+
+  // Still images: re-fetch on the operator's cadence, only while someone is looking.
   useEffect(() => {
-    if (mode !== "image") return;
-    const every = Math.min(300, Math.max(15, cam.source.refreshSec)) * 1000;
-    const t = setInterval(() => setTick((n) => n + 1), every);
+    if (mode !== "image" || !watching) return;
+    // Catch up straight away when returning to the tab, then keep the operator's cadence.
+    const first = setTimeout(() => setTick((n) => n + 1), 0);
+    const t = setInterval(() => setTick((n) => n + 1), every * 1000);
+    return () => {
+      clearTimeout(first);
+      clearInterval(t);
+    };
+  }, [mode, watching, every]);
+
+  // "Updated Xs ago" clock (also only while visible).
+  useEffect(() => {
+    if (!watching) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
-  }, [cam, mode]);
+  }, [watching]);
 
-  // HLS: native where supported (Safari), else hls.js.
+  // HLS: native where supported (Safari), else hls.js. Destroyed on close / camera change.
   useEffect(() => {
-    if (mode !== "video" || cam.row[7] !== "hls" || !video.current || !cam.row[6]) return;
+    if (mode !== "video" || videoKind !== "hls" || !video.current || !videoUrl) return;
     const el = video.current;
-    const url = cam.row[6];
     if (el.canPlayType("application/vnd.apple.mpegurl")) {
-      el.src = url;
-      return;
+      el.src = videoUrl;
+      return () => {
+        el.removeAttribute("src");
+        el.load();
+      };
     }
     let destroyed = false;
     let hls: { destroy: () => void } | null = null;
     import("hls.js").then(({ default: Hls }) => {
       if (destroyed) return;
       if (!Hls.isSupported()) {
-        setVideoError("This browser can't play the stream.");
+        failVideo("This browser can't play the stream.");
         return;
       }
-      const h = new Hls({ lowLatencyMode: true });
-      h.on(Hls.Events.ERROR, (_e, data) => data.fatal && setVideoError("The live stream is unavailable right now."));
-      h.loadSource(url);
+      const h = new Hls({ lowLatencyMode: true, liveDurationInfinity: true });
+      h.on(Hls.Events.ERROR, (_e, data) => data.fatal && failVideo("The live stream is unavailable right now."));
+      h.loadSource(videoUrl);
       h.attachMedia(el);
       hls = h;
+      hlsRef.current = h;
     });
     return () => {
       destroyed = true;
       hls?.destroy();
+      hlsRef.current = null;
     };
-  }, [cam, mode]);
+  }, [mode, videoKind, videoUrl]);
 
-  const [, name, lon, lat, , imageUrl, videoUrl, videoKind] = cam.row;
+  // Pause video (and stop downloading the stream) while the page isn't visible; jump back to live on return.
+  useEffect(() => {
+    const el = video.current;
+    if (mode !== "video" || !el) return;
+    if (!watching) {
+      el.pause();
+      hlsRef.current?.stopLoad();
+      return;
+    }
+    const h = hlsRef.current;
+    if (h) {
+      h.startLoad(-1);
+      if (typeof h.liveSyncPosition === "number") el.currentTime = h.liveSyncPosition;
+    }
+    void el.play().catch(() => {});
+  }, [watching, mode]);
+
+
   const sep = imageUrl.includes("?") ? "&" : "?";
-  const src = tick ? `${imageUrl}${sep}t=${tick}` : imageUrl;
+  const src = tick > 1 ? `${imageUrl}${sep}t=${tick}` : imageUrl;
+  const isLiveVideo = mode === "video" && videoKind === "hls";
+  const status = !watching ? "Paused — not visible" : mode === "video" ? (isLiveVideo ? "Live" : "Video clip") : `Live image · refreshes every ${every}s`;
 
   return (
     <div className="glass absolute top-[76px] left-3 z-20 w-[min(380px,calc(100%-24px))] overflow-hidden rounded-lg shadow-2xl shadow-black/60" role="dialog" aria-label={`Camera: ${name}`}>
       <div className="flex items-start justify-between gap-2 px-3 pt-2.5 pb-2">
         <div className="min-w-0">
-          <div className="meta flex items-center gap-1.5" style={{ color: "#2ec4b6" }}>
-            <span className="live-dot h-1.5 w-1.5 rounded-full" style={{ background: "#2ec4b6" }} /> Live camera · {cam.source.region}
+          <div className="meta flex items-center gap-1.5" style={{ color: watching ? "#2ec4b6" : "var(--text-faint)" }}>
+            <span className={watching ? "live-dot h-1.5 w-1.5 rounded-full" : "h-1.5 w-1.5 rounded-full"} style={{ background: watching ? "#2ec4b6" : "var(--text-faint)" }} />
+            {status} · {cam.source.region}
           </div>
           <div className="mt-0.5 truncate text-[13px] font-medium" title={name}>{name}</div>
         </div>
-        <button onClick={close} className="rounded p-1 text-muted hover:bg-panel-hover hover:text-fg" aria-label="Close camera">
+        <button onClick={close} className="rounded p-1 text-muted hover:bg-panel-hover hover:text-fg" aria-label="Close camera (stops the feed)">
           <CloseIcon />
         </button>
       </div>
       {videoUrl && (
         <div className="flex gap-1 px-3 pb-1.5" role="tablist">
-          {(["image", "video"] as const).map((m) => (
-            <button key={m} role="tab" aria-selected={mode === m} onClick={() => setMode(m)} className={`rounded px-2 py-0.5 text-[11px] ${mode === m ? "bg-panel-hover text-fg" : "text-muted hover:text-fg"}`}>
-              {m === "image" ? "Latest image" : videoKind === "hls" ? "Live video" : "Video clip"}
+          {(["video", "image"] as const).map((m) => (
+            <button key={m} role="tab" aria-selected={mode === m} onClick={() => { setVideoError(null); setMode(m); }} className={`rounded px-2 py-0.5 text-[11px] ${mode === m ? "bg-panel-hover text-fg" : "text-muted hover:text-fg"}`}>
+              {m === "image" ? "Still image" : videoKind === "hls" ? "Live video" : "Video clip"}
             </button>
           ))}
         </div>
@@ -94,10 +163,18 @@ function Viewer({ cam }: { cam: Cam }) {
             <div className="grid h-full place-items-center px-6 text-center text-[12px] text-muted">The operator&apos;s image isn&apos;t available right now.</div>
           ) : (
             // eslint-disable-next-line @next/next/no-img-element -- live image from the operator, not an app asset
-            <img src={src} alt={`Latest image from ${name}`} className="h-full w-full object-contain" referrerPolicy="no-referrer" onError={() => setImgError(true)} onLoad={() => setImgError(false)} />
+            <img
+              src={src}
+              alt={`Latest image from ${name}`}
+              className="h-full w-full object-contain"
+              referrerPolicy="no-referrer"
+              onError={() => setImgError(true)}
+              onLoad={() => {
+                setImgError(false);
+                setLoadedAt(Date.now());
+              }}
+            />
           )
-        ) : videoError ? (
-          <div className="grid h-full place-items-center px-6 text-center text-[12px] text-muted">{videoError}</div>
         ) : (
           <video
             ref={video}
@@ -109,15 +186,17 @@ function Viewer({ cam }: { cam: Cam }) {
             playsInline
             controls
             loop={videoKind === "mp4"}
-            onError={() => setVideoError("The video isn't available right now.")}
+            onError={() => failVideo("The video isn't available right now.")}
           />
         )}
+        {!watching && <div className="absolute inset-0 grid place-items-center bg-black/60 text-[12px] text-muted">Paused while this tab isn&apos;t visible</div>}
       </div>
       <div className="px-3 py-2 text-[10.5px] leading-snug text-faint">
         {cam.source.name} · {lat.toFixed(4)}, {lon.toFixed(4)}
-        {mode === "image" && ` · image refreshes every ${Math.min(300, Math.max(15, cam.source.refreshSec))} s`}
+        {mode === "image" && loadedAt && ` · image loaded ${ago(now - loadedAt)}`}
+        {videoError && mode === "image" && " · live video unavailable, showing the still image"}
         <br />
-        Published by the operator for public viewing ({cam.source.license}).{" "}
+        The feed only runs while this viewer is open and visible. Published by the operator for public viewing ({cam.source.license}).{" "}
         <a href={cam.source.homepage} target="_blank" rel="noreferrer" className="underline hover:text-fg">Source</a>
       </div>
     </div>
