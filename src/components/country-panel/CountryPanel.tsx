@@ -10,6 +10,57 @@ import { CloseIcon } from "@/components/ui/icons";
 import { ImportanceMeter, SectionTitle } from "@/components/ui/primitives";
 import { focusEvent } from "@/components/event-feed/EventFeed";
 import type { EventCategory } from "@/types/events";
+import type { GoogleTrend } from "@/lib/trends";
+
+/** The country's top Google trending searches, when Trends covers it (≈40 countries). */
+function CountrySearches({ code, name }: { code: string; name: string }) {
+  const [res, setRes] = useState<{ code: string; items: GoogleTrend[] | null; error?: string } | null>(null);
+  useEffect(() => {
+    if (!/^[A-Z]{2}$/.test(code)) return;
+    const ctrl = new AbortController();
+    api
+      .countryTrends(code, ctrl.signal)
+      .then((r) => setRes({ code, items: r.country?.items ?? null }))
+      .catch((e) => e.name !== "AbortError" && setRes({ code, items: null, error: e.message }));
+    return () => ctrl.abort();
+  }, [code]);
+  const cur = res?.code === code ? res : null;
+  if (!cur || (!cur.items && !cur.error)) return null;
+  return (
+    <section className="border-t border-line px-4 py-3.5">
+      <SectionTitle
+        right={
+          <button onClick={() => useUI.getState().setTrendsOpen(true)} className="meta text-faint hover:text-accent">
+            All trends
+          </button>
+        }
+      >
+        Trending searches in {name}
+      </SectionTitle>
+      {cur.error ? (
+        <p className="text-[12px] text-warn">Google Trends unavailable right now.</p>
+      ) : (
+        <ol className="space-y-1">
+          {cur.items!.slice(0, 6).map((t) => (
+            <li key={t.title} className="flex items-baseline gap-2 text-[12.5px]">
+              <a
+                href={t.news[0]?.url ?? `https://trends.google.com/trends/explore?date=now%201-d&geo=${code}&q=${encodeURIComponent(t.title)}`}
+                target="_blank"
+                rel="noreferrer"
+                className="min-w-0 flex-1 truncate hover:text-accent"
+                title={t.news[0]?.title ?? t.title}
+              >
+                {t.title}
+              </a>
+              {t.traffic && <span className="tabular shrink-0 text-[11px] text-faint">{t.traffic}</span>}
+            </li>
+          ))}
+        </ol>
+      )}
+      <p className="mt-1.5 text-[10.5px] text-faint">Google Trends daily trending searches: what people are looking up, not verified events.</p>
+    </section>
+  );
+}
 
 export function CountryPanel() {
   const code = useUI((s) => s.selectedCountry);
@@ -98,6 +149,8 @@ export function CountryPanel() {
                 </ul>
               )}
             </section>
+
+            <CountrySearches code={d.country.code} name={d.country.name} />
 
             <section className="border-t border-line px-4 py-3.5">
               <SectionTitle

@@ -73,7 +73,7 @@ export function TopBar() {
       </div>
 
       {/* Right: search, settings, clock */}
-      <div className="flex w-[260px] items-center justify-end gap-1">
+      <div className="flex min-w-[260px] shrink-0 items-center justify-end gap-1">
         <button
           onClick={() => setSearchOpen(true)}
           className="mr-1 flex h-8 w-36 items-center gap-2 rounded-md border border-line px-2.5 text-left text-[12px] text-faint transition-colors hover:border-line-strong hover:text-muted"
@@ -87,6 +87,9 @@ export function TopBar() {
         </IconButton>
         <IconButton onClick={() => useUI.getState().setPlanetOpen(true)} title="Planet: climate & space weather" aria-label="Planet" className="meta px-2.5">
           Planet
+        </IconButton>
+        <IconButton onClick={() => useUI.getState().setTrendsOpen(true)} title="Trends: what people are searching and sharing" aria-label="Trends" className="meta px-2.5">
+          Trends
         </IconButton>
         <IconButton onClick={() => setBriefingOpen(true)} title="Daily briefing" aria-label="Daily briefing" className="meta px-2.5">
           Briefing

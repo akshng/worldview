@@ -15,6 +15,8 @@ const eslintConfig = defineConfig([
     // Vendored MapLibre worker (copied from node_modules) and local data
     "public/vendor/**",
     ".data/**",
+    // Local agent worktrees (separate checkouts)
+    ".claude/**",
   ]),
 ]);
 

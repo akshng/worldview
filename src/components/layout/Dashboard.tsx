@@ -22,6 +22,7 @@ import { Legend } from "@/components/globe/Legend";
 import { BriefingModal } from "@/components/briefing/BriefingModal";
 import { MarketsPanel } from "@/components/markets/MarketsPanel";
 import { PlanetPanel } from "@/components/planet/PlanetPanel";
+import { TrendsPanel } from "@/components/trends/TrendsPanel";
 import { InstrumentDetail } from "@/components/markets/InstrumentDetail";
 import { Toasts, useAlertChecker } from "@/components/markets/Alerts";
 import { modeMeta } from "@/lib/map-modes";
@@ -106,6 +107,7 @@ export function Dashboard() {
       <BriefingModal />
       <MarketsPanel />
       <PlanetPanel />
+      <TrendsPanel />
       <InstrumentDetail />
       <Toasts />
     </div>
