@@ -209,6 +209,12 @@ for (const r of REGIONS) {
   }
 }
 
+/** A country's admin-1 regions: primary names (incl. romanisation variants) and label point. */
+export function regionsOf(iso2: string): Array<{ names: string[]; lat: number; lon: number }> {
+  const c = iso2.toUpperCase();
+  return REGIONS.filter((r) => r.c === c && r.n.length).map((r) => ({ names: r.n, lat: r.lat, lon: r.lon }));
+}
+
 /**
  * Find a state/province (or a larger region named in several provinces'
  * alternate names, e.g. "Lombardy") within a country. Multi-province matches
