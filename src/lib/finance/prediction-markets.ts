@@ -87,11 +87,10 @@ export async function getPredictionMarkets(): Promise<PredictionMarkets> {
   let cursor = "";
   try {
     for (let page = 0; page < 8; page++) {
-      const res = await fetch(`https://api.elections.kalshi.com/trade-api/v2/events?status=open&limit=200&with_nested_markets=true${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`, {
-        headers: { "User-Agent": userAgent(), Accept: "application/json" },
-        signal: AbortSignal.timeout(30_000),
-        cache: "no-store",
-      });
+      const url = `https://api.elections.kalshi.com/trade-api/v2/events?status=open&limit=200&with_nested_markets=true${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`;
+      const get = () => fetch(url, { headers: { "User-Agent": userAgent(), Accept: "application/json" }, signal: AbortSignal.timeout(30_000), cache: "no-store" });
+      // One retry: Kalshi occasionally resets connections.
+      const res = await get().catch(() => new Promise<Response>((r) => setTimeout(() => r(get()), 1500)));
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const j = (await res.json()) as { events?: RawEvent[]; cursor?: string };
       raw.push(...(j.events ?? []));
