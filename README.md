@@ -139,7 +139,7 @@ WorldView then runs as a production server at http://localhost:3000 (bound to th
 ## Map tools
 
 - **SAT** — satellite view (NASA Blue Marble, then 10 m Sentinel-2 imagery when zoomed in).
-- **CAM** — ~7,000 public traffic/road-weather cameras (London, New York City, California, Hong Kong, Finland, Singapore); click for the live image or video.
+- **CAM** — ~18,000 public traffic/road-weather cameras from official open-data feeds (London, New York City, California, Washington, Illinois, Iowa, Kentucky, British Columbia, Toronto, Calgary, Spain, Iceland, Finland, Hong Kong, Singapore); click for the live image or video.
 - **Zoom in** past continent level and the map switches from countries to states/provinces — hover to highlight, click for that region's events.
 
 ## Morning briefing
