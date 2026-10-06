@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   CAMERA_SOURCES,
+  atxRows,
   bcRows,
   caltransRows,
   cgyRows,
@@ -12,6 +13,8 @@ import {
   isRows,
   kyRows,
   nycRows,
+  qldRows,
+  sdRows,
   sgRows,
   tflRows,
   toRows,
@@ -178,11 +181,42 @@ describe("new parsers", () => {
     expect(rows).toEqual([["ky:CCTV_05_71_0103", "I-71 at Old Brownsboro Rd", -85.5612, 38.3202, idx("ky"), "https://www.trimarc.org/images/milestone/CCTV_05_71_0103.jpg", null, null]]);
   });
 
+  it("qldRows reads the QLDTraffic webcam GeoJSON", () => {
+    const rows = qldRows({ features: [
+      { geometry: pt(153.0086975, -27.5551796), properties: { id: 1, description: "Archerfield - Ipswich Motorway & Granard Rd - North ", image_url: "https://cameras.qldtraffic.qld.gov.au/Metropolitan/Archerfield_Ipswich_Mwy_sth.jpg" } },
+      { geometry: pt(153, -27.5), properties: { id: 2, description: "Http", image_url: "http://x/2.jpg" } },
+    ] });
+    expect(rows).toEqual([["qld:1", "Archerfield - Ipswich Motorway & Granard Rd - North", 153.0086975, -27.5551796, idx("qld"), "https://cameras.qldtraffic.qld.gov.au/Metropolitan/Archerfield_Ipswich_Mwy_sth.jpg", null, null]]);
+  });
+
+  it("atxRows keeps cameras that are turned on and title-cases the location", () => {
+    const c = (id: string, status: string) => ({ camera_id: id, location_name: " BRODIE LN / ERNEST ROBLES WAY", camera_status: status, screenshot_address: `https://cctv.austinmobility.io/image/${id}.jpg`, location: pt(-97.820351, 30.229502) });
+    const rows = atxRows([c("1", "TURNED_ON"), c("670", "DESIRED"), c("3", "REMOVED")]);
+    expect(rows).toEqual([["atx:1", "Brodie Ln / Ernest Robles Way", -97.820351, 30.229502, idx("atx"), "https://cctv.austinmobility.io/image/1.jpg", null, null]]);
+  });
+
+  it("sdRows expands each site into its camera views", () => {
+    const rows = sdRows({ features: [
+      { geometry: pt(-97.06, 44.95), properties: { name: "Watertown North", route: "I-29", cameras: [
+        { id: "1", name: "Camera Looking South", image: "https://sd.cdn.iteris-atis.com/camera_images/CSDATY/1/latest.jpg" },
+        { id: "4", name: "Road Surface View", image: "https://sd.cdn.iteris-atis.com/camera_images/CSDATY/4/latest.jpg" },
+        { id: "9", name: "Http", image: "http://x/9.jpg" },
+      ] } },
+      { geometry: null, properties: { name: "No location", cameras: [{ image: "https://sd.cdn.iteris-atis.com/camera_images/X/0/latest.jpg" }] } },
+    ] });
+    expect(rows).toEqual([
+      ["sd:CSDATY:1", "I-29 Watertown North: Camera Looking South", -97.06, 44.95, idx("sd"), "https://sd.cdn.iteris-atis.com/camera_images/CSDATY/1/latest.jpg", null, null],
+      ["sd:CSDATY:4", "I-29 Watertown North: Road Surface View", -97.06, 44.95, idx("sd"), "https://sd.cdn.iteris-atis.com/camera_images/CSDATY/4/latest.jpg", null, null],
+    ]);
+  });
+
   it("every parser rejects missing or zero coordinates", () => {
     const zero: CameraRow[] = [
       ...bcRows([{ id: 1, name: "x", is_on: true, location: pt(0, 0) }]),
       ...isRows([{ Slod: "https://x/a.jpg", Breidd: 0, Lengd: 0 }]),
       ...wsdotRows({ features: [{ geometry: null, properties: { ImageURL: "https://images.wsdot.wa.gov/a.jpg" } }] }),
+      ...qldRows({ features: [{ geometry: pt(0, 0), properties: { id: 1, image_url: "https://x/a.jpg" } }] }),
+      ...atxRows([{ camera_id: "1", camera_status: "TURNED_ON", screenshot_address: "https://x/a.jpg" }]),
     ];
     expect(zero).toEqual([]);
   });
