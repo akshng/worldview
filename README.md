@@ -73,6 +73,12 @@ Secrets are read only on the server (`src/lib/env.ts`, guarded by `server-only`)
 | --- | --- | --- | --- |
 | USGS earthquake feed (M2.5+, 7 days) | Earthquake | 2 min | none |
 | EMSC (European-Mediterranean Seismological Centre) | Earthquakes M3+ worldwide, merged with USGS when both report one | 5 min | none |
+| Japan Meteorological Agency | Earthquakes in and around Japan with maximum seismic intensity (7 days); volcanic warnings level 2+ | 5 / 30 min | none |
+| BMKG (Indonesia) | Latest M5+ and felt earthquakes, with tsunami-potential statement | 5 min | none |
+| GeoNet (New Zealand) | Felt earthquakes (MMI 3+, 7 days) | 5 min | none |
+| AFAD (Türkiye) | Earthquakes M3+ in and around Türkiye (3 days) | 5 min | none |
+| Servicio Sismológico Nacional (Mexico) | Latest located Mexican earthquakes | 5 min | none |
+| Hong Kong Observatory | Warnings in force: typhoon signals, rainstorm, flooding, landslip, tsunami… | 10 min | none |
 | GDACS (UN/EC disaster alerts) | Earthquake, cyclone, flood, volcano, drought, wildfire | 10 min | none |
 | NWS active alerts (severe/extreme, US) | Weather, flood | 5 min | none |
 | NOAA National Hurricane Center | Active Atlantic/Pacific hurricanes and tropical storms, per advisory | 15 min | none |

@@ -35,11 +35,23 @@ import { fdicFailuresConnector } from "./fdic-failures";
 import { fireballsConnector } from "./fireballs";
 import { ecccConnector } from "./eccc";
 import { auEmergencyConnector } from "./au-emergency";
+import { jmaQuakeConnector } from "./jma-quake";
+import { jmaVolcanoConnector } from "./jma-volcano";
+import { bmkgConnector } from "./bmkg";
+import { geonetConnector } from "./geonet";
+import { afadConnector } from "./afad";
+import { ssnMexicoConnector } from "./ssn-mexico";
+import { hkoWarningsConnector } from "./hko-warnings";
 import { demoConnector } from "./demo";
 
 export const CONNECTORS = [
   usgsConnector,
   emscConnector,
+  jmaQuakeConnector,
+  bmkgConnector,
+  geonetConnector,
+  afadConnector,
+  ssnMexicoConnector,
   gdacsConnector,
   nhcConnector,
   spcReportsConnector,
@@ -47,9 +59,11 @@ export const CONNECTORS = [
   meteoalarmConnector,
   ecccConnector,
   auEmergencyConnector,
+  hkoWarningsConnector,
   ukFloodsConnector,
   eonetConnector,
   usgsVolcanoConnector,
+  jmaVolcanoConnector,
   cemsConnector,
   firmsConnector,
   nifcConnector,
