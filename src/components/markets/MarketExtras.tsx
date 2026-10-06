@@ -140,3 +140,36 @@ export function TreasuryAuctions() {
     </div>
   );
 }
+
+/** New S-1/F-1 registration statements (last 30 days). */
+export function IpoFilings() {
+  const [rows, setRows] = useState<import("@/lib/finance/ipos").Registration[] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [onlyIpo, setOnlyIpo] = useState(true);
+  useEffect(() => {
+    api.ipos().then((r) => setRows(r.filings)).catch((e) => setErr(e.message));
+  }, []);
+  if (err) return <p className="text-[12px] text-warn">Filings unavailable: {err}</p>;
+  if (!rows) return <p className="text-[12px] text-muted">Loading…</p>;
+  const shown = rows.filter((r) => !onlyIpo || r.likelyIpo).slice(0, 12);
+  return (
+    <div>
+      <label className="mb-1 flex items-center gap-1.5 text-[11.5px] text-muted">
+        <input type="checkbox" checked={onlyIpo} onChange={(e) => setOnlyIpo(e.target.checked)} /> Only companies without a ticker yet (likely IPOs)
+      </label>
+      <ul>
+        {shown.map((r) => (
+          <li key={r.url} className="flex items-baseline gap-2 border-t border-line py-1 text-[12px]">
+            <span className="tabular shrink-0 text-faint">{r.filed.slice(5)}</span>
+            <a href={r.url} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate hover:text-accent" title={`${r.company} · ${r.form}${r.location ? ` · ${r.location}` : ""}`}>
+              {r.company}
+            </a>
+            <span className="shrink-0 text-[11px] text-faint">{r.ticker ?? r.form}</span>
+          </li>
+        ))}
+        {!shown.length && <li className="text-[12px] text-faint">None in the last 30 days.</li>}
+      </ul>
+      <p className="mt-1 text-[10.5px] text-faint">SEC EDGAR. A registration statement is a filing, not a completed offering; amendments excluded.</p>
+    </div>
+  );
+}

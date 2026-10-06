@@ -16,12 +16,13 @@ import { StatusBadge } from "@/components/ui/primitives";
 import { focusEvent } from "@/components/event-feed/EventFeed";
 import type { EventSummary } from "@/types/events";
 import { QuoteTile } from "./QuoteTile";
-import { EconomicCalendar, SectorBars, TreasuryAuctions, YieldCurve } from "./MarketExtras";
+import { EconomicCalendar, IpoFilings, SectorBars, TreasuryAuctions, YieldCurve } from "./MarketExtras";
 import { MacroDashboard } from "./MacroDashboard";
 import { StockMovers } from "./StockMovers";
 import { CryptoTable } from "./CryptoTable";
 import { TickerSearch } from "./TickerSearch";
 import { Positioning } from "./Positioning";
+import { PredictionMarkets } from "./PredictionMarkets";
 
 const GROUPS: Array<{ id: keyof MarketSnapshot["groups"]; title: string }> = [
   { id: "indices", title: "Equity indices" },
@@ -156,6 +157,12 @@ export function MarketsPanel() {
               ))}
             {snap && (
               <section className="mb-5">
+                <h3 className="meta mb-2 text-faint">Prediction markets · implied probabilities</h3>
+                <PredictionMarkets />
+              </section>
+            )}
+            {snap && (
+              <section className="mb-5">
                 <h3 className="meta mb-2 text-faint">Futures positioning · speculators (CFTC, weekly)</h3>
                 <Positioning />
               </section>
@@ -204,6 +211,11 @@ export function MarketsPanel() {
             <section>
               <h3 className="meta mb-2 text-faint">Economic calendar · next 2 weeks</h3>
               <EconomicCalendar />
+            </section>
+
+            <section>
+              <h3 className="meta mb-2 text-faint">New registration statements · S-1 / F-1</h3>
+              <IpoFilings />
             </section>
 
             <section>

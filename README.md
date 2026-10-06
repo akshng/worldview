@@ -86,6 +86,8 @@ Secrets are read only on the server (`src/lib/env.ts`, guarded by `server-only`)
 | GDELT 2.0 event export | Conflict, protest, politics, crime/public safety | 15 min | none |
 | GDELT Global Knowledge Graph | News with real headlines: conflict, politics, protests, markets, business, tech, science, health, transport | 15 min | none |
 | World news RSS (BBC, Al Jazeera, NPR, DW, France 24, UN News, Guardian, CNBC, Sky, ABC Australia) | Headlines placed by the place they name; the same story from several outlets merges | 15 min | none |
+| Environment and Climate Change Canada | Canadian weather warnings with area polygons | 10 min | none |
+| NSW Rural Fire Service + VicEmergency | Australian bushfires and official warnings (NSW, Victoria) | 10 min | none |
 | MeteoAlarm (EUMETNET) | Orange/red weather warnings from 38 European weather services | 20 min | none |
 | Launch Library 2 | Space launches (±7 days) | 30 min | none |
 | NOAA tsunami warning centers | Tsunami warnings/advisories/statements | 3 min | none |

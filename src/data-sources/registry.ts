@@ -33,6 +33,8 @@ import { wikipediaEventsConnector } from "./wikipedia-events";
 import { airQualityConnector } from "./air-quality";
 import { fdicFailuresConnector } from "./fdic-failures";
 import { fireballsConnector } from "./fireballs";
+import { ecccConnector } from "./eccc";
+import { auEmergencyConnector } from "./au-emergency";
 import { demoConnector } from "./demo";
 
 export const CONNECTORS = [
@@ -43,6 +45,8 @@ export const CONNECTORS = [
   spcReportsConnector,
   weatherConnector,
   meteoalarmConnector,
+  ecccConnector,
+  auEmergencyConnector,
   ukFloodsConnector,
   eonetConnector,
   usgsVolcanoConnector,

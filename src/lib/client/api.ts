@@ -200,6 +200,8 @@ export const api = {
     getJSON<{ hits: import("@/lib/finance/search").SearchHit[] }>(`/api/markets/search?q=${encodeURIComponent(q)}`, signal),
   shortVolume: (symbol: string, signal?: AbortSignal) =>
     getJSON<import("@/lib/finance/short-volume").ShortVolume>(`/api/markets/short-volume/${encodeURIComponent(symbol)}`, signal),
+  ipos: (signal?: AbortSignal) => getJSON<{ filings: import("@/lib/finance/ipos").Registration[]; source: string }>("/api/markets/ipos", signal),
+  predictions: (signal?: AbortSignal) => getJSON<import("@/lib/finance/prediction-markets").PredictionMarkets>("/api/markets/predictions", signal),
   auctions: (signal?: AbortSignal) => getJSON<{ auctions: import("@/lib/finance/auctions").AuctionResult[]; source: string }>("/api/markets/auctions", signal),
   planet: (signal?: AbortSignal) => getJSON<import("@/lib/planet").PlanetDashboard>("/api/planet", signal),
   positioning: (signal?: AbortSignal) => getJSON<import("@/lib/finance/cot").CotReport>("/api/markets/positioning", signal),
