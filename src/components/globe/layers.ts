@@ -16,6 +16,9 @@ export const EVENTS_SOURCE = "events";
 export const FLAT_SOURCE = "events-flat";
 export const DENSITY_SOURCE = "density";
 export const AIRCRAFT_SOURCE = "aircraft";
+export const CAMERAS_SOURCE = "cameras";
+export const REGIONS_SOURCE = "regions";
+export const CAMERA_COLOR = "#2ec4b6";
 export const AREAS_SOURCE = "areas";
 export const VESSELS_SOURCE = "vessels";
 export const COUNTRIES_SOURCE = "countries";
@@ -517,4 +520,71 @@ export function areaCollection(events: EventSummary[]): { fc: GeoJSON.FeatureCol
     features.push({ type: "Feature", id: fid, properties: { id: e.id, type: e.type }, geometry: e.area as GeoJSON.Geometry });
   }
   return { fc: { type: "FeatureCollection", features }, ids };
+}
+
+/** Public camera markers (clustered); shown in every map mode when enabled. */
+export function cameraLayers(): LayerSpecification[] {
+  return [
+    {
+      id: "cam-cluster",
+      type: "circle",
+      source: CAMERAS_SOURCE,
+      filter: ["has", "point_count"],
+      layout: { visibility: "none" },
+      paint: {
+        "circle-color": "rgba(46,196,182,0.18)",
+        "circle-stroke-color": CAMERA_COLOR,
+        "circle-stroke-width": 1.2,
+        "circle-radius": ["interpolate", ["linear"], ["get", "point_count"], 2, 9, 50, 14, 500, 20],
+      },
+    },
+    {
+      id: "cam-count",
+      type: "symbol",
+      source: CAMERAS_SOURCE,
+      filter: ["has", "point_count"],
+      layout: { visibility: "none", "text-field": ["get", "point_count_abbreviated"], "text-font": ["Noto Sans Bold"], "text-size": 10, "text-allow-overlap": true },
+      paint: { "text-color": CAMERA_COLOR },
+    },
+    {
+      id: "cam-point",
+      type: "circle",
+      source: CAMERAS_SOURCE,
+      filter: ["!", ["has", "point_count"]],
+      layout: { visibility: "none" },
+      paint: {
+        "circle-color": CAMERA_COLOR,
+        "circle-radius": ["interpolate", ["linear"], ["zoom"], 4, 3, 12, 6],
+        "circle-stroke-color": "#05070a",
+        "circle-stroke-width": 1.2,
+      },
+    },
+  ];
+}
+
+/** States/provinces: faint outlines, hover and selection, from REGION_ZOOM up. */
+export function regionLayers(minzoom: number): LayerSpecification[] {
+  return [
+    {
+      id: "region-fill",
+      type: "fill",
+      source: REGIONS_SOURCE,
+      minzoom,
+      paint: {
+        "fill-color": "#9cc9ff",
+        "fill-opacity": ["case", ["boolean", ["feature-state", "selected"], false], 0.09, ["boolean", ["feature-state", "hover"], false], 0.05, 0],
+      },
+    },
+    {
+      id: "region-outline",
+      type: "line",
+      source: REGIONS_SOURCE,
+      minzoom,
+      paint: {
+        "line-color": "#9cc9ff",
+        "line-width": ["case", ["boolean", ["feature-state", "selected"], false], 1.4, 0.5],
+        "line-opacity": ["case", ["boolean", ["feature-state", "selected"], false], 0.8, ["boolean", ["feature-state", "hover"], false], 0.5, 0.14],
+      },
+    },
+  ];
 }

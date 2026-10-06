@@ -18,6 +18,8 @@ export interface Settings {
   mapStyle: MapStyleId;
   showEventLabels: boolean;
   showDayNight: boolean;
+  /** Public camera markers on the map */
+  showCameras: boolean;
   autoRefresh: boolean;
   defaultRange: PresetRangeId;
   defaultCategories: EventCategory[];
@@ -69,7 +71,11 @@ interface UIState {
 
   // selection / panels
   selectedEventId: string | null;
+  /** Camera open in the viewer: [id, name, lon, lat, sourceIndex, imageUrl, videoUrl, videoKind] + its source */
+  selectedCamera: { row: import("@/layers/cameras").CameraRow; source: import("@/layers/cameras").CameraSource } | null;
   selectedCountry: string | null;
+  /** State/province selected on the map (id in /geo/regions.geojson) */
+  selectedRegion: number | null;
   hoveredEventId: string | null;
   flyTo: FlyToRequest | null;
 
@@ -100,7 +106,9 @@ interface UIState {
   setRadarFrame: (i: number | null) => void;
   setRadarPlaying: (v: boolean) => void;
   selectEvent: (id: string | null) => void;
+  selectCamera: (c: UIState["selectedCamera"]) => void;
   selectCountry: (code: string | null) => void;
+  selectRegion: (id: number | null) => void;
   setHovered: (id: string | null) => void;
   requestFlyTo: (r: Omit<FlyToRequest, "nonce">) => void;
   setSidebarCollapsed: (v: boolean) => void;
@@ -120,6 +128,7 @@ const DEFAULT_SETTINGS: Settings = {
   mapStyle: "dark",
   showEventLabels: false,
   showDayNight: true,
+  showCameras: false,
   autoRefresh: true,
   defaultRange: "24h",
   defaultCategories: [...EVENT_CATEGORIES],
@@ -143,7 +152,9 @@ export const useUI = create<UIState>()(
       radarFrame: null,
       radarPlaying: false,
       selectedEventId: null,
+      selectedCamera: null,
       selectedCountry: null,
+      selectedRegion: null,
       hoveredEventId: null,
       flyTo: null,
       sidebarCollapsed: false,
@@ -175,8 +186,10 @@ export const useUI = create<UIState>()(
       setFeedSort: (feedSort) => set({ feedSort }),
       setRadarFrame: (radarFrame) => set({ radarFrame }),
       setRadarPlaying: (radarPlaying) => set({ radarPlaying }),
-      selectEvent: (selectedEventId) => set({ selectedEventId, ...(selectedEventId ? { selectedCountry: null } : {}) }),
-      selectCountry: (selectedCountry) => set({ selectedCountry, ...(selectedCountry ? { selectedEventId: null } : {}) }),
+      selectCamera: (selectedCamera) => set({ selectedCamera }),
+      selectEvent: (selectedEventId) => set({ selectedEventId, ...(selectedEventId ? { selectedCountry: null, selectedRegion: null } : {}) }),
+      selectCountry: (selectedCountry) => set({ selectedCountry, ...(selectedCountry ? { selectedEventId: null, selectedRegion: null } : {}) }),
+      selectRegion: (selectedRegion) => set({ selectedRegion, ...(selectedRegion !== null ? { selectedEventId: null, selectedCountry: null } : {}) }),
       setHovered: (hoveredEventId) => set({ hoveredEventId }),
       requestFlyTo: (r) => set({ flyTo: { ...r, nonce: Date.now() + Math.random() } }),
       setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),

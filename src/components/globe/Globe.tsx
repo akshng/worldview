@@ -28,14 +28,17 @@ import {
   liveLayers,
   modeLayers,
   nightLayer,
-  toFeatureCollection,
-} from "./layers";
+  toFeatureCollection, CAMERAS_SOURCE, CAMERA_COLOR, cameraLayers, REGIONS_SOURCE, regionLayers } from "./layers";
 import type { LiveLayerResponse } from "@/lib/client/use-live-layer";
 import type { AviationData } from "@/layers/aviation/types";
 import type { MaritimeData } from "@/layers/maritime/types";
 import type { RadarData } from "@/layers/weather-radar";
 import { nightCollection } from "./terminator";
 import { useUI } from "@/lib/store/ui";
+import { useLiveLayer } from "@/lib/client/use-live-layer";
+import type { CamerasData } from "@/layers/cameras";
+import { CameraViewer } from "@/components/cameras/CameraViewer";
+import { loadRegions, REGION_ZOOM } from "@/lib/client/regions";
 import { useData } from "@/lib/client/data-store";
 import { CATEGORIES } from "@/lib/categories";
 import { relativeTime } from "@/lib/time";
@@ -68,6 +71,10 @@ export default function Globe({ window: win, live }: GlobeProps) {
   const loadedMap = useRef<MlMap | null>(null);
   const liveMap = () => (mapRef.current && loadedMap.current === mapRef.current ? mapRef.current : null);
   const [mapError, setMapError] = useState<string | null>(null);
+  const camerasRef = useRef<CamerasData | null>(null);
+  const hoveredRegion = useRef<number | null>(null);
+  const selectedRegionFid = useRef<number | null>(null);
+  const selectedRegion = useUI((s) => s.selectedRegion);
 
   const visible = useData((s) => s.visible);
   const mapStyle = useUI((s) => s.settings.mapStyle);
@@ -80,6 +87,8 @@ export default function Globe({ window: win, live }: GlobeProps) {
   const flyTo = useUI((s) => s.flyTo);
   const radarFrame = useUI((s) => s.radarFrame);
   const radarPlaying = useUI((s) => s.radarPlaying);
+  const showCameras = useUI((s) => s.settings.showCameras);
+  const cameras = useLiveLayer<CamerasData>(showCameras ? "cameras" : null, 30 * 60_000);
 
   // ---- init -------------------------------------------------------------
   useEffect(() => {
@@ -118,6 +127,21 @@ export default function Globe({ window: win, live }: GlobeProps) {
 
       map.addSource(COUNTRIES_SOURCE, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
       for (const l of countryLayers()) map.addLayer(l);
+      map.addSource(REGIONS_SOURCE, { type: "geojson", data: EMPTY_FC });
+      for (const l of regionLayers(REGION_ZOOM)) map.addLayer(l);
+      // States/provinces load the first time the map is zoomed in far enough.
+      let regionsRequested = false;
+      const maybeLoadRegions = () => {
+        if (regionsRequested || map.getZoom() < REGION_ZOOM - 0.4) return;
+        regionsRequested = true;
+        loadRegions()
+          .then((fc) => (map.getSource(REGIONS_SOURCE) as GeoJSONSource | undefined)?.setData(fc as unknown as GeoJSON.FeatureCollection))
+          .catch(() => {
+            regionsRequested = false;
+          });
+      };
+      map.on("zoomend", maybeLoadRegions);
+      maybeLoadRegions();
 
       map.addSource(EVENTS_SOURCE, {
         type: "geojson",
@@ -138,6 +162,8 @@ export default function Globe({ window: win, live }: GlobeProps) {
       for (const l of modeLayers()) map.addLayer(l);
       for (const l of eventLayers()) map.addLayer(l);
       for (const l of liveLayers()) map.addLayer(l);
+      map.addSource(CAMERAS_SOURCE, { type: "geojson", data: EMPTY_FC, cluster: true, clusterRadius: 38, clusterMaxZoom: 11 });
+      for (const l of cameraLayers()) map.addLayer(l);
       for (const l of labelLayers()) map.addLayer(l);
 
       // Country polygons are large; load after first paint.
@@ -187,6 +213,12 @@ export default function Globe({ window: win, live }: GlobeProps) {
         const sog = typeof p.sog === "number" ? `${p.sog} kn` : "speed n/a";
         return popupLines(coords, { text: "Vessel", color: "#4dd4ff" }, String(p.name || `MMSI ${p.mmsi}`), [`MMSI ${p.mmsi}`, sog].join(" · "));
       }
+      if (f.layer.id === "cam-point") {
+        return popupLines(coords, { text: "Live camera", color: CAMERA_COLOR }, String(p.name), `${p.sourceName} · click to view`);
+      }
+      if (f.layer.id === "cam-cluster") {
+        return popupLines(coords, { text: "Cameras", color: CAMERA_COLOR }, `${p.point_count} public cameras`, "Click to zoom in");
+      }
       if (f.layer.id === "density-fill") {
         // Polygon cell: caller re-anchors the popup at the cursor.
         return popupLines(coords, { text: "Density", color: "#2f9bbf" }, `${p.count} event${p.count === 1 ? "" : "s"} in this cell`, `Highest importance ${p.maxImp}`);
@@ -203,7 +235,7 @@ export default function Globe({ window: win, live }: GlobeProps) {
       );
     };
 
-    const INTERACTIVE = [...EVENT_POINT_LAYERS, "ev-cluster", "aircraft", "vessels", "density-fill"];
+    const INTERACTIVE = [...EVENT_POINT_LAYERS, "ev-cluster", "cam-point", "cam-cluster", "aircraft", "vessels", "density-fill"];
     const hitAt = (pt: PointLike) =>
       map.queryRenderedFeatures(pt, { layers: INTERACTIVE.filter((l) => map.getLayer(l)) })[0];
 
@@ -218,8 +250,22 @@ export default function Globe({ window: win, live }: GlobeProps) {
       }
       const hoveredEvent = top && EVENT_POINT_LAYERS.includes(top.layer.id) ? String(top.properties.id) : null;
       if (useUI.getState().hoveredEventId !== hoveredEvent) useUI.getState().setHovered(hoveredEvent);
+      // Zoomed in (outside markets mode), states/provinces take over from countries.
+      const regionMode = map.getZoom() >= REGION_ZOOM && useUI.getState().mapMode !== "markets";
+      const region = top || !regionMode || !map.getLayer("region-fill") ? undefined : map.queryRenderedFeatures(e.point, { layers: ["region-fill"] })[0];
+      const rid = region?.id !== undefined ? Number(region.id) : null;
+      if (rid !== hoveredRegion.current) {
+        if (hoveredRegion.current !== null) map.setFeatureState({ source: REGIONS_SOURCE, id: hoveredRegion.current }, { hover: false });
+        if (rid !== null) map.setFeatureState({ source: REGIONS_SOURCE, id: rid }, { hover: true });
+        hoveredRegion.current = rid;
+      }
+      if (region && !top) {
+        const rp = region.properties as { name?: string; type?: string; countryName?: string };
+        map.getCanvas().style.cursor = "pointer";
+        popupLines([e.lngLat.lng, e.lngLat.lat], { text: rp.type ?? "Region", color: "#9cc9ff" }, String(rp.name ?? ""), String(rp.countryName ?? ""));
+      }
       // Country hover
-      const country = top ? undefined : map.queryRenderedFeatures(e.point, { layers: map.getLayer("country-fill") ? ["country-fill"] : [] })[0];
+      const country = top || regionMode ? undefined : map.queryRenderedFeatures(e.point, { layers: map.getLayer("country-fill") ? ["country-fill"] : [] })[0];
       const idx = country && useUI.getState().mapMode === "markets" ? marketByCountry.current.get(String(country.properties?.code)) : undefined;
       if (idx) {
         const up = idx.changePct >= 0;
@@ -241,6 +287,8 @@ export default function Globe({ window: win, live }: GlobeProps) {
       popupRef.current?.remove();
       if (hoveredCountry.current !== null) map.setFeatureState({ source: COUNTRIES_SOURCE, id: hoveredCountry.current }, { hover: false });
       hoveredCountry.current = null;
+      if (hoveredRegion.current !== null) map.setFeatureState({ source: REGIONS_SOURCE, id: hoveredRegion.current }, { hover: false });
+      hoveredRegion.current = null;
     });
 
     map.on("click", async (e) => {
@@ -293,11 +341,30 @@ export default function Globe({ window: win, live }: GlobeProps) {
           .addTo(map);
         return;
       }
+      if (hit?.layer.id === "cam-cluster") {
+        const src = map.getSource(CAMERAS_SOURCE) as GeoJSONSource;
+        const zoom = await src.getClusterExpansionZoom(Number(hit.properties.cluster_id));
+        map.easeTo({ center: (hit.geometry as GeoJSON.Point).coordinates as [number, number], zoom: Math.min(zoom + 0.3, 14), duration: 600 });
+        return;
+      }
+      if (hit?.layer.id === "cam-point") {
+        const data = camerasRef.current;
+        const row = data?.rows.find((r) => r[0] === hit.properties.id);
+        if (data && row) ui.selectCamera({ row, source: data.sources[row[4]] });
+        return;
+      }
       if (hit?.layer.id === "density-fill") {
         map.easeTo({ center: e.lngLat, zoom: Math.max(map.getZoom() + 1.5, 4), duration: 700 });
         return;
       }
       if (hit) return; // aircraft / vessels: popup only
+      if (map.getZoom() >= REGION_ZOOM && ui.mapMode !== "markets" && map.getLayer("region-fill")) {
+        const region = map.queryRenderedFeatures(e.point, { layers: ["region-fill"] })[0];
+        if (region?.id !== undefined) {
+          ui.selectRegion(Number(region.id));
+          return;
+        }
+      }
       const country = map.getLayer("country-fill") ? map.queryRenderedFeatures(e.point, { layers: ["country-fill"] })[0] : undefined;
       if (country?.properties?.code) ui.selectCountry(String(country.properties.code));
     });
@@ -360,6 +427,27 @@ export default function Globe({ window: win, live }: GlobeProps) {
         : EMPTY_FC,
     );
   }, [live, ready]);
+
+  // ---- public cameras ---------------------------------------------------------
+  useEffect(() => {
+    const map = liveMap();
+    if (!ready || !map) return;
+    const data = showCameras ? (cameras.data?.data ?? null) : null;
+    camerasRef.current = data;
+    for (const id of ["cam-cluster", "cam-count", "cam-point"]) if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", showCameras ? "visible" : "none");
+    (map.getSource(CAMERAS_SOURCE) as GeoJSONSource | undefined)?.setData(
+      data
+        ? {
+            type: "FeatureCollection",
+            features: data.rows.map(([id, name, lon, lat, si]) => ({
+              type: "Feature",
+              geometry: { type: "Point", coordinates: [lon, lat] },
+              properties: { id, name, sourceName: data.sources[si]?.name ?? "" },
+            })),
+          }
+        : EMPTY_FC,
+    );
+  }, [showCameras, cameras.data, ready]);
 
   // ---- markets choropleth -----------------------------------------------------
   const marketStateIds = useRef<number[]>([]);
@@ -474,13 +562,22 @@ export default function Globe({ window: win, live }: GlobeProps) {
     selectedCountryFid.current = fid ?? null;
   }, [selectedCountry, ready]);
 
+  // ---- selected state/province highlight ---------------------------------------
+  useEffect(() => {
+    const map = liveMap();
+    if (!ready || !map || !map.getSource(REGIONS_SOURCE)) return;
+    if (selectedRegionFid.current !== null) map.setFeatureState({ source: REGIONS_SOURCE, id: selectedRegionFid.current }, { selected: false });
+    if (selectedRegion !== null) map.setFeatureState({ source: REGIONS_SOURCE, id: selectedRegion }, { selected: true });
+    selectedRegionFid.current = selectedRegion;
+  }, [selectedRegion, ready]);
+
   // ---- camera -------------------------------------------------------------
   useEffect(() => {
     const map = liveMap();
     if (!ready || !map || !flyTo) return;
     // Keep the target visible beside an open detail panel.
     const ui = useUI.getState();
-    const panelOpen = !!(ui.selectedEventId || ui.selectedCountry);
+    const panelOpen = !!(ui.selectedEventId || ui.selectedCountry || ui.selectedRegion !== null);
     const padding = { top: 90, bottom: 110, left: 40, right: panelOpen ? 460 : 40 };
     if (flyTo.bbox) {
       const [w, s, e, n] = flyTo.bbox;
@@ -496,12 +593,27 @@ export default function Globe({ window: win, live }: GlobeProps) {
   return (
     <div className="absolute inset-0">
       <div ref={container} className="h-full w-full" aria-label="Interactive globe of world events" />
+      <CameraViewer />
       {mapError && (
         <div className="absolute inset-0 grid place-items-center text-sm text-muted">
           Map could not be initialised: {mapError}
         </div>
       )}
       <div className="absolute right-3 bottom-[118px] flex flex-col overflow-hidden rounded-md glass">
+        <MapButton
+          title={showCameras ? `Hide public cameras${cameras.data ? ` (${cameras.data.count.toLocaleString("en-US")})` : ""}` : "Show public cameras"}
+          onClick={() => useUI.getState().updateSettings({ showCameras: !showCameras })}
+          active={showCameras}
+        >
+          <span className="text-[10px] font-semibold tracking-wide">{showCameras && cameras.loading && !cameras.data ? "…" : "CAM"}</span>
+        </MapButton>
+        <MapButton
+          title={mapStyle === "satellite" ? "Switch to map view" : "Switch to satellite view"}
+          onClick={() => useUI.getState().updateSettings({ mapStyle: mapStyle === "satellite" ? "dark" : "satellite" })}
+          active={mapStyle === "satellite"}
+        >
+          <span className="text-[10px] font-semibold tracking-wide">SAT</span>
+        </MapButton>
         <MapButton title="Zoom in" onClick={() => mapRef.current?.easeTo({ zoom: mapRef.current.getZoom() + 1, duration: 300 })}>+</MapButton>
         <MapButton title="Zoom out" onClick={() => mapRef.current?.easeTo({ zoom: mapRef.current.getZoom() - 1, duration: 300 })}>−</MapButton>
         <MapButton
@@ -515,13 +627,14 @@ export default function Globe({ window: win, live }: GlobeProps) {
   );
 }
 
-function MapButton({ title, onClick, children }: { title: string; onClick: () => void; children: React.ReactNode }) {
+function MapButton({ title, onClick, children, active }: { title: string; onClick: () => void; children: React.ReactNode; active?: boolean }) {
   return (
     <button
       title={title}
       aria-label={title}
+      aria-pressed={active}
       onClick={onClick}
-      className="h-8 w-8 border-b border-line text-[15px] text-muted last:border-b-0 hover:bg-panel-hover hover:text-fg"
+      className={`h-8 w-8 border-b border-line text-[15px] last:border-b-0 hover:bg-panel-hover hover:text-fg ${active ? "bg-accent/20 text-fg" : "text-muted"}`}
     >
       {children}
     </button>

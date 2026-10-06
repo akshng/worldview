@@ -1,6 +1,7 @@
 /**
  * Basemap style. Vector tiles: OpenFreeMap (OpenMapTiles schema, no key).
- * Imagery: NASA GIBS Blue Marble / Black Marble (public domain, no key).
+ * Imagery: NASA GIBS Blue Marble / Black Marble (public domain, no key), and
+ * EOX Sentinel-2 cloudless (10 m, CC BY-NC-SA 4.0, no key) when zoomed in on satellite.
  * All basemap variants live in one style and are toggled by visibility, so
  * switching styles never reloads our data layers.
  */
@@ -16,7 +17,7 @@ export type BasemapId = "dark" | "satellite" | "night";
 /** Layers that belong to each basemap variant (shared ones are always visible). */
 export const BASEMAP_LAYERS: Record<BasemapId, string[]> = {
   dark: ["bg-land", "water", "landcover-ice", "roads-major"],
-  satellite: ["bg-ocean", "raster-bluemarble"],
+  satellite: ["bg-ocean", "raster-bluemarble", "raster-s2"],
   night: ["bg-ocean", "raster-blackmarble"],
 };
 
@@ -41,6 +42,15 @@ export function buildStyle(variant: BasemapId): StyleSpecification {
       source: "bluemarble",
       layout: v("raster-bluemarble"),
       paint: { "raster-brightness-max": 0.78, "raster-saturation": -0.25, "raster-contrast": 0.05 },
+    },
+    {
+      // Sharp 10 m imagery once zoomed in; Blue Marble shows the whole globe below it.
+      id: "raster-s2",
+      type: "raster",
+      source: "s2cloudless",
+      minzoom: 4,
+      layout: v("raster-s2"),
+      paint: { "raster-brightness-max": 0.9, "raster-fade-duration": 200, "raster-opacity": ["interpolate", ["linear"], ["zoom"], 4, 0, 5, 1] },
     },
     {
       id: "raster-blackmarble",
@@ -142,6 +152,15 @@ export function buildStyle(variant: BasemapId): StyleSpecification {
         maxzoom: 8,
         attribution: "Imagery: NASA Blue Marble via NASA GIBS",
       },
+      s2cloudless: {
+        type: "raster",
+        tiles: ["https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2024_3857/default/g/{z}/{y}/{x}.jpg"],
+        tileSize: 256,
+        minzoom: 4,
+        maxzoom: 15,
+        attribution:
+          '<a href="https://s2maps.eu" target="_blank" rel="noopener noreferrer">Sentinel-2 cloudless – s2maps.eu</a> by EOX IT Services GmbH (contains modified Copernicus Sentinel data 2024)',
+      },
       blackmarble: {
         type: "raster",
         tiles: [
@@ -192,7 +211,7 @@ export function labelLayers(): LayerSpecification[] {
       type: "symbol",
       source: "omt",
       "source-layer": "place",
-      minzoom: 4.5,
+      minzoom: 3.4,
       filter: ["==", ["get", "class"], "state"],
       layout: { "text-field": name, "text-font": FONT_REGULAR, "text-size": 10, "text-transform": "uppercase", "text-letter-spacing": 0.1 },
       paint: { "text-color": "rgba(160,172,190,0.45)", ...halo },

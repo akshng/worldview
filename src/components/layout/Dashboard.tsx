@@ -13,6 +13,7 @@ import { Sidebar } from "@/components/sidebar/Sidebar";
 import { EventFeed } from "@/components/event-feed/EventFeed";
 import { EventPanel } from "@/components/event-panel/EventPanel";
 import { CountryPanel } from "@/components/country-panel/CountryPanel";
+import { RegionPanel } from "@/components/region-panel/RegionPanel";
 import { Timeline } from "@/components/timeline/Timeline";
 import { StatsStrip } from "@/components/stats/StatsStrip";
 import { SearchPalette } from "@/components/search/SearchPalette";
@@ -45,6 +46,7 @@ export function Dashboard() {
   const cursor = useUI((s) => s.timelineCursor);
   const selectedEventId = useUI((s) => s.selectedEventId);
   const selectedCountry = useUI((s) => s.selectedCountry);
+  const selectedRegion = useUI((s) => s.selectedRegion);
   const mapMode = useUI((s) => s.mapMode);
   const now = useNow(30_000);
   const modeInfo = modeMeta(mapMode);
@@ -91,9 +93,9 @@ export function Dashboard() {
             </div>
           </div>
           {/* Detail panels float over the globe's right edge; the camera pads for them. */}
-          {(selectedEventId || selectedCountry) && (
+          {(selectedEventId || selectedCountry || selectedRegion !== null) && (
             <div className="pointer-events-none absolute top-3 right-3 bottom-[104px] flex">
-              {selectedEventId ? <EventPanel /> : <CountryPanel />}
+              {selectedEventId ? <EventPanel /> : selectedRegion !== null ? <RegionPanel /> : <CountryPanel />}
             </div>
           )}
         </main>
