@@ -108,7 +108,8 @@ function build(): LocalCandidate[] {
     const aliases = Object.entries(COUNTRY_ALIASES).filter(([, code]) => code === c.code).map(([a]) => a);
     out.push({
       kind: "country",
-      name: c.name,
+      // Natural Earth abbreviates a few short names ("S. Geo. and the Is.")
+      name: c.name.includes(".") ? c.nameLong : c.name,
       keys: uniq([c.name, c.nameLong, ...aliases.filter((a) => a.length > 3)]),
       codes: uniq([c.iso3, ...aliases.filter((a) => a.length <= 3)]),
       context: uniq([c.subregion, c.region]),
@@ -207,7 +208,14 @@ export function searchPlacesLocal(query: string, limit = 6): PlaceResult[] {
 export function findRegionId(name: string, countryCode: string | null): number | null {
   if (!countryCode) return null;
   build();
-  const ids = regionKeys?.get(`${countryCode.toUpperCase()}|${normalizePlace(name)}`);
+  const cc = countryCode.toUpperCase();
+  const n = normalizePlace(name);
+  // "Kyiv Oblast" → "kyiv", "Tokyo Prefecture" → "tokyo", "State of Mexico" → "mexico"
+  const bare = n
+    .replace(/\b(oblast|province|provincia|state|region|prefecture|governorate|county|department|district|of|the)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const ids = regionKeys?.get(`${cc}|${n}`) ?? (bare && bare !== n ? regionKeys?.get(`${cc}|${bare}`) : undefined);
   return ids?.length ? ids[0] : null;
 }
 

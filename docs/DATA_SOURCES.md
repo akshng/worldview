@@ -182,6 +182,15 @@ Adding a layer: create `src/layers/<id>/` with a `LiveLayerProvider` (`load()` r
 
 Natural Earth countries (1:50m), populated places, and admin-1 states/provinces (label points + local/alternate names); OurAirports large/medium airports. All public domain.
 
+## Place search (geocoding)
+
+⌘K search has a **Places** group (`src/lib/geo/place-search.ts`, `src/lib/geo/place-index.ts`, `src/lib/geo/geocode.ts`):
+
+- **Instant, offline**: countries, continents, admin-1 states/provinces (ids match `public/geo/regions.geojson`, so picking one opens the region panel), cities and airports (IATA/ICAO codes and names) from the bundled reference geography above, returned with `/api/search`. Typed coordinates (decimal, hemisphere letters or degrees-minutes-seconds) are parsed in the browser.
+- **Online**: [Photon](https://photon.komoot.io/) by komoot — keyless OpenStreetMap geocoder that allows type-ahead under fair use — for addresses, landmarks, neighbourhoods and small towns. The browser calls our `/api/geocode` proxy (≥ 3 characters, 300 ms debounce); the server sends a descriptive `User-Agent`, caches each query for 24 h (up to 2,000 queries in memory), and rate-limits to 40 requests/min per client and 60 upstream calls/min overall (HTTP 429 beyond that). Results are labelled "OSM" and attributed: *Search by Photon (komoot), data © OpenStreetMap contributors* (ODbL).
+- **Camera**: countries and states fit their bounding box; cities fly to zoom 10; addresses and points of interest to zoom 16 (large ones like parks fit their extent). A temporary pin marks the result until the next search or a map click.
+- **Not used**: `nominatim.openstreetmap.org` — its usage policy forbids autocomplete/type-ahead. Photon results are OSM data and can be incomplete or ambiguous (several "Eiffel Tower"s); the detail line shows town and country to tell them apart.
+
 ## Considered but not used
 
 - **ReliefWeb API** now requires a pre-approved app name (returns 403 without one).

@@ -230,11 +230,14 @@ export function rankLocalPlaces(query: string, candidates: readonly LocalCandida
     scored.push({ c, score });
   }
   scored.sort((a, b) => b.score - a.score);
+  // Drop weak partial matches ("Paris" → "Hanover Parish") when there are strong ones.
+  const floor = scored.length ? scored[0].score - 650 : 0;
 
   const out: PlaceResult[] = [];
   const seen = new Set<string>();
-  for (const { c } of scored) {
-    const id = `local:${c.kind}:${c.countryCode ?? ""}:${c.regionId ?? ""}:${normalizePlace(c.name)}`;
+  for (const { c, score } of scored) {
+    if (score < floor) break;
+    const id = `local:${c.kind}:${c.countryCode ?? ""}:${normalizePlace(c.name)}:${c.lat.toFixed(1)},${c.lon.toFixed(1)}`;
     if (seen.has(id)) continue;
     seen.add(id);
     out.push({ id, kind: c.kind, name: c.name, detail: c.detail, lat: c.lat, lon: c.lon, bbox: c.bbox, countryCode: c.countryCode, regionId: c.regionId, source: "local" });
@@ -333,17 +336,13 @@ export function parsePhoton(body: unknown, limit = 8): PlaceResult[] {
     const name = str(p.name) ?? (street ? [house, street].filter(Boolean).join(" ") : null) ?? str(p.city) ?? str(p.state) ?? str(p.country);
     if (!name) continue;
     const cc = str(p.countrycode)?.toUpperCase() ?? null;
+    const streetLine = street ? [house, street].filter(Boolean).join(" ") : null;
+    const addr = (kind === "poi" || kind === "address" || kind === "airport") && streetLine !== name ? streetLine : null;
+    const local = kind === "city" ? null : (str(p.city) ?? str(p.district) ?? str(p.county));
     const parts: string[] = [];
-    if (kind === "poi" || kind === "address" || kind === "airport") {
-      const addr = street && name !== [house, street].filter(Boolean).join(" ") ? [house, street].filter(Boolean).join(" ") : null;
-      if (addr) parts.push(addr);
-    }
-    for (const k of ["district", "city", "county", "state", "country"] as const) {
-      const v = str(p[k]);
-      if (v && v !== name && !parts.includes(v)) parts.push(v);
-    }
-    // Keep the detail line short: the most local part and the last two (state, country).
-    const detailParts = parts.length > 3 ? [parts[0], ...parts.slice(-2)] : parts;
+    for (const v of [addr, local, kind === "state" ? null : str(p.state), str(p.country)]) if (v && v !== name && !parts.includes(v)) parts.push(v);
+    // Keep the detail line short: street, town, country (state only when there's room).
+    const detailParts = parts.length > 3 ? parts.filter((_, i) => i !== 2) : parts;
     const osm = `${str(p.osm_type) ?? "?"}${typeof p.osm_id === "number" || typeof p.osm_id === "string" ? p.osm_id : `${lat},${lon}`}`;
     const r: PlaceResult = {
       id: `photon:${osm}`,
@@ -357,7 +356,7 @@ export function parsePhoton(body: unknown, limit = 8): PlaceResult[] {
       regionId: null,
       source: "photon",
     };
-    if (out.some((o) => o.id === r.id || (o.kind === r.kind && o.name === r.name && Math.abs(o.lat - r.lat) < 0.01 && Math.abs(o.lon - r.lon) < 0.01))) continue;
+    if (out.some((o) => o.id === r.id || (o.kind === r.kind && o.name === r.name && approxKm(o, r) < 3))) continue;
     out.push(r);
     if (out.length >= limit) break;
   }
