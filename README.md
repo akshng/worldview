@@ -105,6 +105,9 @@ Secrets are read only on the server (`src/lib/env.ts`, guarded by `server-only`)
 | FDIC failed bank list | US bank failures (last 2 years) | 12 h | none |
 | CDC Travelers' Health notices | Outbreaks and health risks by country | 6 h | none |
 | US State Department travel advisories | Level 2–4 advisories updated in the last 30 days | 6 h | none |
+| UK FCDO foreign travel advice (GOV.UK Content API) | Destinations updated in the last 30 days where the FCDO advises against all / all but essential travel (whole country or parts) | 6 h | none |
+| Government of Canada travel advisories | "Avoid non-essential travel" / "Avoid all travel" advisories updated in the last 30 days | 6 h | none |
+| Australian Smartraveller | Level 3–4 advice (reconsider your need to travel, do not travel) updated in the last 30 days | 6 h | none |
 | Federal Register | US presidential documents (executive orders, proclamations, determinations) | 60 min | none |
 | adsb.lol community ADS-B | Aircraft squawking 7700 / 7600 / 7500 right now | 2 min | none |
 | WHO Disease Outbreak News | Disease outbreaks (Health) | 60 min | none |
@@ -128,6 +131,7 @@ Details, terms and caveats: [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md).
 - **Daily briefing** (top-bar "Briefing"): new / developing / ongoing / resolved, today vs yesterday, regional sections, what to watch — every line links to an event; optional AI summary written only from those events. Can be prepared automatically every morning ([below](#morning-briefing))
 - **Markets** (top bar): indices, US sectors, Treasury yields + yield curve, FX, commodities, crypto; economic calendar; instrument view with charts, SEC fundamentals and filings; watchlist and in-app price alerts; world events linked to the instruments they could affect; AI market wrap — information only, not advice ([docs/FINANCE.md](docs/FINANCE.md))
 - **Markets map mode**: countries coloured by their main stock index's daily move
+- **Security** (top bar): newly exploited vulnerabilities from CISA's KEV catalog (with ransomware flag and federal due date), critical CVEs published in the last 7 days (NIST NVD), and the latest travel-advisory changes from the US, UK, Canadian and Australian governments. Keyless official sources, cached 1 h ([details](docs/DATA_SOURCES.md#security-panel-srclibcyber))
 - **Trends** (top bar): what people are searching and sharing — Google Trends trending searches for 41 countries (plus terms trending in several countries at once, and the selected country's searches in its overview), most-read Wikipedia articles in 12 languages, Bluesky and Mastodon (mastodon.social) trending topics, and the Hacker News front page. Keyless, cached 15 min; aggregate trends and public titles only. Not included: X/Twitter (no free or keyless API; no third-party scrapers) and Reddit (refuses unauthenticated API requests; robots.txt disallows automated access). Trends are attention signals, not verified events ([details](docs/DATA_SOURCES.md#trends-panel-srclibtrends))
 - Real areas (warning polygons, fire footprints), uncertainty rings by location precision, and location-correction notes
 - Source health and live-layer status in Settings → Data sources

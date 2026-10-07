@@ -4,6 +4,8 @@ import { describeFcdoStatus, parseFcdoTravel, recentFcdoChildren, toFcdoPage } f
 import { parseCanadaTravel } from "@/data-sources/canada-travel";
 import { parseSmartraveller, parseSmartravellerChanged, sydneyOffsetHours } from "@/data-sources/smartraveller";
 import { matchScore } from "@/lib/deduplication/similarity";
+import { parseTravelAdvisories } from "@/data-sources/travel-advisories";
+import { advisoryChanges, nvdUrl, parseKev, parseNvd } from "@/lib/cyber";
 
 const now = Date.parse("2026-10-06T12:00:00Z");
 const ctx = { now, retrievedAt: new Date(now).toISOString() };
@@ -101,5 +103,79 @@ describe("travel advisory dedup", () => {
     const us = { ...base, title: "US travel advisory: Saudi Arabia — Level 3, reconsider travel", dataSourceIds: ["travel-advisories"] };
     const uk = { ...base, title: "UK travel advice: Saudi Arabia — FCDO advises against all travel to parts", dataSourceIds: ["fcdo-travel"] };
     expect(matchScore(us, uk, { mergeWithinSource: new Set() })).toBeNull();
+  });
+});
+
+describe("CISA KEV", () => {
+  const row = (cveID: string, dateAdded: string, ransom = "Unknown") => ({
+    cveID,
+    vendorProject: "Citrix",
+    product: "NetScaler",
+    vulnerabilityName: "Citrix NetScaler Memory Buffer Vulnerability",
+    shortDescription: "Citrix NetScaler ADC contains a buffer vulnerability.",
+    dateAdded,
+    dueDate: "2026-10-07",
+    knownRansomwareCampaignUse: ransom,
+  });
+
+  it("summarises recent additions newest first", () => {
+    const { summary, ids } = parseKev(
+      { catalogVersion: "2026.10.04", dateReleased: "2026-10-04T18:52:56Z", vulnerabilities: [row("CVE-2026-1111", "2026-09-01"), row("CVE-2026-88779", "2026-10-04", "Known"), row("CVE-2026-2222", "2026-10-02"), row("bogus", "2026-10-04")] },
+      now,
+    );
+    expect(summary).toMatchObject({ total: 3, addedLast7d: 2, addedLast30d: 2, catalogVersion: "2026.10.04" });
+    expect(summary.latest.map((v) => v.cveId)).toEqual(["CVE-2026-88779", "CVE-2026-2222", "CVE-2026-1111"]);
+    expect(summary.latest[0]).toMatchObject({ ransomware: true, vendor: "Citrix", dueDate: "2026-10-07", url: "https://nvd.nist.gov/vuln/detail/CVE-2026-88779" });
+    expect(summary.latest[1].ransomware).toBe(false);
+    expect(ids.has("CVE-2026-1111")).toBe(true);
+  });
+});
+
+describe("NVD CVE API", () => {
+  const cve = (id: string, published: string, metrics: object, vulnStatus = "Analyzed") => ({
+    cve: {
+      id,
+      published,
+      vulnStatus,
+      descriptions: [{ lang: "es", value: "x" }, { lang: "en", value: "A code injection   vulnerability in WatchGuard Fireware OS." }],
+      affected: [{ affectedData: [{ vendor: "WatchGuard", product: "Fireware OS" }] }],
+      metrics,
+    },
+  });
+  const v31 = (type: string, baseScore: number, baseSeverity: string) => ({ type, cvssData: { baseScore, baseSeverity, vectorString: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H" } });
+
+  it("prefers the primary CVSS v3 score and sorts newest first", () => {
+    const r = parseNvd({
+      vulnerabilities: [
+        cve("CVE-2026-86131", "2026-09-30T00:16:36.817", { cvssMetricV31: [v31("Secondary", 7.7, "HIGH"), v31("Primary", 9.8, "CRITICAL")] }),
+        cve("CVE-2026-104070", "2026-10-06T17:17:12.213", { cvssMetricV31: [v31("Primary", 9.1, "CRITICAL")] }),
+        cve("CVE-2026-9999", "2026-10-06T17:17:12.213", { cvssMetricV31: [v31("Primary", 9.1, "CRITICAL")] }, "Rejected"),
+        cve("CVE-2026-10000", "2026-10-06T17:17:12.213", {}),
+      ],
+    });
+    expect(r.map((c) => c.id)).toEqual(["CVE-2026-104070", "CVE-2026-86131"]);
+    expect(r[1]).toMatchObject({ score: 9.8, severity: "CRITICAL", vendor: "WatchGuard", product: "Fireware OS", published: "2026-09-30T00:16:36.817Z", knownExploited: false });
+    expect(r[1].description).toBe("A code injection vulnerability in WatchGuard Fireware OS.");
+  });
+
+  it("builds a bounded critical-severity query", () => {
+    const u = new URL(nvdUrl(now, 7));
+    expect(u.searchParams.get("cvssV3Severity")).toBe("CRITICAL");
+    expect(u.searchParams.get("pubStartDate")).toBe("2026-09-29T12:00:00.000Z");
+    expect(u.searchParams.get("pubEndDate")).toBe("2026-10-06T12:00:00.000Z");
+  });
+});
+
+describe("advisory changes", () => {
+  it("turns advisory candidates from every government into panel rows", () => {
+    const ca = parseCanadaTravel(
+      { data: { LY: { "country-iso": "LY", "advisory-state": 3, "date-published": { timestamp: Math.floor((now - 86_400_000) / 1000) }, eng: { name: "Libya", "url-slug": "libya", "advisory-text": "Avoid all travel" } } } },
+      ctx,
+    ).candidates;
+    const us = parseTravelAdvisories({ items: [{ title: "Saudi Arabia - Level 3: Reconsider Travel", link: "https://travel.state.gov/sa", description: "", published: daysAgo(3) }] }, ctx).candidates;
+    expect(advisoryChanges([...us, ...ca])).toEqual([
+      { government: "CA", country: "LY", place: "Libya", advice: "Avoid all travel", updatedAt: daysAgo(1), url: "https://travel.gc.ca/destinations/libya" },
+      { government: "US", country: "SA", place: "Saudi Arabia", advice: "Level 3, reconsider travel", updatedAt: daysAgo(3), url: "https://travel.state.gov/sa" },
+    ]);
   });
 });
