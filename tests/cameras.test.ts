@@ -19,6 +19,14 @@ import {
   tflRows,
   toRows,
   wsdotRows,
+  skylineRows,
+  mdRows,
+  deRows,
+  moRows,
+  carsRows,
+  alRows,
+  okRows,
+  isLiveVideo,
   type CameraRow,
 } from "@/layers/cameras";
 
@@ -219,5 +227,98 @@ describe("new parsers", () => {
       ...atxRows([{ camera_id: "1", camera_status: "TURNED_ON", screenshot_address: "https://x/a.jpg" }]),
     ];
     expect(zero).toEqual([]);
+  });
+});
+
+describe("live-video sources", () => {
+  it("caltransRows repairs District 8 http / 'ttps' stream links to https", () => {
+    const cam = (index: string, vid: string) => ({
+      cctv: { index, inService: "true", location: { district: "8", locationName: "I-10 : Rte 210", latitude: "34.06", longitude: "-117.6" }, imageData: { streamingVideoURL: vid, static: { currentImageURL: `https://cwwp2.dot.ca.gov/data/d8/cctv/image/${index}.jpg` } } },
+    });
+    const rows = caltransRows([cam("1", "ttps://wzmedia.dot.ca.gov/D8/LB10_at_Rte_210.stream/playlist.m3u8"), cam("2", "http://wzmedia.dot.ca.gov/D8/X.stream/playlist.m3u8"), cam("3", "http://other.example/x.m3u8")]);
+    expect(rows.map((r) => r[6])).toEqual(["https://wzmedia.dot.ca.gov/D8/LB10_at_Rte_210.stream/playlist.m3u8", "https://wzmedia.dot.ca.gov/D8/X.stream/playlist.m3u8", null]);
+    expect(rows.map((r) => r[7])).toEqual(["hls", "hls", null]);
+  });
+
+  it("skylineRows reads VDOT / SC511 features and skips inactive or problem streams", () => {
+    const f = (id: string, extra: object = {}) => ({
+      geometry: pt(-77.3055, 38.84519),
+      properties: { id, name: `cam${id}`, description: "University Drive and Sager Avenue", https_url: `https://media-sfs7.vdotcameras.com/rtplive/cam${id}/playlist.m3u8`, image_url: `https://snapshot.vdotcameras.com/thumbs/cam${id}.flv.png`, active: true, problem_stream: false, ...extra },
+    });
+    const rows = skylineRows([f("1"), f("2", { active: false }), f("3", { problem_stream: true }), f("4", { https_url: "rtmp://x/y" }), f("5", { https_url: "", image_url: "" })], "va");
+    expect(rows).toEqual([
+      ["va:1", "University Drive and Sager Avenue", -77.3055, 38.84519, idx("va"), "https://snapshot.vdotcameras.com/thumbs/cam1.flv.png", "https://media-sfs7.vdotcameras.com/rtplive/cam1/playlist.m3u8", "hls"],
+      ["va:4", "University Drive and Sager Avenue", -77.3055, 38.84519, idx("va"), "https://snapshot.vdotcameras.com/thumbs/cam4.flv.png", null, null],
+    ]);
+    expect(skylineRows([f("9")], "sc")[0][4]).toBe(idx("sc"));
+  });
+
+  it("mdRows builds CHART stream URLs (video only) and skips offline cameras", () => {
+    const c = (id: string, extra: object = {}) => ({ id, name: "710002", description: "I-70 East of I-270", lat: 39.39761, lon: -77.42188, cctvIp: "strmr5.sha.maryland.gov", commMode: "ONLINE", opStatus: "OK", ...extra });
+    const rows = mdRows([c("9201ff58"), c("aa", { commMode: "OFFLINE" }), c("bb", { opStatus: "COMM_FAILURE" }), c("cc", { cctvIp: "evil.example.com" }), c("../x"), c("dd", { opStatus: "COMM_MARGINAL" })]);
+    expect(rows).toEqual([
+      ["md:9201ff58", "I-70 East of I-270", -77.42188, 39.39761, idx("md"), "", "https://strmr5.sha.maryland.gov/rtplive/9201ff58/playlist.m3u8", "hls"],
+      ["md:dd", "I-70 East of I-270", -77.42188, 39.39761, idx("md"), "", "https://strmr5.sha.maryland.gov/rtplive/dd/playlist.m3u8", "hls"],
+    ]);
+  });
+
+  it("deRows keeps enabled, active DelDOT cameras with an https stream", () => {
+    const c = (id: string, extra: object = {}) => ({ id, title: "DE 1 @ MILFORD NECK ROAD (NORTH OFF)", lat: 38.990931, lon: -75.448625, enabled: true, status: "Active", urls: { m3u8s: `https://video.deldot.gov:443/live/${id}.stream/playlist.m3u8` }, ...extra });
+    const rows = deRows({ videoCameras: [c("KCAM001"), c("KCAM002", { status: "Unavailable" }), c("KCAM003", { enabled: false }), c("KCAM004", { urls: { m3u8s: "" } })] });
+    expect(rows).toEqual([["de:KCAM001", "De 1 @ Milford Neck Road (North Off)", -75.448625, 38.990931, idx("de"), "", "https://video.deldot.gov:443/live/KCAM001.stream/playlist.m3u8", "hls"]]);
+  });
+
+  it("moRows keeps MoDOT and Ozarks Traffic streams, skipping KC Scout relays", () => {
+    const rows = moRows([
+      { location: "141 AT 21, MM 27.1", x: -90.424496, y: 38.4623, html: "https://sfs02-traveler.modot.mo.gov/rtplive/MODOT_CAM_209/playlist.m3u8" },
+      { location: "Glenstone at Sunshine", x: -93.26, y: 37.18, html: "https://S2.ozarkstrafficoneview.com/rtplive/CAM104/playlist.m3u8" },
+      { location: "I-435 NB", x: -94.5, y: 39.0, html: "https://traveler.modot.org/tisvc/api/Tms/CameraStream/K435NBC-41-LQ" },
+      { location: "No stream", x: -92, y: 38, html: null },
+    ]);
+    expect(rows).toEqual([
+      ["mo:MODOT_CAM_209", "141 AT 21, MM 27.1", -90.424496, 38.4623, idx("mo"), "", "https://sfs02-traveler.modot.mo.gov/rtplive/MODOT_CAM_209/playlist.m3u8", "hls"],
+      ["mo:oz:CAM104", "Glenstone at Sunshine", -93.26, 37.18, idx("mo"), "", "https://s2.ozarkstrafficoneview.com/rtplive/CAM104/playlist.m3u8", "hls"],
+    ]);
+  });
+
+  it("carsRows expands views: HLS with preview still, plain stills, token streams as stills only", () => {
+    const loc = { latitude: 39.703969, longitude: -105.704145 };
+    const rows = carsRows([
+      { id: 14336, public: true, active: true, name: "I-70 MP 227.00 EB", location: loc, views: [{ name: "I-70 MP 227.00 EB", type: "WMP", url: "https://publicstreamer4.cotrip.org:443/rtplive/070E22700CAM1RHS/playlist.m3u8", videoPreviewUrl: "https://cocam.carsprogram.org/Snapshots/070E22700CAM1RHS.flv.png" }] },
+      { id: 2, name: "US 285 at CO 17", location: loc, views: [{ name: "Looking South", type: "STILL_IMAGE", url: "https://cocam.carsprogram.org/a.jpg" }, { name: "Looking North", type: "STILL_IMAGE", url: "http://x/b.jpg" }] },
+      { id: 3, name: "K-96", location: loc, views: [{ type: "WMP", url: "https://kdot-sfs2.us-east-1.skyvdn.com/rtplive/1/playlist.m3u8?token=abc", videoPreviewUrl: "https://kscam.carsprogram.org/1.jpg" }] },
+      { id: 4, name: "Relay", location: loc, views: [{ type: "MJPEG", url: "https://api.example.com/stream?key=1", videoPreviewUrl: "https://x/4.jpg" }] },
+      { id: 5, active: false, name: "Inactive", location: loc, views: [{ type: "STILL_IMAGE", url: "https://x/5.jpg" }] },
+    ], "co");
+    expect(rows).toEqual([
+      ["co:14336:0", "I-70 MP 227.00 EB", -105.704145, 39.703969, idx("co"), "https://cocam.carsprogram.org/Snapshots/070E22700CAM1RHS.flv.png", "https://publicstreamer4.cotrip.org:443/rtplive/070E22700CAM1RHS/playlist.m3u8", "hls"],
+      ["co:2:0", "US 285 at CO 17: Looking South", -105.704145, 39.703969, idx("co"), "https://cocam.carsprogram.org/a.jpg", null, null],
+      ["co:3:0", "K-96", -105.704145, 39.703969, idx("co"), "https://kscam.carsprogram.org/1.jpg", null, null],
+    ]);
+  });
+
+  it("alRows keeps public ALGO cameras with stream and snapshot", () => {
+    const c = (id: number, accessLevel = "Public") => ({ id, accessLevel, location: { latitude: 30.535105, longitude: -88.23953, city: "Mobile", displayRouteDesignator: "I-10", displayCrossStreet: "McDonald Rd" }, playbackUrls: { hls: `https://cdn3.wowza.com/5/x/mobile-fastly/mob-cam-${id}.stream/playlist.m3u8` }, snapshotImageUrl: `https://api.algotraffic.com/v4/Cameras/${id}/snapshot.jpg` });
+    const rows = alRows([c(1845), c(2, "FirstResponder")]);
+    expect(rows).toEqual([["al:1845", "I-10 at McDonald Rd, Mobile", -88.23953, 30.535105, idx("al"), "https://api.algotraffic.com/v4/Cameras/1845/snapshot.jpg", "https://cdn3.wowza.com/5/x/mobile-fastly/mob-cam-1845.stream/playlist.m3u8", "hls"]]);
+  });
+
+  it("okRows flattens poles and skips out-of-service or blocked cameras", () => {
+    const m = (id: number, extra: object = {}) => ({ id, location: "I-44 & I-240 A", latitude: "35.39637", longitude: "-97.57406", status: "Free", blockAtis: "0", streamDictionary: { streamSrc: `https://stream.oktraffic.org/delay-stream/${id}.stream/playlist.m3u8` }, ...extra });
+    const rows = okRows([{ mapCameras: [m(1), m(2, { status: "Out Of Service" }), m(3, { blockAtis: "1" }), m(4, { streamDictionary: null })] }, {}]);
+    expect(rows).toEqual([["ok:1", "I-44 & I-240 A", -97.57406, 35.39637, idx("ok"), "", "https://stream.oktraffic.org/delay-stream/1.stream/playlist.m3u8", "hls"]]);
+  });
+
+  it("video-only rows are always live HLS; MP4 clips are not live", () => {
+    const rows = [
+      ...mdRows([{ id: "ab", lat: 39, lon: -77, cctvIp: "strmr3.sha.maryland.gov", commMode: "ONLINE", opStatus: "OK" }]),
+      ...okRows([{ mapCameras: [{ id: 1, latitude: 35, longitude: -97, streamDictionary: { streamSrc: "https://stream.oktraffic.org/delay-stream/a.stream/playlist.m3u8" } }] }]),
+    ];
+    expect(rows.length).toBe(2);
+    for (const r of rows) {
+      expect(r[5]).toBe("");
+      expect(isLiveVideo(r)).toBe(true);
+    }
+    expect(isLiveVideo(["x", "x", 0, 0, 0, "https://a/b.jpg", "https://a/b.mp4", "mp4"])).toBe(false);
   });
 });

@@ -28,7 +28,7 @@ import {
   liveLayers,
   modeLayers,
   nightLayer,
-  toFeatureCollection, CAMERAS_SOURCE, CAMERA_COLOR, cameraLayers, REGIONS_SOURCE, regionLayers,
+  toFeatureCollection, CAMERAS_SOURCE, CAMERA_COLOR, CAMERA_LIVE_COLOR, cameraLayers, REGIONS_SOURCE, regionLayers,
   AURORA_LAYER_IDS,
   AURORA_SOURCE,
   AURORA_STOPS,
@@ -101,6 +101,7 @@ export default function Globe({ window: win, live }: GlobeProps) {
   const radarPlaying = useUI((s) => s.radarPlaying);
   const showCameras = useUI((s) => s.settings.showCameras);
   const cameras = useLiveLayer<CamerasData>(showCameras ? "cameras" : null, 30 * 60_000);
+  const camerasLiveOnly = useUI((s) => s.settings.camerasLiveOnly);
   const showIss = useUI((s) => s.settings.showIss);
   const showAurora = useUI((s) => s.settings.showAurora);
   const iss = useLiveLayer<IssData>(showIss ? "iss" : null, 5_000, { pauseWhenHidden: true });
@@ -236,7 +237,9 @@ export default function Globe({ window: win, live }: GlobeProps) {
         return popupLines(coords, { text: "Vessel", color: "#4dd4ff" }, String(p.name || `MMSI ${p.mmsi}`), [`MMSI ${p.mmsi}`, sog].join(" · "));
       }
       if (f.layer.id === "cam-point") {
-        return popupLines(coords, { text: "Live camera", color: CAMERA_COLOR }, String(p.name), `${p.sourceName} · click to view`);
+        return p.live
+          ? popupLines(coords, { text: "Live video", color: CAMERA_LIVE_COLOR }, String(p.name), `${p.sourceName} · click to watch`)
+          : popupLines(coords, { text: "Camera · still image", color: CAMERA_COLOR }, String(p.name), `${p.sourceName} · click to view`);
       }
       if (f.layer.id === "cam-cluster") {
         return popupLines(coords, { text: "Cameras", color: CAMERA_COLOR }, `${p.point_count} public cameras`, "Click to zoom in");
@@ -478,15 +481,17 @@ export default function Globe({ window: win, live }: GlobeProps) {
       data
         ? {
             type: "FeatureCollection",
-            features: data.rows.map(([id, name, lon, lat, si]) => ({
-              type: "Feature",
-              geometry: { type: "Point", coordinates: [lon, lat] },
-              properties: { id, name, sourceName: data.sources[si]?.name ?? "" },
-            })),
+            features: data.rows
+              .filter((r) => !camerasLiveOnly || isLiveRow(r))
+              .map((r) => ({
+                type: "Feature",
+                geometry: { type: "Point", coordinates: [r[2], r[3]] },
+                properties: { id: r[0], name: r[1], sourceName: data.sources[r[4]]?.name ?? "", live: isLiveRow(r) },
+              })),
           }
         : EMPTY_FC,
     );
-  }, [showCameras, cameras.data, ready]);
+  }, [showCameras, camerasLiveOnly, cameras.data, ready]);
 
   // ---- space overlays (ISS, aurora) — independent of map modes ----------------
   useEffect(() => {
@@ -658,8 +663,11 @@ export default function Globe({ window: win, live }: GlobeProps) {
           Map could not be initialised: {mapError}
         </div>
       )}
-      {(showIss || showAurora) && (
-        <SpaceLegend iss={showIss ? iss : null} aurora={showAurora ? aurora : null} />
+      {(showIss || showAurora || showCameras) && (
+        <div className="pointer-events-none absolute right-14 bottom-[118px] flex w-[230px] flex-col gap-2">
+          {showCameras && <CameraLegend data={cameras.data?.data ?? null} liveOnly={camerasLiveOnly} />}
+          {(showIss || showAurora) && <SpaceLegend iss={showIss ? iss : null} aurora={showAurora ? aurora : null} />}
+        </div>
       )}
       <div className="absolute right-3 bottom-[118px] flex flex-col overflow-hidden rounded-md glass">
         <MapButton
@@ -711,7 +719,7 @@ function SpaceLegend({ iss, aurora }: { iss: LayerState<IssData> | null; aurora:
   const a = aurora?.data?.data;
   const pos = iss?.data?.data.position;
   return (
-    <div className="glass pointer-events-auto absolute right-14 bottom-[118px] w-[230px] space-y-2 rounded-md px-3 py-2 text-[11px] leading-snug">
+    <div className="glass pointer-events-auto space-y-2 rounded-md px-3 py-2 text-[11px] leading-snug">
       {iss && (
         <div>
           <div className="meta" style={{ color: ISS_COLOR }}>
@@ -753,6 +761,36 @@ function SpaceLegend({ iss, aurora }: { iss: LayerState<IssData> | null; aurora:
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Camera rows with a live (HLS) stream; matches isLiveVideo in the cameras layer. */
+const isLiveRow = (r: CamerasData["rows"][number]) => r[7] === "hls" && !!r[6];
+
+/** Key for the camera markers, with the "Live video only" filter. */
+function CameraLegend({ data, liveOnly }: { data: CamerasData | null; liveOnly: boolean }) {
+  const fmt = (n: number) => n.toLocaleString("en-US");
+  return (
+    <div className="glass pointer-events-auto rounded-md px-3 py-2 text-[11px] leading-snug">
+      <div className="meta" style={{ color: CAMERA_COLOR }}>
+        Public cameras
+      </div>
+      <div className="mt-1 flex items-center gap-1.5 text-muted">
+        <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: CAMERA_LIVE_COLOR, boxShadow: "0 0 0 1.4px #fff" }} />
+        Live video{data ? ` · ${fmt(data.liveCount ?? 0)}` : ""}
+      </div>
+      {!liveOnly && (
+        <div className="flex items-center gap-1.5 text-muted">
+          <span className="inline-block h-2 w-2 rounded-full opacity-70" style={{ background: CAMERA_COLOR }} />
+          Still image / clip{data ? ` · ${fmt(data.rows.length - (data.liveCount ?? 0))}` : ""}
+        </div>
+      )}
+      <label className="mt-1.5 flex cursor-pointer items-center gap-1.5 text-muted hover:text-fg">
+        <input type="checkbox" checked={liveOnly} onChange={(e) => useUI.getState().updateSettings({ camerasLiveOnly: e.target.checked })} />
+        Live video only
+      </label>
+      <div className="mt-1 text-faint">Streams and images load from each operator only while a viewer is open.</div>
     </div>
   );
 }

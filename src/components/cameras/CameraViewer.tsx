@@ -2,7 +2,8 @@
 /**
  * Viewer for one public camera. Live first: opens straight into the camera's
  * video (HLS live stream / MP4 clip) when it has one, otherwise a still image
- * re-fetched on the operator's cadence. Nothing streams unless the viewer is open
+ * re-fetched on the operator's cadence. Video-only cameras (no still published)
+ * have no still tab; if their stream fails the viewer says so. Nothing streams unless the viewer is open
  * and the page is visible; closing it stops the feed. Media loads directly from
  * the operator's servers.
  */
@@ -40,11 +41,14 @@ function ago(ms: number): string {
 function Viewer({ cam }: { cam: Cam }) {
   const close = () => useUI.getState().selectCamera(null);
   const [, name, lon, lat, , imageUrl, videoUrl, videoKind] = cam.row;
+  const hasStill = !!imageUrl;
   // Live first: open straight into video when the camera has it.
   const [mode, setMode] = useState<"image" | "video">(videoUrl ? "video" : "image");
   const [tick, setTick] = useState(0);
   const [imgError, setImgError] = useState(false);
   const [videoError, setVideoError] = useState<string | null>(null);
+  /** Bumped by "Retry" to restart the stream. */
+  const [attempt, setAttempt] = useState(0);
   const [loadedAt, setLoadedAt] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const watching = usePageVisible();
@@ -53,10 +57,10 @@ function Viewer({ cam }: { cam: Cam }) {
   const id = cam.row[0];
   const every = stillEvery(cam.source.refreshSec);
 
-  // A camera whose stream fails falls back to its auto-refreshing still image.
+  // A camera whose stream fails falls back to its auto-refreshing still image; a video-only camera shows the error.
   const failVideo = (msg: string) => {
     setVideoError(msg);
-    setMode("image");
+    if (hasStill) setMode("image");
   };
 
   // Still images: re-fetch on the operator's cadence, only while someone is looking.
@@ -97,8 +101,21 @@ function Viewer({ cam }: { cam: Cam }) {
         failVideo("This browser can't play the stream.");
         return;
       }
-      const h = new Hls({ lowLatencyMode: true, liveDurationInfinity: true });
-      h.on(Hls.Events.ERROR, (_e, data) => data.fatal && failVideo("The live stream is unavailable right now."));
+      // Operators' streams are plain live HLS. Retry the playlist a couple of times: on-demand stream
+      // servers can take a few seconds to start a camera nobody was watching.
+      const h = new Hls({
+        lowLatencyMode: false,
+        liveDurationInfinity: true,
+        manifestLoadPolicy: {
+          default: {
+            maxTimeToFirstByteMs: 15_000,
+            maxLoadTimeMs: 20_000,
+            timeoutRetry: { maxNumRetry: 2, retryDelayMs: 0, maxRetryDelayMs: 0 },
+            errorRetry: { maxNumRetry: 2, retryDelayMs: 1500, maxRetryDelayMs: 4000 },
+          },
+        },
+      });
+      h.on(Hls.Events.ERROR, (_e, data) => data.fatal && failVideo("Stream unavailable right now."));
       h.loadSource(videoUrl);
       h.attachMedia(el);
       hls = h;
@@ -109,12 +126,12 @@ function Viewer({ cam }: { cam: Cam }) {
       hls?.destroy();
       hlsRef.current = null;
     };
-  }, [mode, videoKind, videoUrl]);
+  }, [mode, videoKind, videoUrl, attempt]);
 
   // Pause video (and stop downloading the stream) while the page isn't visible; jump back to live on return.
   useEffect(() => {
     const el = video.current;
-    if (mode !== "video" || !el) return;
+    if (mode !== "video" || !el || videoError) return;
     if (!watching) {
       el.pause();
       hlsRef.current?.stopLoad();
@@ -126,13 +143,21 @@ function Viewer({ cam }: { cam: Cam }) {
       if (typeof h.liveSyncPosition === "number") el.currentTime = h.liveSyncPosition;
     }
     void el.play().catch(() => {});
-  }, [watching, mode]);
+  }, [watching, mode, videoError]);
 
 
   const sep = imageUrl.includes("?") ? "&" : "?";
   const src = tick > 1 ? `${imageUrl}${sep}t=${tick}` : imageUrl;
   const isLiveVideo = mode === "video" && videoKind === "hls";
-  const status = !watching ? "Paused — not visible" : mode === "video" ? (isLiveVideo ? "Live" : "Video clip") : `Live image · refreshes every ${every}s`;
+  const status = !watching
+    ? "Paused — not visible"
+    : mode === "video"
+      ? videoError
+        ? "Stream unavailable"
+        : isLiveVideo
+          ? "Live video"
+          : "Video clip"
+      : `Live image · refreshes every ${every}s`;
 
   return (
     <div className="glass absolute top-[76px] left-3 z-20 w-[min(380px,calc(100%-24px))] overflow-hidden rounded-lg shadow-2xl shadow-black/60" role="dialog" aria-label={`Camera: ${name}`}>
@@ -148,7 +173,7 @@ function Viewer({ cam }: { cam: Cam }) {
           <CloseIcon />
         </button>
       </div>
-      {videoUrl && (
+      {videoUrl && hasStill && (
         <div className="flex gap-1 px-3 pb-1.5" role="tablist">
           {(["video", "image"] as const).map((m) => (
             <button key={m} role="tab" aria-selected={mode === m} onClick={() => { setVideoError(null); setMode(m); }} className={`rounded px-2 py-0.5 text-[11px] ${mode === m ? "bg-panel-hover text-fg" : "text-muted hover:text-fg"}`}>
@@ -175,6 +200,24 @@ function Viewer({ cam }: { cam: Cam }) {
               }}
             />
           )
+        ) : videoError && !hasStill ? (
+          <div className="grid h-full place-items-center px-6 text-center text-[12px] text-muted">
+            <div>
+              <div className="text-fg">Stream unavailable</div>
+              {videoError === "Stream unavailable right now." ? "The operator's live feed for this camera isn't responding." : videoError}
+              <div>
+                <button
+                  onClick={() => {
+                    setVideoError(null);
+                    setAttempt((n) => n + 1);
+                  }}
+                  className="mt-2 rounded px-2 py-0.5 text-[11px] text-fg hover:bg-panel-hover"
+                >
+                  Retry
+                </button>
+              </div>
+            </div>
+          </div>
         ) : (
           <video
             ref={video}
@@ -186,7 +229,7 @@ function Viewer({ cam }: { cam: Cam }) {
             playsInline
             controls
             loop={videoKind === "mp4"}
-            onError={() => failVideo("The video isn't available right now.")}
+            onError={() => failVideo("Stream unavailable right now.")}
           />
         )}
         {!watching && <div className="absolute inset-0 grid place-items-center bg-black/60 text-[12px] text-muted">Paused while this tab isn&apos;t visible</div>}
@@ -195,6 +238,7 @@ function Viewer({ cam }: { cam: Cam }) {
         {cam.source.name} · {lat.toFixed(4)}, {lon.toFixed(4)}
         {mode === "image" && loadedAt && ` · image loaded ${ago(now - loadedAt)}`}
         {videoError && mode === "image" && " · live video unavailable, showing the still image"}
+        {!hasStill && " · live video only (the operator publishes no still image)"}
         <br />
         The feed only runs while this viewer is open and visible. Published by the operator for public viewing ({cam.source.license}).{" "}
         <a href={cam.source.homepage} target="_blank" rel="noreferrer" className="underline hover:text-fg">Source</a>

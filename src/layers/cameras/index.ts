@@ -56,12 +56,12 @@ export const CAMERA_SOURCES: CameraSource[] = [
   { id: "md", name: "Maryland CHART cameras", region: "Maryland, US", homepage: "https://chart.maryland.gov/", license: "Maryland SHA CHART public data feed", refreshSec: 60 },
   { id: "de", name: "DelDOT traffic cameras", region: "Delaware, US", homepage: "https://deldot.gov/map/", license: "Delaware DOT TMC public camera feed", refreshSec: 60 },
   { id: "mo", name: "MoDOT Traveler cameras", region: "Missouri, US", homepage: "https://traveler.modot.org/map/", license: "Missouri DOT Traveler Information public feed (incl. Ozarks Traffic, Springfield)", refreshSec: 60 },
-  { id: "co", name: "COtrip cameras", region: "Colorado, US", homepage: "https://maps.cotrip.org/", license: "Colorado DOT COtrip public camera feed", refreshSec: 120 },
+  { id: "co", name: "COtrip cameras", region: "Colorado, US", homepage: "https://www.cotrip.org/", license: "Colorado DOT COtrip public camera feed", refreshSec: 120 },
   { id: "in", name: "INDOT TrafficWise cameras", region: "Indiana, US", homepage: "https://511in.org/", license: "Indiana DOT 511IN public camera feed", refreshSec: 120 },
   { id: "al", name: "ALGO Traffic cameras", region: "Alabama, US", homepage: "https://algotraffic.com/", license: "Alabama DOT ALGO Traffic public camera feed", refreshSec: 60 },
   { id: "ok", name: "OKTraffic cameras", region: "Oklahoma, US", homepage: "https://oktraffic.org/", license: "Oklahoma DOT OKTraffic public camera feed", refreshSec: 60 },
   { id: "ks", name: "KanDrive cameras", region: "Kansas, US", homepage: "https://www.kandrive.gov/", license: "Kansas DOT KanDrive public camera feed (no warranty)", refreshSec: 300 },
-  { id: "ne", name: "Nebraska 511 cameras", region: "Nebraska, US", homepage: "https://new.511.nebraska.gov/", license: "Nebraska DOT 511 public camera feed (no warranty)", refreshSec: 300 },
+  { id: "ne", name: "Nebraska 511 cameras", region: "Nebraska, US", homepage: "https://511.nebraska.gov/", license: "Nebraska DOT 511 public camera feed (no warranty)", refreshSec: 300 },
 ];
 const IDX = Object.fromEntries(CAMERA_SOURCES.map((s, i) => [s.id, i]));
 

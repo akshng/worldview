@@ -19,6 +19,8 @@ export const AIRCRAFT_SOURCE = "aircraft";
 export const CAMERAS_SOURCE = "cameras";
 export const REGIONS_SOURCE = "regions";
 export const CAMERA_COLOR = "#2ec4b6";
+/** Cameras with a live video stream: brighter fill and a white ring */
+export const CAMERA_LIVE_COLOR = "#5ff5e4";
 export const AREAS_SOURCE = "areas";
 export const VESSELS_SOURCE = "vessels";
 export const COUNTRIES_SOURCE = "countries";
@@ -566,11 +568,13 @@ export function cameraLayers(): LayerSpecification[] {
       source: CAMERAS_SOURCE,
       filter: ["!", ["has", "point_count"]],
       layout: { visibility: "none" },
+      // Live-video cameras (feature property `live`) get a brighter fill and a white ring; still-only ones are dimmer.
       paint: {
-        "circle-color": CAMERA_COLOR,
-        "circle-radius": ["interpolate", ["linear"], ["zoom"], 4, 3, 12, 6],
-        "circle-stroke-color": "#05070a",
-        "circle-stroke-width": 1.2,
+        "circle-color": ["case", ["boolean", ["get", "live"], false], CAMERA_LIVE_COLOR, CAMERA_COLOR],
+        "circle-opacity": ["case", ["boolean", ["get", "live"], false], 1, 0.7],
+        "circle-radius": ["interpolate", ["linear"], ["zoom"], 4, ["case", ["boolean", ["get", "live"], false], 3.5, 2.6], 12, ["case", ["boolean", ["get", "live"], false], 6.5, 5]],
+        "circle-stroke-color": ["case", ["boolean", ["get", "live"], false], "#ffffff", "#05070a"],
+        "circle-stroke-width": ["case", ["boolean", ["get", "live"], false], 1.4, 1.1],
       },
     },
   ];
