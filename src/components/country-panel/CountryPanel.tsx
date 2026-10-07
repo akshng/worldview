@@ -9,6 +9,7 @@ import { relativeTime } from "@/lib/time";
 import { CloseIcon } from "@/components/ui/icons";
 import { ImportanceMeter, SectionTitle } from "@/components/ui/primitives";
 import { focusEvent } from "@/components/event-feed/EventFeed";
+import { CountryProfile } from "./CountryProfile";
 import type { EventCategory } from "@/types/events";
 import type { GoogleTrend } from "@/lib/trends";
 
@@ -127,6 +128,8 @@ export function CountryPanel() {
                 </div>
               ))}
             </div>
+
+            <CountryProfile code={d.country.code} />
 
             <section className="px-4 py-3.5">
               <SectionTitle>Last 24 hours by category</SectionTitle>

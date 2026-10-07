@@ -175,6 +175,8 @@ export const api = {
     getJSON<EventsResponse>(`/api/events?${new URLSearchParams(params)}`, signal),
   event: (id: string, signal?: AbortSignal) => getJSON<EventDetailResponse>(`/api/events/${encodeURIComponent(id)}`, signal),
   country: (code: string, signal?: AbortSignal) => getJSON<CountryResponse>(`/api/countries/${encodeURIComponent(code)}`, signal),
+  countryProfile: (code: string, signal?: AbortSignal) =>
+    getJSON<import("@/lib/country-profile").CountryProfile>(`/api/countries/${encodeURIComponent(code)}/profile`, signal),
   briefing: (signal?: AbortSignal) =>
     getJSON<
       import("@/lib/briefing").DailyBriefing & {

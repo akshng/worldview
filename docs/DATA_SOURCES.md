@@ -136,6 +136,21 @@ Top bar → **Trends** (`GET /api/trends`): what people are searching for, readi
 
 Privacy: only aggregate trends and public post/article titles are kept. No user handles, avatars, author names or other data about individuals are stored or shown.
 
+## Country profile (`src/lib/country-profile`)
+
+Clicking a country → **Profile** in the country overview (`GET /api/countries/:code/profile`). Each stat shows its value, period and source; hovering shows the series name. Missing values are left out, never shown as 0. For each stat the most recent period wins; ties go to the more specific source (Eurostat > OECD > World Bank > IMF > FRED). Wikidata numbers only fill gaps no official source covers, are starred and labelled as community data. All sources are keyless and fetched in parallel; one failing source doesn't affect the others, and the panel lists which ones were unavailable. Profiles are cached 24 h per country (30 min if a source failed).
+
+| Source | Endpoint | Coverage | Stats |
+| --- | --- | --- | --- |
+| World Bank Indicators API | `api.worldbank.org/v2/country/{iso3}/indicator/{ids}?source=2&mrnev=1` | ~215 economies, annual | Population, GDP (current US$), GDP per capita, real GDP growth, CPI inflation, unemployment (ILO modelled), current account % GDP |
+| IMF DataMapper (World Economic Outlook) | `imf.org/external/datamapper/api/v1/{indicator}` (returns every country; each indicator cached 24 h and shared) | ~195 economies, annual | General government gross debt % GDP; fallbacks for growth, inflation, unemployment, current account, GDP, GDP per capita and population (e.g. Taiwan, Liechtenstein). Projection years after last year are ignored; the latest year can still be an IMF estimate. The IMF CDN sometimes answers 403 to bursts; the profile then shows it as unavailable |
+| Eurostat dissemination API (JSON-stat 2.0) | `ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/{dataset}` | EU 27 + Iceland, Norway, Switzerland, Liechtenstein | HICP inflation (`prc_hicp_minr`, monthly; `prc_hicp_manr` stopped at 2025-12), unemployment (`une_rt_m`, s.a.), government debt % GDP (`gov_10q_ggdebt`, quarterly), 10-year convergence bond yield (`irt_lt_mcby_m`). Greece is `EL` |
+| OECD SDMX, Key Short-Term Economic Indicators | `sdmx.oecd.org/public/rest/data/OECD.SDD.STES,DSD_KEI@DF_KEI,4.0/.M.CP+UNEMP+IRLT+IR3TIB.....?lastNObservations=1` | OECD members plus AR, BR, CN, ID, IN, RU, SA, ZA, monthly | CPI year-on-year, unemployment (s.a.), 3-month interbank rate, long-term (10-year) government bond yield. The API allows only a few dozen requests per hour per IP, so one all-country request is made per day |
+| FRED (`fredgraph.csv`) | `IRLTLT01{XX}M156N`, `IR3TIB01{XX}M156N` | As OECD | Fallback for the two interest-rate series, used only when the OECD endpoint fails |
+| Wikidata SPARQL (community data) | `query.wikidata.org/sparql` (POST, descriptive User-Agent) | All countries with an ISO 3166-1 code | Capital, currency (ISO 4217), head of state, head of government (current, preferred-rank statements with no end date), HDI; population, GDP and GDP per capita (US$ only) as fallbacks. Reads both `en` and language-neutral `mul` labels, since many items (e.g. euro, Emmanuel Macron) now have only the latter |
+
+Notes: the short rate is a 3-month interbank rate, not the central bank policy rate (no keyless cross-country policy-rate source was found; euro-area countries share one rate). World Bank "unemployment" is the ILO modelled estimate. Government debt is general government gross debt (IMF/Eurostat); the World Bank central-government debt series is not used because it measures something different.
+
 ## Live layers (`src/layers/`)
 
 Live layers are continuously changing observations visualised in map modes. They are **not events**: they never enter the event store, scoring or deduplication. Each is fetched on demand through `/api/layers/:id` and cached server-side for its TTL, so upstream quotas are only used while someone is looking, and every client shares one cached copy. If an upstream fetch fails, the last good snapshot is served with `stale: true` (shown in the legend).
@@ -159,7 +174,6 @@ Natural Earth countries (1:50m), populated places, and admin-1 states/provinces 
 - **ReliefWeb API** now requires a pre-approved app name (returns 403 without one).
 - **Smithsonian GVP weekly volcano RSS** blocks programmatic access (403).
 - **Stooq** no longer serves quote CSVs.
-- **World Bank and IMF DataMapper APIs** time out or deny access from this environment, so country economic profiles aren't included yet.
 - **Polymarket** (prediction markets) API timed out.
 - **SEC EDGAR "current filings" Form 4 feed** (market-wide insider trades) refuses automated clients.
 - **Nasdaq earnings calendar** API blocks non-browser clients.

@@ -130,6 +130,7 @@ Details, terms and caveats: [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md).
 - **Markets map mode**: countries coloured by their main stock index's daily move
 - **Trends** (top bar): what people are searching and sharing — Google Trends trending searches for 41 countries (plus terms trending in several countries at once, and the selected country's searches in its overview), most-read Wikipedia articles in 12 languages, Bluesky and Mastodon (mastodon.social) trending topics, and the Hacker News front page. Keyless, cached 15 min; aggregate trends and public titles only. Not included: X/Twitter (no free or keyless API; no third-party scrapers) and Reddit (refuses unauthenticated API requests; robots.txt disallows automated access). Trends are attention signals, not verified events ([details](docs/DATA_SOURCES.md#trends-panel-srclibtrends))
 - **Energy** (top bar): live electricity grids — demand, generation mix by fuel and renewable share, carbon intensity and wholesale price for Great Britain (NESO Carbon Intensity API, Elexon), Spain (Red Eléctrica), France (RTE éCO2mix), Germany (SMARD) and Australia's NEM (AEMO). Keyless, cached 10 min, all times UTC ([details](docs/DATA_SOURCES.md#energy-panel-srclibenergy))
+- **Country profile** in each country overview: population, GDP, GDP per capita, growth, inflation, unemployment, government debt, current account, 3-month rate, 10-year yield and HDI, plus capital, currency and current leaders — each value with its period and source, from the World Bank, IMF, Eurostat, OECD and FRED (keyless official sources), with Wikidata as labelled community data. Cached 24 h ([details](docs/DATA_SOURCES.md#country-profile-srclibcountry-profile))
 - Real areas (warning polygons, fire footprints), uncertainty rings by location precision, and location-correction notes
 - Source health and live-layer status in Settings → Data sources
 - Demo mode with clearly labelled simulated data
@@ -214,6 +215,7 @@ The full walkthrough is in [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md#adding-a-
 | `GET /api/events/:id` | Full event (sources, timeline, related). `?raw=1` adds upstream records |
 | `POST /api/events/:id/interpret` | Generate AI interpretation (if configured) |
 | `GET /api/countries/:code` | Country overview (ISO alpha-2/3) |
+| `GET /api/countries/:code/profile` | Country profile: key stats with source and period, capital, currency, leaders (cached 24 h) |
 | `GET /api/search?q=` | Locations, events, topics + parsed intent. `&ai=1` lets the AI interpret the question into filters |
 | `GET /api/stats` | Aggregates for the same filters as `/api/events` |
 | `GET /api/sources` | Source health + recent ingestion runs |
@@ -247,7 +249,7 @@ The full walkthrough is in [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md#adding-a-
 
 ## Attribution
 
-Basemap © [OpenFreeMap](https://openfreemap.org), [OpenMapTiles](https://openmaptiles.org), [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors. Imagery: NASA GIBS. Reference geography: Natural Earth (public domain). Event data © its respective publishers, linked from every event.
+Basemap © [OpenFreeMap](https://openfreemap.org), [OpenMapTiles](https://openmaptiles.org), [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors. Imagery: NASA GIBS. Reference geography: Natural Earth (public domain). Country profiles: World Bank (CC BY 4.0), IMF, Eurostat, OECD, FRED and Wikidata (CC0). Event data © its respective publishers, linked from every event.
 
 ## License & credit
 
