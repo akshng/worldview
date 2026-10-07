@@ -345,6 +345,8 @@ export function eventLayers(): LayerSpecification[] {
       type: "circle",
       source: EVENTS_SOURCE,
       minzoom: 3,
+      // At street level (satellite deep zoom) a km-scale ring only tints the whole screen.
+      maxzoom: 15,
       filter: ["all", ["!", ["has", "point_count"]], [">", ["get", "uncpx0"], 0]],
       paint: {
         "circle-radius": ["interpolate", ["exponential", 2], ["zoom"], 0, ["get", "uncpx0"], 20, ["*", ["get", "uncpx0"], 1048576]],

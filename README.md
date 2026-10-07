@@ -150,7 +150,12 @@ WorldView then runs as a production server at http://localhost:3000 (bound to th
 
 ## Map tools
 
-- **SAT** — satellite view (NASA Blue Marble, then 10 m Sentinel-2 imagery when zoomed in).
+- **SAT** — satellite view with a source picker:
+  - **Best detail (mosaic)**: NASA Blue Marble → 10 m Sentinel-2 (zoom 4+) → sub-metre Esri World Imagery (zoom ~11 to 19; or USGS aerial imagery for the US, or off). Sharp, but a mosaic of past captures — not live.
+  - **Live — geostationary**: GOES-East/West GeoColor and Himawari, a new frame every 10 min at ~0.5–2 km per pixel (no coverage over Europe/Africa). It switches to the mosaic as you zoom in.
+  - **Daily — VIIRS** and **Night — VIIRS night band**: the last full day's global composite.
+  - Optional **roads & labels** (hybrid) and a semi-transparent **clouds (infrared)** overlay that also works on the other map styles.
+  - The panel shows what is on screen, its image time ("17:50 UTC, 40 min ago") and whether it is near-real-time or an archive mosaic. Recent imagery re-checks for a new frame every 5 min while the tab is visible. Sources, licences and limits: [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md#map-views).
 - **CAM** — ~19,000 public traffic/road-weather cameras from official open-data feeds (London, New York City, California, Washington, Illinois, Iowa, Kentucky, Austin, South Dakota, British Columbia, Toronto, Calgary, Spain, Iceland, Finland, Queensland, Hong Kong, Singapore); click for the live image or video.
 - **ISS** — the International Space Station's position (updated every 5 s) and ground track ±90 min (past solid, next 90 min dashed), computed by wheretheiss.at from orbital elements; hover for altitude, speed and day/night.
 - **AUR** — NOAA SWPC OVATION aurora forecast: probability of visible aurora (≥ 10 %), with the forecast time in the legend. A model forecast, not an observation.

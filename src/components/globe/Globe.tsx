@@ -9,7 +9,7 @@ import type { GeoJSONSource, Map as MlMap, MapGeoJSONFeature, PointLike, Popup }
 import { getMaplibre } from "./maplibre";
 import { basemapVisibility, buildStyle, IMAGERY_TOP, labelLayers } from "./style";
 import { ImageryPanel } from "./ImageryPanel";
-import { desiredRasters, gibsTileUrl, maxZoomFor, rasterId } from "@/lib/imagery";
+import { desiredRasters, gibsTileUrl, maxZoomFor, rasterId, rasterSlot } from "@/lib/imagery";
 import { useImageryTimes } from "@/lib/client/use-imagery-times";
 import {
   AIRCRAFT_SOURCE,
@@ -612,7 +612,7 @@ export default function Globe({ window: win, live }: GlobeProps) {
     const want = desiredRasters({ mapStyle, satSource, clouds: showClouds }, imageryTimes ?? {}, new Date());
     const wantIds = new Set(want.map(rasterId));
     const current = (map.getStyle().layers ?? []).map((l) => l.id).filter((id) => id.startsWith("gibs-"));
-    const slotOf = (id: string) => id.replace(/-\d+$/, "");
+    const slotOf = rasterSlot;
     const wantSlots = new Set(want.map((w) => slotOf(rasterId(w))));
     const remove = (id: string) => {
       if (map.getLayer(id)) map.removeLayer(id);
@@ -630,7 +630,9 @@ export default function Globe({ window: win, live }: GlobeProps) {
         tiles: [gibsTileUrl(w.layer, w.time)],
         tileSize: 256,
         maxzoom: w.layer.maxzoom,
-        attribution: `Imagery: NASA GIBS — ${w.layer.label}${w.layer.cadence === "daily" ? ` (${w.time})` : ` (${w.time.slice(11, 16)} UTC)`}`,
+        attribution: `Imagery: ${w.layer.credit} via <a href="https://www.earthdata.nasa.gov/gibs" target="_blank" rel="noopener noreferrer">NASA GIBS</a> — ${w.layer.label}, ${
+          w.layer.cadence === "daily" ? w.time : `${w.time.slice(0, 10)} ${w.time.slice(11, 16)} UTC`
+        }`,
       });
       map.addLayer(
         { id, type: "raster", source: id, maxzoom: fadeEnd, paint: { "raster-opacity": w.opacity, "raster-fade-duration": 300 } },

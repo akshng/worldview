@@ -19,6 +19,8 @@ export interface GibsLayer {
   /** GIBS layer identifier */
   id: string;
   label: string;
+  /** Who produced the imagery (credited in the map attribution) */
+  credit: string;
   tileMatrixSet: string;
   /** Native max zoom of the tile matrix set */
   maxzoom: number;
@@ -32,6 +34,7 @@ export const GIBS_LAYERS = {
   goesEast: {
     id: "GOES-East_ABI_GeoColor",
     label: "GOES-East GeoColor",
+    credit: "NOAA GOES-East (GeoColor: CIRA)",
     tileMatrixSet: "GoogleMapsCompatible_Level7",
     maxzoom: 7,
     ext: "png",
@@ -41,6 +44,7 @@ export const GIBS_LAYERS = {
   goesWest: {
     id: "GOES-West_ABI_GeoColor",
     label: "GOES-West GeoColor",
+    credit: "NOAA GOES-West (GeoColor: CIRA)",
     tileMatrixSet: "GoogleMapsCompatible_Level7",
     maxzoom: 7,
     ext: "png",
@@ -50,6 +54,7 @@ export const GIBS_LAYERS = {
   himawariVis: {
     id: "Himawari_AHI_Band3_Red_Visible_1km",
     label: "Himawari red visible",
+    credit: "JMA Himawari",
     tileMatrixSet: "GoogleMapsCompatible_Level7",
     maxzoom: 7,
     ext: "png",
@@ -59,6 +64,7 @@ export const GIBS_LAYERS = {
   himawariIr: {
     id: "Himawari_AHI_Band13_Clean_Infrared",
     label: "Himawari infrared",
+    credit: "JMA Himawari",
     tileMatrixSet: "GoogleMapsCompatible_Level6",
     maxzoom: 6,
     ext: "png",
@@ -68,6 +74,7 @@ export const GIBS_LAYERS = {
   goesEastIr: {
     id: "GOES-East_ABI_Band13_Clean_Infrared",
     label: "GOES-East infrared",
+    credit: "NOAA GOES-East",
     tileMatrixSet: "GoogleMapsCompatible_Level6",
     maxzoom: 6,
     ext: "png",
@@ -77,6 +84,7 @@ export const GIBS_LAYERS = {
   goesWestIr: {
     id: "GOES-West_ABI_Band13_Clean_Infrared",
     label: "GOES-West infrared",
+    credit: "NOAA GOES-West",
     tileMatrixSet: "GoogleMapsCompatible_Level6",
     maxzoom: 6,
     ext: "png",
@@ -86,6 +94,7 @@ export const GIBS_LAYERS = {
   viirs: {
     id: "VIIRS_NOAA20_CorrectedReflectance_TrueColor",
     label: "VIIRS NOAA-20 true colour",
+    credit: "NASA/NOAA NOAA-20 VIIRS",
     tileMatrixSet: "GoogleMapsCompatible_Level9",
     maxzoom: 9,
     ext: "jpg",
@@ -95,6 +104,7 @@ export const GIBS_LAYERS = {
   dnb: {
     id: "VIIRS_SNPP_DayNightBand_At_Sensor_Radiance",
     label: "VIIRS Suomi NPP night band",
+    credit: "NASA/NOAA Suomi NPP VIIRS",
     tileMatrixSet: "GoogleMapsCompatible_Level8",
     maxzoom: 8,
     ext: "png",
@@ -379,6 +389,13 @@ export function desiredRasters(
   return out;
 }
 
+/** Map layer/source id: slot + image time + GIBS layer, so a new frame (or band) gets a new source. */
 export function rasterId(r: DynamicRaster): string {
-  return `gibs-${r.slot}-${r.time.replace(/[^0-9]/g, "")}`;
+  const layerIdx = Object.values(GIBS_LAYERS).findIndex((l) => l.id === r.layer.id);
+  return `gibs-${r.slot}-${r.time.replace(/[^0-9]/g, "")}-${layerIdx}`;
+}
+
+/** The slot part of a rasterId ("gibs-geo-east-20261007175000-0" → "gibs-geo-east"). */
+export function rasterSlot(id: string): string {
+  return id.replace(/-\d+-\d+$/, "");
 }
