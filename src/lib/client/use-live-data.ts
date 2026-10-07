@@ -10,6 +10,8 @@ import { useUI } from "@/lib/store/ui";
 import { rangeMs } from "@/lib/time";
 
 const POLL_FALLBACK_MS = 90_000;
+/** Minimum gap between background refreshes: with ~40 sources the server reports changes constantly. */
+const MIN_REFRESH_GAP_MS = 15_000;
 
 export function useLiveData() {
   const range = useUI((s) => s.range);
@@ -17,6 +19,8 @@ export function useLiveData() {
   const span = useUI((s) => s.timelineSpan);
   const autoRefresh = useUI((s) => s.settings.autoRefresh);
   const abortRef = useRef<AbortController | null>(null);
+  const inFlight = useRef<Promise<void> | null>(null);
+  const lastSilent = useRef(0);
 
   const fetchFrom = useCallback(() => {
     const now = Date.now();
@@ -29,12 +33,17 @@ export function useLiveData() {
 
   const load = useCallback(
     async (opts: { silent?: boolean } = {}) => {
+      // A background refresh never cancels a load that's already running (on a slow
+      // machine that could cancel every download and nothing would ever arrive).
+      if (opts.silent && inFlight.current) return;
+      if (opts.silent) lastSilent.current = Date.now();
       abortRef.current?.abort();
       const ctrl = new AbortController();
       abortRef.current = ctrl;
       if (!opts.silent) useData.setState({ loading: true });
-      try {
+      const run = (async () => {
         const res = await api.events({ from: fetchFrom(), limit: "20000", sort: "recent" }, ctrl.signal);
+        if (ctrl.signal.aborted) return;
         useData.setState({
           events: res.events,
           mode: res.mode,
@@ -43,9 +52,18 @@ export function useLiveData() {
           error: null,
           lastFetchedAt: Date.now(),
         });
+      })();
+      inFlight.current = run.then(
+        () => undefined,
+        () => undefined,
+      );
+      try {
+        await run;
       } catch (err) {
         if ((err as Error).name === "AbortError") return;
         useData.setState({ loading: false, error: (err as Error).message });
+      } finally {
+        if (abortRef.current === ctrl) inFlight.current = null;
       }
     },
     [fetchFrom],
@@ -67,10 +85,12 @@ export function useLiveData() {
     let poll: ReturnType<typeof setInterval> | null = null;
     const schedule = () => {
       if (debounce) return;
+      // Coalesce bursts and keep at least MIN_REFRESH_GAP_MS between refreshes.
+      const wait = Math.max(2500, MIN_REFRESH_GAP_MS - (Date.now() - lastSilent.current));
       debounce = setTimeout(() => {
         debounce = null;
         void load({ silent: true });
-      }, 2500);
+      }, wait);
     };
     const es = new EventSource("/api/stream");
     es.addEventListener("events.changed", schedule);
