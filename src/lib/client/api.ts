@@ -87,8 +87,17 @@ export interface SearchResponse {
   query: string;
   intent: SearchIntent | null;
   locations: Array<{ kind: "country" | "state" | "city" | "region"; code: string | null; name: string; detail: string; lat: number; lon: number; zoom: number; bbox: [number, number, number, number] | null }>;
+  /** Local gazetteer places (countries, states, cities, airports) */
+  places: import("@/lib/geo/place-search").PlaceResult[];
   events: EventSummary[];
   topics: Array<{ id: string; label: string; detail: string; categories: string[] }>;
+}
+
+export interface GeocodeResponse {
+  query: string;
+  results: import("@/lib/geo/place-search").PlaceResult[];
+  cached: boolean;
+  attribution: string;
 }
 
 export interface SearchIntent {
@@ -234,6 +243,8 @@ export const api = {
   },
   sources: (signal?: AbortSignal) => getJSON<SourcesResponse>("/api/sources", signal),
   meta: (signal?: AbortSignal) => getJSON<MetaResponse>("/api/meta", signal),
+  /** Online place search (Photon by komoot, proxied + cached by our server) */
+  geocode: (q: string, signal?: AbortSignal) => getJSON<GeocodeResponse>(`/api/geocode?q=${encodeURIComponent(q)}`, signal),
   search: (q: string, signal?: AbortSignal, ai = false) =>
     getJSON<SearchResponse>(`/api/search?q=${encodeURIComponent(q)}${ai ? "&ai=1" : ""}`, signal),
   async interpret(id: string): Promise<AIInterpretation> {

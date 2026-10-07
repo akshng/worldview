@@ -1,5 +1,6 @@
 /**
- * Global search: locations (countries, cities, regions), events and topics,
+ * Global search: locations (countries, cities, regions), places (see
+ * src/lib/geo/place-index.ts), events and topics,
  * plus a structured intent for natural-language-ish queries.
  */
 import "server-only";
@@ -9,6 +10,7 @@ import { toEventSummary, type EventSummary, type WorldEvent } from "@/types/even
 import { textMatches, sortEvents } from "@/lib/events/query";
 import { CATEGORIES } from "@/lib/categories";
 import { bboxContains } from "@/lib/geo/math";
+import { CONTINENT_ALIASES, searchPlacesLocal } from "@/lib/geo/place-index";
 import { parseIntent, TOPIC_KEYWORDS, type ParsedIntent } from "./intent";
 import type { CommandIntent } from "@/lib/ai/types";
 
@@ -34,19 +36,7 @@ export interface LocationResult {
   bbox: [number, number, number, number] | null;
 }
 
-const REGION_ALIASES: Record<string, string> = {
-  europe: "Europe",
-  "middle east": "Middle East",
-  mideast: "Middle East",
-  africa: "Africa",
-  asia: "Asia",
-  "latin america": "Latin America",
-  "south america": "Latin America",
-  "central america": "Latin America",
-  "north america": "North America",
-  oceania: "Oceania",
-  pacific: "Oceania",
-};
+const REGION_ALIASES = CONTINENT_ALIASES;
 
 function regionResult(region: string): LocationResult | null {
   const members = COUNTRIES.filter((c) => c.region === region);
@@ -151,6 +141,8 @@ export async function search(repo: EventRepository, q: string, opts: SearchOptio
   }
 
   const locations = ai ? [] : searchLocations(query);
+  // Places (countries, states, cities, airports) from the bundled gazetteer — instant, no network.
+  const places = ai ? [] : searchPlacesLocal(query);
   if (place && !locations.some((l) => l.name === place!.name)) locations.unshift(place);
 
   // Events: structured filters from the intent + free text (or place) matching.
@@ -201,6 +193,7 @@ export async function search(repo: EventRepository, q: string, opts: SearchOptio
         }
       : null,
     locations,
+    places,
     events,
     topics,
     totalEventMatches: matched.length,

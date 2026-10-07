@@ -128,6 +128,7 @@ Details, terms and caveats: [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md).
 - 3D globe with clustering, day/night terminator, three basemaps (dark vector, NASA Blue Marble, night lights)
 - **Map modes**: Events, Heatmap, Density grid, Weather (radar loop), Fires (radiative power), Earthquakes (magnitude × depth), Conflict, Aviation (live aircraft), Maritime (live vessels)
 - Live feed, event details (facts · sources · timeline · score explanation · related events · separate AI box), country overviews, timeline replay, ⌘K search with intent parsing
+- **Place search** (⌘K): type a country, state, city, address, landmark, airport code ("JFK") or coordinates ("48.85, 2.35") and the globe flies there and drops a pin; countries and states open their panels. Instant results from the bundled gazetteer, plus addresses and landmarks from Photon by komoot (OpenStreetMap) via a cached server proxy ([details](docs/DATA_SOURCES.md#place-search-geocoding))
 - **Daily briefing** (top-bar "Briefing"): new / developing / ongoing / resolved, today vs yesterday, regional sections, what to watch — every line links to an event; optional AI summary written only from those events. Can be prepared automatically every morning ([below](#morning-briefing))
 - **Markets** (top bar): indices, US sectors, Treasury yields + yield curve, FX, commodities, crypto; economic calendar; instrument view with charts, SEC fundamentals and filings; watchlist and in-app price alerts; world events linked to the instruments they could affect; AI market wrap — information only, not advice ([docs/FINANCE.md](docs/FINANCE.md))
 - **Markets map mode**: countries coloured by their main stock index's daily move
@@ -220,7 +221,8 @@ The full walkthrough is in [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md#adding-a-
 | `POST /api/events/:id/interpret` | Generate AI interpretation (if configured) |
 | `GET /api/countries/:code` | Country overview (ISO alpha-2/3) |
 | `GET /api/countries/:code/profile` | Country profile: key stats with source and period, capital, currency, leaders (cached 24 h) |
-| `GET /api/search?q=` | Locations, events, topics + parsed intent. `&ai=1` lets the AI interpret the question into filters |
+| `GET /api/search?q=` | Places (gazetteer), locations, events, topics + parsed intent. `&ai=1` lets the AI interpret the question into filters |
+| `GET /api/geocode?q=` | Online place search (Photon by komoot, OpenStreetMap data); ≥ 3 chars, cached 24 h per query, rate-limited (429) |
 | `GET /api/stats` | Aggregates for the same filters as `/api/events` |
 | `GET /api/sources` | Source health + recent ingestion runs |
 | `POST /api/ingest/:source` | Trigger a run (localhost or `ADMIN_TOKEN`) |

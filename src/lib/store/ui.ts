@@ -50,6 +50,13 @@ export interface Toast {
   symbol?: string;
 }
 
+/** Temporary marker dropped by place search (cleared by the next search or a map click) */
+export interface SearchPin {
+  lon: number;
+  lat: number;
+  name: string;
+}
+
 export interface FlyToRequest {
   lon: number;
   lat: number;
@@ -82,6 +89,7 @@ interface UIState {
   selectedRegion: number | null;
   hoveredEventId: string | null;
   flyTo: FlyToRequest | null;
+  searchPin: SearchPin | null;
 
   // chrome
   sidebarCollapsed: boolean;
@@ -118,6 +126,7 @@ interface UIState {
   selectRegion: (id: number | null) => void;
   setHovered: (id: string | null) => void;
   requestFlyTo: (r: Omit<FlyToRequest, "nonce">) => void;
+  setSearchPin: (p: SearchPin | null) => void;
   setSidebarCollapsed: (v: boolean) => void;
   setSearchOpen: (v: boolean) => void;
   setBriefingOpen: (v: boolean) => void;
@@ -169,6 +178,7 @@ export const useUI = create<UIState>()(
       selectedRegion: null,
       hoveredEventId: null,
       flyTo: null,
+      searchPin: null,
       sidebarCollapsed: false,
       searchOpen: false,
       briefingOpen: false,
@@ -207,6 +217,7 @@ export const useUI = create<UIState>()(
       selectRegion: (selectedRegion) => set({ selectedRegion, ...(selectedRegion !== null ? { selectedEventId: null, selectedCountry: null } : {}) }),
       setHovered: (hoveredEventId) => set({ hoveredEventId }),
       requestFlyTo: (r) => set({ flyTo: { ...r, nonce: Date.now() + Math.random() } }),
+      setSearchPin: (searchPin) => set({ searchPin }),
       setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
       setSearchOpen: (searchOpen) => set({ searchOpen }),
       setBriefingOpen: (briefingOpen) => set({ briefingOpen }),
