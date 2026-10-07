@@ -45,6 +45,11 @@ import {
   searchPinCollection,
   searchPinLayers,
 } from "./layers";
+import { INFRA_INTERACTIVE, INFRA_LAYER_OF, INFRA_MAP_LAYERS, infraLayers, infraSource } from "./infra-layers";
+import { InfraPanel } from "./InfraPanel";
+import { INFRA_DATASETS, INFRA_LAYER_BY_ID, INFRA_LAYER_IDS, fuelColor, PIPELINE_COLORS } from "@/lib/infra/catalog";
+import { CHOKEPOINTS, chokepointFeatures, LEVEL_COLORS, type ChokepointStatus } from "@/lib/infra/chokepoints";
+import { loadInfraFile, useChokepointMonitor, useInfra } from "@/lib/client/infra";
 import { issFeatures, type IssData } from "@/layers/iss";
 import { auroraFeatures, type AuroraData } from "@/layers/aurora";
 import type { LiveLayerResponse } from "@/lib/client/use-live-layer";
@@ -114,6 +119,12 @@ export default function Globe({ window: win, live }: GlobeProps) {
   const iss = useLiveLayer<IssData>(showIss ? "iss" : null, 5_000, { pauseWhenHidden: true });
   const aurora = useLiveLayer<AuroraData>(showAurora ? "aurora" : null, 10 * 60_000, { pauseWhenHidden: true });
   const auroraRef = useRef<AuroraData | null>(null);
+  const infraOn = useUI((s) => s.settings.infraLayers);
+  const infraOpen = useUI((s) => s.infraOpen);
+  const chokepointsOn = infraOn.includes("chokepoints");
+  useChokepointMonitor(chokepointsOn || infraOpen);
+  const monitor = useInfra((s) => s.monitor);
+  const monitorRef = useRef<Map<string, ChokepointStatus>>(new Map());
   const wantIdsRef = useRef<Set<string>>(new Set());
   const satSource = useUI((s) => s.settings.satSource);
   const hiresProvider = useUI((s) => s.settings.hiresProvider);
@@ -182,6 +193,15 @@ export default function Globe({ window: win, live }: GlobeProps) {
       };
       map.on("zoomend", maybeLoadRegions);
       maybeLoadRegions();
+
+      // Strategic infrastructure: empty until a layer is switched on; below events.
+      for (const id of INFRA_LAYER_IDS) {
+        const src = infraSource(id);
+        if (map.getSource(src)) continue;
+        const attribution = INFRA_LAYER_BY_ID[id].sources.map((d) => INFRA_DATASETS[d].attribution).join(" · ");
+        map.addSource(src, { type: "geojson", data: EMPTY_FC, attribution: id === "chokepoints" ? undefined : attribution });
+      }
+      for (const l of infraLayers()) map.addLayer(l);
 
       map.addSource(EVENTS_SOURCE, {
         type: "geojson",
@@ -281,6 +301,60 @@ export default function Globe({ window: win, live }: GlobeProps) {
         const at = a?.forecastTime ? new Date(a.forecastTime).toISOString().slice(11, 16) + " UTC" : "time n/a";
         return popupLines(coords, { text: "Aurora forecast", color: "#2fbf71" }, `${p.p}% chance of visible aurora`, `NOAA OVATION model forecast for ${at}`);
       }
+      const infraId = INFRA_LAYER_OF[f.layer.id];
+      if (infraId) {
+        const s = (v: unknown) => (v === undefined || v === null || v === "" ? null : String(v));
+        const sub = (...parts: unknown[]) => parts.map(s).filter(Boolean).join(" · ");
+        const color = INFRA_LAYER_BY_ID[infraId].color;
+        switch (infraId) {
+          case "cables":
+            return popupLines(coords, { text: "Subsea telecom cable", color }, s(p.n) ?? "Unnamed submarine cable", sub(p.op, p.km ? `${p.km} km mapped` : null, "OpenStreetMap"));
+          case "landing": {
+            const raw = p.cables;
+            const cables = Array.isArray(raw) ? raw : typeof raw === "string" && raw.startsWith("[") ? (JSON.parse(raw) as string[]) : [];
+            return popupLines(
+              coords,
+              { text: p.k === "station" ? "Cable landing station" : "Cable landing point", color },
+              s(p.n) ?? (cables.length ? cables.slice(0, 3).join(", ") : "Submarine cable landing"),
+              sub(p.k === "station" ? "mapped landing station" : "cable end at the coast", "OpenStreetMap"),
+            );
+          }
+          case "power":
+          case "nuclear":
+            return popupLines(
+              coords,
+              { text: `${s(p.f) ?? "Power"} power plant`, color: fuelColor(String(p.f)) },
+              s(p.n) ?? "Power plant",
+              sub(`${Number(p.mw).toLocaleString("en-US")} MW`, p.c, p.y ? `commissioned ${p.y}` : null, "WRI GPPD"),
+            );
+          case "pipelines":
+            return popupLines(
+              coords,
+              { text: `${p.s === "products" ? "Refined-products" : p.s === "gas" ? "Gas" : p.s === "oil" ? "Oil" : "Oil/gas"} pipeline`, color: PIPELINE_COLORS[String(p.s)] ?? color },
+              s(p.n) ?? "Unnamed pipeline",
+              sub(p.op, p.km ? `${Number(p.km).toLocaleString("en-US")} km mapped` : null, "OpenStreetMap"),
+            );
+          case "lng":
+            return popupLines(coords, { text: "LNG terminal", color }, s(p.n) ?? "LNG site", sub(p.c, p.src === "wpi" ? "World Port Index (LNG terminal facility)" : "OpenStreetMap"));
+          case "ports": {
+            const size = ({ L: "large harbour", M: "medium harbour", S: "small harbour", V: "very small harbour" } as Record<string, string>)[String(p.s)];
+            return popupLines(coords, { text: "Port", color }, s(p.n) ?? "Port", sub(p.c, size, p.loc, p.oil ? "oil terminal" : null, p.lng ? "LNG terminal" : null, "NGA WPI"));
+          }
+          case "datacenters":
+            return popupLines(coords, { text: "Data centre", color }, s(p.n) ?? "Unnamed data centre", sub(p.op, "OpenStreetMap"));
+          case "bases":
+            return popupLines(coords, { text: p.k === "naval_base" ? "Naval base" : "Military base", color }, s(p.n) ?? "Unnamed military site", sub(p.op, "as mapped in OpenStreetMap"));
+          case "chokepoints": {
+            const st = monitorRef.current.get(String(p.id));
+            return popupLines(
+              coords,
+              { text: "Maritime chokepoint", color: st ? LEVEL_COLORS[st.level] : color },
+              String(p.name),
+              sub(p.connects, st ? `${st.total} event${st.total === 1 ? "" : "s"} within ${st.radiusKm} km in 7 days` : null, st ? `disruption ${st.score}/100` : null),
+            );
+          }
+        }
+      }
       if (f.layer.id === "density-fill") {
         // Polygon cell: caller re-anchors the popup at the cursor.
         return popupLines(coords, { text: "Density", color: "#2f9bbf" }, `${p.count} event${p.count === 1 ? "" : "s"} in this cell`, `Highest importance ${p.maxImp}`);
@@ -297,7 +371,7 @@ export default function Globe({ window: win, live }: GlobeProps) {
       );
     };
 
-    const INTERACTIVE = [...EVENT_POINT_LAYERS, "ev-cluster", "cam-point", "cam-cluster", "aircraft", "vessels", "iss-point", "density-fill", "aurora"];
+    const INTERACTIVE = [...EVENT_POINT_LAYERS, "ev-cluster", "cam-point", "cam-cluster", "aircraft", "vessels", "iss-point", "density-fill", "aurora", ...INFRA_INTERACTIVE];
     const hitAt = (pt: PointLike) =>
       map.queryRenderedFeatures(pt, { layers: INTERACTIVE.filter((l) => map.getLayer(l)) })[0];
 
@@ -306,7 +380,8 @@ export default function Globe({ window: win, live }: GlobeProps) {
       map.getCanvas().style.cursor = top ? "pointer" : "";
       if (top && top.layer.id !== "ev-cluster") {
         showPopup(top);
-        if (top.layer.id === "density-fill" || top.layer.id === "aurora") popupRef.current?.setLngLat(e.lngLat);
+        // Areas and lines (density cells, aurora, cables, pipelines, chokepoint radii): anchor at the cursor.
+        if (top.geometry.type !== "Point") popupRef.current?.setLngLat(e.lngLat);
       } else {
         popupRef.current?.remove();
       }
@@ -355,9 +430,15 @@ export default function Globe({ window: win, live }: GlobeProps) {
 
     map.on("click", async (e) => {
       const top = hitAt(e.point);
-      // The aurora overlay is hover-only; clicks pass through to countries/regions.
-      const hit = top?.layer.id === "aurora" ? undefined : top;
+      // The aurora overlay and infrastructure lines/areas are hover-only; clicks pass through to countries/regions.
+      const hoverOnly = top && (top.layer.id === "aurora" || (INFRA_LAYER_OF[top.layer.id] && top.geometry.type !== "Point"));
+      const hit = hoverOnly ? undefined : top;
       const ui = useUI.getState();
+      if (hit?.layer.id === "infra-chokepoints-centre") {
+        ui.setInfraOpen(true);
+        map.easeTo({ center: (hit.geometry as GeoJSON.Point).coordinates as [number, number], zoom: Math.max(map.getZoom(), 5), duration: 700 });
+        return;
+      }
       // Any click on the map dismisses the place-search marker.
       if (ui.searchPin) ui.setSearchPin(null);
       if (hit && EVENT_POINT_LAYERS.includes(hit.layer.id)) {
@@ -536,6 +617,36 @@ export default function Globe({ window: win, live }: GlobeProps) {
     auroraRef.current = data;
     (map.getSource(AURORA_SOURCE) as GeoJSONSource | undefined)?.setData(data ? auroraFeatures(data) : EMPTY_FC);
   }, [showAurora, aurora.data, ready]);
+
+  // ---- strategic infrastructure — independent of map modes, files load on first toggle ----
+  useEffect(() => {
+    const map = liveMap();
+    if (!ready || !map) return;
+    const { setStatus, status } = useInfra.getState();
+    for (const id of INFRA_LAYER_IDS) {
+      const show = infraOn.includes(id);
+      for (const layer of INFRA_MAP_LAYERS[id]) if (map.getLayer(layer)) map.setLayoutProperty(layer, "visibility", show ? "visible" : "none");
+      const file = INFRA_LAYER_BY_ID[id].file;
+      if (!show || !file || typeof status[id] === "number" || status[id] === "loading") continue;
+      setStatus(id, "loading");
+      loadInfraFile(file)
+        .then((fc) => {
+          if (liveMap() !== map) return;
+          (map.getSource(infraSource(id)) as GeoJSONSource | undefined)?.setData(fc);
+          const count = id === "nuclear" ? fc.features.filter((f) => f.properties?.f === "Nuclear").length : id === "power" ? fc.features.filter((f) => f.properties?.f !== "Nuclear").length : fc.features.length;
+          setStatus(id, count);
+        })
+        .catch(() => setStatus(id, "error"));
+    }
+  }, [infraOn, ready]);
+
+  useEffect(() => {
+    const map = liveMap();
+    if (!ready || !map) return;
+    monitorRef.current = new Map((monitor?.chokepoints ?? []).map((c) => [c.id, c]));
+    (map.getSource(infraSource("chokepoints")) as GeoJSONSource | undefined)?.setData(chokepointsOn ? chokepointFeatures(monitorRef.current) : EMPTY_FC);
+    if (chokepointsOn) useInfra.getState().setStatus("chokepoints", CHOKEPOINTS.length);
+  }, [chokepointsOn, monitor, ready]);
 
   // ---- markets choropleth -----------------------------------------------------
   const marketStateIds = useRef<number[]>([]);
@@ -763,8 +874,16 @@ export default function Globe({ window: win, live }: GlobeProps) {
           </div>
         )}
         {(showIss || showAurora) && <SpaceLegend iss={showIss ? iss : null} aurora={showAurora ? aurora : null} />}
+        {infraOpen && <InfraPanel />}
       </div>
       <div className="absolute right-3 bottom-[118px] flex flex-col overflow-hidden rounded-md glass">
+        <MapButton
+          title={infraOpen ? "Hide infrastructure panel" : `Strategic infrastructure: cables, energy, ports, data centres, bases, chokepoints${infraOn.length ? ` (${infraOn.length} on)` : ""}`}
+          onClick={() => useUI.getState().setInfraOpen(!infraOpen)}
+          active={infraOpen || infraOn.length > 0}
+        >
+          <span className="text-[10px] font-semibold tracking-wide">INF</span>
+        </MapButton>
         <MapButton
           title={showIss ? "Hide International Space Station" : "Show International Space Station position and ground track"}
           onClick={() => useUI.getState().updateSettings({ showIss: !showIss })}

@@ -10,6 +10,7 @@ import type { ImportanceFilterId } from "@/lib/categories";
 import type { PresetRangeId, TimeRangeId } from "@/lib/time";
 import { MAP_MODE_IDS } from "@/lib/map-modes";
 import type { HiresProviderId, SatSourceId } from "@/lib/imagery";
+import { INFRA_LAYER_IDS, type InfraLayerId } from "@/lib/infra/catalog";
 
 export type MapStyleId = "dark" | "satellite" | "night";
 export type MapMode = import("@/lib/map-modes").MapModeId;
@@ -35,6 +36,8 @@ export interface Settings {
   showIss: boolean;
   /** NOAA OVATION aurora forecast overlay */
   showAurora: boolean;
+  /** Strategic infrastructure layers switched on (independent of map modes) */
+  infraLayers: InfraLayerId[];
   autoRefresh: boolean;
   defaultRange: PresetRangeId;
   defaultCategories: EventCategory[];
@@ -111,6 +114,8 @@ interface UIState {
   energyOpen: boolean;
   securityOpen: boolean;
   trendsOpen: boolean;
+  /** Infrastructure layer panel (toggles, sources, chokepoint monitor) */
+  infraOpen: boolean;
   /** Instrument detail view (symbol) */
   instrument: string | null;
   toasts: Toast[];
@@ -146,6 +151,8 @@ interface UIState {
   setEnergyOpen: (v: boolean) => void;
   setSecurityOpen: (v: boolean) => void;
   setTrendsOpen: (v: boolean) => void;
+  setInfraOpen: (v: boolean) => void;
+  toggleInfraLayer: (id: InfraLayerId) => void;
   openInstrument: (symbol: string | null) => void;
   pushToast: (t: Omit<Toast, "id">) => void;
   dismissToast: (id: number) => void;
@@ -166,6 +173,7 @@ const DEFAULT_SETTINGS: Settings = {
   camerasLiveOnly: false,
   showIss: false,
   showAurora: false,
+  infraLayers: [],
   autoRefresh: true,
   defaultRange: "24h",
   defaultCategories: [...EVENT_CATEGORIES],
@@ -203,6 +211,7 @@ export const useUI = create<UIState>()(
       energyOpen: false,
       securityOpen: false,
       trendsOpen: false,
+      infraOpen: false,
       instrument: null,
       toasts: [],
       settingsOpen: false,
@@ -242,6 +251,12 @@ export const useUI = create<UIState>()(
       setEnergyOpen: (energyOpen) => set({ energyOpen }),
       setSecurityOpen: (securityOpen) => set({ securityOpen }),
       setTrendsOpen: (trendsOpen) => set({ trendsOpen }),
+      setInfraOpen: (infraOpen) => set({ infraOpen }),
+      toggleInfraLayer: (id) =>
+        set((s) => {
+          const cur = s.settings.infraLayers;
+          return { settings: { ...s.settings, infraLayers: cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id] } };
+        }),
       openInstrument: (instrument) => set({ instrument }),
       pushToast: (t) => set((s) => ({ toasts: [...s.toasts.slice(-3), { ...t, id: Date.now() + Math.random() }] })),
       dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
@@ -267,6 +282,9 @@ export const useUI = create<UIState>()(
         const settings = { ...DEFAULT_SETTINGS, ...(p.settings ?? {}) };
         if (!["mosaic", "live", "daily", "night"].includes(settings.satSource)) settings.satSource = DEFAULT_SETTINGS.satSource;
         if (!["esri", "usgs", "off"].includes(settings.hiresProvider)) settings.hiresProvider = DEFAULT_SETTINGS.hiresProvider;
+        settings.infraLayers = Array.isArray(settings.infraLayers)
+          ? settings.infraLayers.filter((id) => (INFRA_LAYER_IDS as readonly string[]).includes(id))
+          : [];
         const valid = settings.defaultCategories.filter((c) => (EVENT_CATEGORIES as readonly string[]).includes(c));
         const mapMode = (MAP_MODE_IDS as readonly string[]).includes(String(p.mapMode)) ? p.mapMode! : "events";
         return {

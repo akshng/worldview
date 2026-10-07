@@ -1,0 +1,37 @@
+{
+ "builtAt": "2026-10-07T23:21:31.526Z",
+ "layers": {
+  "power-plants": {
+   "count": 13876,
+   "bytes": 2212518
+  },
+  "ports": {
+   "count": 3807,
+   "bytes": 556113
+  },
+  "cables": {
+   "count": 707,
+   "bytes": 187398
+  },
+  "landing-points": {
+   "count": 366,
+   "bytes": 52249
+  },
+  "pipelines": {
+   "count": 396,
+   "bytes": 453505
+  },
+  "lng": {
+   "count": 223,
+   "bytes": 28097
+  },
+  "datacenters": {
+   "count": 3198,
+   "bytes": 479802
+  },
+  "bases": {
+   "count": 4748,
+   "bytes": 733247
+  }
+ }
+}
