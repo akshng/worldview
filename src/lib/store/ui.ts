@@ -35,6 +35,12 @@ export interface Settings {
   showIss: boolean;
   /** NOAA OVATION aurora forecast overlay */
   showAurora: boolean;
+  /** AIS vessel overlay (independent of the Maritime map mode) */
+  showShips: boolean;
+  /** adsb.lol military-flagged aircraft overlay */
+  showMilAir: boolean;
+  /** CelesTrak satellites propagated with SGP4 */
+  showSatellites: boolean;
   autoRefresh: boolean;
   defaultRange: PresetRangeId;
   defaultCategories: EventCategory[];
@@ -166,6 +172,9 @@ const DEFAULT_SETTINGS: Settings = {
   camerasLiveOnly: false,
   showIss: false,
   showAurora: false,
+  showShips: false,
+  showMilAir: false,
+  showSatellites: false,
   autoRefresh: true,
   defaultRange: "24h",
   defaultCategories: [...EVENT_CATEGORIES],

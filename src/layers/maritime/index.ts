@@ -1,13 +1,16 @@
 /**
- * AIS vessel positions via AISStream.io (free API key required: AISSTREAM_API_KEY).
+ * AIS vessel positions. With AISSTREAM_API_KEY: AISStream.io (global
+ * terrestrial AIS). Without a key: Fintraffic Digitraffic marine (keyless,
+ * CC BY 4.0, Finnish coastal receivers — Baltic Sea only).
  *
  * AISStream is a websocket stream, so this layer keeps a connection open while
  * the layer is being viewed (closing it after 10 idle minutes) and serves the
  * latest position per vessel from memory.
  */
-import type { LiveLayerProvider } from "../types";
-import { parseAisMessage } from "./parser";
-import type { AisStreamMessage, MaritimeData, VesselRow } from "./types";
+import { httpGet } from "@/data-sources/types";
+import type { LayerContext, LayerSnapshot, LiveLayerProvider } from "../types";
+import { parseAisMessage, parseDigitraffic } from "./parser";
+import type { AisStreamMessage, DigitrafficLocations, DigitrafficVessel, MaritimeData, VesselRow } from "./types";
 
 const STREAM_URL = "wss://stream.aisstream.io/v0/stream";
 const MAX_VESSELS = 40_000;
@@ -70,15 +73,56 @@ function connect(apiKey: string) {
   state.idleTimer.unref?.();
 }
 
+// ---- keyless fallback: Fintraffic Digitraffic marine (Finland / Baltic Sea) ----
+
+const DT_BASE = "https://meri.digitraffic.fi/api/ais/v1";
+const DT_META_TTL_MS = 30 * 60_000;
+const DT_MAX_AGE_MS = 60 * 60_000;
+export const DIGITRAFFIC_ATTRIBUTION = "AIS: Fintraffic / digitraffic.fi, CC BY 4.0";
+
+const gm = globalThis as unknown as { __worldviewDtMeta?: { rows: DigitrafficVessel[]; fetchedAt: number } };
+const dtMeta = (gm.__worldviewDtMeta ??= { rows: [], fetchedAt: 0 });
+
+async function loadDigitraffic(ctx: LayerContext): Promise<LayerSnapshot<MaritimeData>> {
+  // Digitraffic asks every client to identify itself with a Digitraffic-User header.
+  const headers = { "Digitraffic-User": "WorldView/0.1", "Accept-Encoding": "gzip" };
+  if (ctx.now - dtMeta.fetchedAt > DT_META_TTL_MS) {
+    try {
+      const res = await httpGet(`${DT_BASE}/vessels`, ctx, { headers });
+      const rows = (await res.json()) as DigitrafficVessel[];
+      if (Array.isArray(rows)) Object.assign(dtMeta, { rows, fetchedAt: ctx.now });
+    } catch {
+      /* metadata is optional: positions still render without names/types */
+    }
+  }
+  const loc = (await (await httpGet(`${DT_BASE}/locations`, ctx, { headers })).json()) as DigitrafficLocations;
+  const rows = parseDigitraffic(loc, dtMeta.rows, DT_MAX_AGE_MS, ctx.now);
+  return {
+    layerId: "maritime",
+    observedAt: loc.dataUpdatedTime ?? new Date(ctx.now).toISOString(),
+    retrievedAt: new Date(ctx.now).toISOString(),
+    count: rows.length,
+    data: { fields: FIELDS, rows, source: "digitraffic" },
+    attribution: DIGITRAFFIC_ATTRIBUTION,
+    notes: [
+      "Keyless regional feed: Finnish coastal AIS receivers (Gulf of Finland, Gulf of Bothnia, northern Baltic). Set AISSTREAM_API_KEY for global terrestrial AIS.",
+      `Vessels reporting within the last ${DT_MAX_AGE_MS / 60_000} minutes; refreshed at most once a minute.`,
+    ],
+  };
+}
+
+const FIELDS = ["mmsi", "name", "lon", "lat", "sog_kn", "cog_deg", "heading_deg", "nav_status", "observed_at", "ship_type", "destination"];
+
 export const maritimeLayer: LiveLayerProvider<MaritimeData> = {
   id: "maritime",
-  name: "Vessels (AISStream)",
-  description: "Live AIS ship positions from the AISStream.io terrestrial receiver network. Requires a free AISSTREAM_API_KEY.",
-  homepage: "https://aisstream.io/",
-  attribution: "AIS data © AISStream.io",
+  name: "Vessels (AIS)",
+  description:
+    "Live AIS ship positions. With a free AISSTREAM_API_KEY: the global AISStream.io terrestrial network; without one: the keyless Fintraffic Digitraffic feed (Finland / Baltic Sea).",
+  homepage: "https://www.digitraffic.fi/en/marine-traffic/",
+  attribution: `AIS data © AISStream.io, or ${DIGITRAFFIC_ATTRIBUTION}`,
   ttlMs: 60_000,
-  checkConfiguration: (env) => (env.AISSTREAM_API_KEY ? null : "AISSTREAM_API_KEY is not set (free key at aisstream.io)"),
   async load(ctx) {
+    if (!ctx.env.AISSTREAM_API_KEY) return loadDigitraffic(ctx);
     state.lastRequest = ctx.now;
     connect(ctx.env.AISSTREAM_API_KEY!);
     if (state.error) throw new Error(state.error);
@@ -89,8 +133,8 @@ export const maritimeLayer: LiveLayerProvider<MaritimeData> = {
       observedAt: new Date(state.lastMessage || ctx.now).toISOString(),
       retrievedAt: new Date(ctx.now).toISOString(),
       count: rows.length,
-      data: { fields: ["mmsi", "name", "lon", "lat", "sog_kn", "cog_deg", "heading_deg", "nav_status", "observed_at"], rows },
-      attribution: this.attribution,
+      data: { fields: FIELDS, rows, source: "aisstream" },
+      attribution: "AIS data © AISStream.io",
       notes: [
         rows.length === 0 ? "Stream connecting — vessels appear as position reports arrive (usually within a minute)." : `Vessels reporting within the last ${MAX_AGE_MS / 60_000} minutes.`,
         "Terrestrial AIS: strong near coasts, sparse in open ocean.",

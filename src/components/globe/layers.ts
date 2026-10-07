@@ -10,6 +10,7 @@ import { CATEGORY_LIST } from "@/lib/categories";
 import type { MapMode } from "@/lib/store/ui";
 import type { EventSummary } from "@/types/events";
 import { FONT_BOLD, FONT_REGULAR } from "./style";
+import { SHIP_COLORS } from "@/layers/maritime/parser";
 
 export const EVENTS_SOURCE = "events";
 /** Same events without clustering, for magnitude/intensity styled modes */
@@ -39,6 +40,13 @@ export const AURORA_STOPS: Array<[number, string]> = [
   [70, "#ff922b"],
   [90, "#f03e3e"],
 ];
+export const MIL_SOURCE = "mil-aircraft";
+export const MIL_COLOR = "#ff8c42";
+export const MIL_LAYER_IDS = ["mil-aircraft", "mil-label"];
+export const SAT_SOURCE = "satellites";
+export const SAT_TRACK_SOURCE = "sat-track";
+export const SAT_COLORS = { stations: "#ffb703", gps: "#69db7c", visual: "#a5d8ff" } as const;
+export const SAT_LAYER_IDS = ["sat-track", "sat-point", "sat-selected", "sat-label"];
 export const ISS_LAYER_IDS = ["iss-track-past", "iss-track-future", "iss-halo", "iss-point", "iss-label"];
 export const AURORA_LAYER_IDS = ["aurora"];
 
@@ -241,8 +249,9 @@ export function liveLayers(): LayerSpecification[] {
         "icon-ignore-placement": true,
       },
       paint: {
-        "icon-color": ["case", [">", ["coalesce", ["get", "sog"], 0], 0.5], "#4dd4ff", "#6c7a89"],
-        "icon-opacity": 0.85,
+        // Colour by AIS ship category; stationary vessels (< 0.5 kn) are dimmed.
+        "icon-color": ["match", ["get", "cat"], ...Object.entries(SHIP_COLORS).flat(), SHIP_COLORS.other] as unknown as ExpressionSpecification,
+        "icon-opacity": ["case", [">", ["coalesce", ["get", "sog"], 0], 0.5], 0.95, 0.5],
       },
     },
   ];
@@ -627,6 +636,99 @@ export function auroraLayers(): LayerSpecification[] {
         "circle-opacity": ["interpolate", ["linear"], ["get", "p"], 10, 0.22, 50, 0.45, 90, 0.6],
         "circle-pitch-alignment": "map",
       },
+    },
+  ];
+}
+
+/** adsb.lol military-flagged aircraft: orange arrows with callsigns from zoom 4. Hidden until toggled. */
+export function milLayers(): LayerSpecification[] {
+  return [
+    {
+      id: "mil-aircraft",
+      type: "symbol",
+      source: MIL_SOURCE,
+      layout: {
+        visibility: "none",
+        "icon-image": "arrow",
+        "icon-size": ["interpolate", ["linear"], ["zoom"], 1, 0.38, 6, 0.7],
+        "icon-rotate": ["coalesce", ["get", "track"], 0],
+        "icon-rotation-alignment": "map",
+        "icon-allow-overlap": true,
+        "icon-ignore-placement": true,
+      },
+      paint: { "icon-color": MIL_COLOR, "icon-opacity": ["case", ["get", "onGround"], 0.5, 0.95] },
+    },
+    {
+      id: "mil-label",
+      type: "symbol",
+      source: MIL_SOURCE,
+      minzoom: 4,
+      layout: {
+        visibility: "none",
+        "text-field": ["coalesce", ["get", "label"], ""],
+        "text-font": FONT_REGULAR,
+        "text-size": 10,
+        "text-offset": [0, 1.1],
+        "text-anchor": "top",
+        "text-optional": true,
+      },
+      paint: { "text-color": MIL_COLOR, "text-halo-color": "#05070a", "text-halo-width": 1.1 },
+    },
+  ];
+}
+
+/** Satellites (SGP4 in the browser): points by group, the selected one's orbit track and a label. Hidden until toggled. */
+export function satelliteLayers(): LayerSpecification[] {
+  const groupColor = ["match", ["get", "group"], "stations", SAT_COLORS.stations, "gps", SAT_COLORS.gps, SAT_COLORS.visual] as unknown as ExpressionSpecification;
+  return [
+    {
+      id: "sat-track",
+      type: "line",
+      source: SAT_TRACK_SOURCE,
+      layout: { visibility: "none", "line-cap": "round" },
+      paint: {
+        "line-color": ["coalesce", ["get", "color"], SAT_COLORS.visual],
+        "line-width": 1.4,
+        "line-opacity": ["case", ["==", ["get", "part"], "past"], 0.45, 0.85],
+        "line-dasharray": [3, 2],
+      },
+    },
+    {
+      id: "sat-point",
+      type: "circle",
+      source: SAT_SOURCE,
+      layout: { visibility: "none" },
+      paint: {
+        "circle-color": groupColor,
+        "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, ["case", ["==", ["get", "group"], "stations"], 3.6, 2.4], 6, 5],
+        "circle-stroke-color": "#05070a",
+        "circle-stroke-width": 0.8,
+        "circle-opacity": 0.95,
+      },
+    },
+    {
+      id: "sat-selected",
+      type: "circle",
+      source: SAT_SOURCE,
+      filter: ["==", ["get", "id"], -1],
+      layout: { visibility: "none" },
+      paint: { "circle-color": "rgba(0,0,0,0)", "circle-radius": 8, "circle-stroke-color": "#ffffff", "circle-stroke-width": 1.6 },
+    },
+    {
+      id: "sat-label",
+      type: "symbol",
+      source: SAT_SOURCE,
+      filter: ["any", ["==", ["get", "group"], "stations"], ["==", ["get", "selected"], true]],
+      layout: {
+        visibility: "none",
+        "text-field": ["get", "name"],
+        "text-font": FONT_REGULAR,
+        "text-size": 10,
+        "text-offset": [0, 0.9],
+        "text-anchor": "top",
+        "text-optional": true,
+      },
+      paint: { "text-color": groupColor, "text-halo-color": "#05070a", "text-halo-width": 1.1 },
     },
   ];
 }

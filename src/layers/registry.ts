@@ -8,8 +8,20 @@ import { marketsLayer } from "./markets";
 import { camerasLayer } from "./cameras";
 import { issLayer } from "./iss";
 import { auroraLayer } from "./aurora";
+import { militaryAircraftLayer } from "./military-aircraft";
+import { satellitesLayer } from "./satellites";
 
-export const LAYERS = [weatherRadarLayer, aviationLayer, maritimeLayer, marketsLayer, camerasLayer, issLayer, auroraLayer] as LiveLayerProvider<unknown>[];
+export const LAYERS = [
+  weatherRadarLayer,
+  aviationLayer,
+  maritimeLayer,
+  marketsLayer,
+  camerasLayer,
+  issLayer,
+  auroraLayer,
+  militaryAircraftLayer,
+  satellitesLayer,
+] as LiveLayerProvider<unknown>[];
 
 interface CacheEntry {
   snapshot: LayerSnapshot | null;

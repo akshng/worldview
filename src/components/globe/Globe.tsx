@@ -4,7 +4,7 @@
  * Rendering is fully WebGL: clustering, points, heatmap and country hit-testing
  * happen in map layers — never as DOM markers.
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { GeoJSONSource, Map as MlMap, MapGeoJSONFeature, PointLike, Popup } from "maplibre-gl";
 import { getMaplibre } from "./maplibre";
 import { basemapVisibility, buildStyle, IMAGERY_TOP, labelLayers } from "./style";
@@ -44,7 +44,21 @@ import {
   SEARCH_PIN_SOURCE,
   searchPinCollection,
   searchPinLayers,
+  MIL_COLOR,
+  MIL_LAYER_IDS,
+  MIL_SOURCE,
+  milLayers,
+  SAT_COLORS,
+  SAT_LAYER_IDS,
+  SAT_SOURCE,
+  SAT_TRACK_SOURCE,
+  satelliteLayers,
 } from "./layers";
+import { milFeatures, prepareSats, satFeatures, satTrackFeatures, vesselFeatures } from "./tracking";
+import { TrackingLegend } from "./TrackingLegend";
+import type { MilitaryAircraftData } from "@/layers/military-aircraft/parser";
+import type { SatellitesData } from "@/layers/satellites/parser";
+import { navStatusLabel } from "@/layers/maritime/parser";
 import { issFeatures, type IssData } from "@/layers/iss";
 import { auroraFeatures, type AuroraData } from "@/layers/aurora";
 import type { LiveLayerResponse } from "@/lib/client/use-live-layer";
@@ -114,6 +128,15 @@ export default function Globe({ window: win, live }: GlobeProps) {
   const iss = useLiveLayer<IssData>(showIss ? "iss" : null, 5_000, { pauseWhenHidden: true });
   const aurora = useLiveLayer<AuroraData>(showAurora ? "aurora" : null, 10 * 60_000, { pauseWhenHidden: true });
   const auroraRef = useRef<AuroraData | null>(null);
+  // Live tracking overlays: each fetches only while toggled on and the tab is visible.
+  const showShips = useUI((s) => s.settings.showShips);
+  const showMilAir = useUI((s) => s.settings.showMilAir);
+  const showSatellites = useUI((s) => s.settings.showSatellites);
+  // In Maritime mode the mode already polls the same (server-cached) layer.
+  const ships = useLiveLayer<MaritimeData>(showShips && mapMode !== "maritime" ? "maritime" : null, 60_000, { pauseWhenHidden: true });
+  const mil = useLiveLayer<MilitaryAircraftData>(showMilAir ? "military-aircraft" : null, 30_000, { pauseWhenHidden: true });
+  const sats = useLiveLayer<SatellitesData>(showSatellites ? "satellites" : null, 30 * 60_000, { pauseWhenHidden: true });
+  const [selectedSat, setSelectedSat] = useState<number | null>(null);
   const wantIdsRef = useRef<Set<string>>(new Set());
   const satSource = useUI((s) => s.settings.satSource);
   const hiresProvider = useUI((s) => s.settings.hiresProvider);
@@ -207,6 +230,11 @@ export default function Globe({ window: win, live }: GlobeProps) {
       map.addSource(ISS_TRACK_SOURCE, { type: "geojson", data: EMPTY_FC });
       map.addSource(ISS_SOURCE, { type: "geojson", data: EMPTY_FC });
       for (const l of issLayers()) map.addLayer(l);
+      map.addSource(MIL_SOURCE, { type: "geojson", data: EMPTY_FC });
+      for (const l of milLayers()) map.addLayer(l);
+      map.addSource(SAT_TRACK_SOURCE, { type: "geojson", data: EMPTY_FC });
+      map.addSource(SAT_SOURCE, { type: "geojson", data: EMPTY_FC });
+      for (const l of satelliteLayers()) map.addLayer(l);
       for (const l of labelLayers()) map.addLayer(l);
       map.addSource(SEARCH_PIN_SOURCE, { type: "geojson", data: searchPinCollection(useUI.getState().searchPin) });
       for (const l of searchPinLayers()) map.addLayer(l);
@@ -256,7 +284,34 @@ export default function Globe({ window: win, live }: GlobeProps) {
       }
       if (f.layer.id === "vessels") {
         const sog = typeof p.sog === "number" ? `${p.sog} kn` : "speed n/a";
-        return popupLines(coords, { text: "Vessel", color: "#4dd4ff" }, String(p.name || `MMSI ${p.mmsi}`), [`MMSI ${p.mmsi}`, sog].join(" · "));
+        const hdg = typeof p.heading === "number" ? `${Math.round(p.heading)}°` : null;
+        const cat = p.cat && p.cat !== "other" ? String(p.cat) : null;
+        const nav = navStatusLabel(typeof p.nav === "number" ? p.nav : null);
+        return popupLines(
+          coords,
+          { text: cat ? `Vessel · ${cat}` : "Vessel", color: "#4dd4ff" },
+          String(p.name || `MMSI ${p.mmsi}`),
+          [`MMSI ${p.mmsi}`, sog, hdg, nav, p.dest ? `→ ${p.dest}` : null].filter(Boolean).join(" · "),
+        );
+      }
+      if (f.layer.id === "mil-aircraft") {
+        const alt = p.onGround ? "on ground" : typeof p.alt === "number" ? `${Math.round(p.alt).toLocaleString("en-US")} ft` : "altitude n/a";
+        const gs = typeof p.gs === "number" ? `${p.gs} kt` : null;
+        return popupLines(
+          coords,
+          { text: "Military-flagged aircraft (ADS-B)", color: MIL_COLOR },
+          String(p.callsign || p.reg || p.hex),
+          [p.type || "type n/a", alt, gs, p.reg && p.callsign ? String(p.reg) : null, `hex ${p.hex}`].filter(Boolean).join(" · "),
+        );
+      }
+      if (f.layer.id === "sat-point") {
+        const group = p.group === "stations" ? "Space station" : p.group === "gps" ? "GPS satellite" : "Satellite";
+        return popupLines(
+          coords,
+          { text: `${group} · click for orbit`, color: SAT_COLORS[p.group as keyof typeof SAT_COLORS] ?? SAT_COLORS.visual },
+          String(p.name),
+          `${Number(p.altKm).toLocaleString("en-US")} km · ${p.speedKms} km/s · period ${p.periodMin} min · NORAD ${p.id}`,
+        );
       }
       if (f.layer.id === "cam-point") {
         return p.live
@@ -297,7 +352,7 @@ export default function Globe({ window: win, live }: GlobeProps) {
       );
     };
 
-    const INTERACTIVE = [...EVENT_POINT_LAYERS, "ev-cluster", "cam-point", "cam-cluster", "aircraft", "vessels", "iss-point", "density-fill", "aurora"];
+    const INTERACTIVE = [...EVENT_POINT_LAYERS, "ev-cluster", "cam-point", "cam-cluster", "aircraft", "vessels", "mil-aircraft", "sat-point", "iss-point", "density-fill", "aurora"];
     const hitAt = (pt: PointLike) =>
       map.queryRenderedFeatures(pt, { layers: INTERACTIVE.filter((l) => map.getLayer(l)) })[0];
 
@@ -423,6 +478,10 @@ export default function Globe({ window: win, live }: GlobeProps) {
         map.easeTo({ center: e.lngLat, zoom: Math.max(map.getZoom() + 1.5, 4), duration: 700 });
         return;
       }
+      if (hit?.layer.id === "sat-point") {
+        setSelectedSat(Number(hit.properties.id));
+        return;
+      }
       if (hit) return; // aircraft / vessels / ISS: popup only
       if (map.getZoom() >= REGION_ZOOM && ui.mapMode !== "markets" && map.getLayer("region-fill")) {
         const region = map.queryRenderedFeatures(e.point, { layers: ["region-fill"] })[0];
@@ -467,7 +526,8 @@ export default function Globe({ window: win, live }: GlobeProps) {
     const map = liveMap();
     if (!ready || !map) return;
     const aircraft = live?.layerId === "aviation" ? (live.data as AviationData) : null;
-    const vessels = live?.layerId === "maritime" ? (live.data as MaritimeData) : null;
+    // Vessels come from the Maritime mode, or from the SHIP overlay in any other mode.
+    const vessels = live?.layerId === "maritime" ? (live.data as MaritimeData) : showShips ? (ships.data?.data ?? null) : null;
     (map.getSource(AIRCRAFT_SOURCE) as GeoJSONSource | undefined)?.setData(
       aircraft
         ? {
@@ -480,19 +540,44 @@ export default function Globe({ window: win, live }: GlobeProps) {
           }
         : EMPTY_FC,
     );
-    (map.getSource(VESSELS_SOURCE) as GeoJSONSource | undefined)?.setData(
-      vessels
-        ? {
-            type: "FeatureCollection",
-            features: vessels.rows.map(([mmsi, name, lon, lat, sog, cog, heading]) => ({
-              type: "Feature",
-              geometry: { type: "Point", coordinates: [lon, lat] },
-              properties: { mmsi, name, sog, heading: heading ?? cog },
-            })),
-          }
-        : EMPTY_FC,
-    );
-  }, [live, ready]);
+    (map.getSource(VESSELS_SOURCE) as GeoJSONSource | undefined)?.setData(vessels ? vesselFeatures(vessels) : EMPTY_FC);
+  }, [live, showShips, ships.data, ready]);
+
+  // ---- military-flagged aircraft (adsb.lol) ------------------------------------
+  useEffect(() => {
+    const map = liveMap();
+    if (!ready || !map) return;
+    for (const id of MIL_LAYER_IDS) if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", showMilAir ? "visible" : "none");
+    const data = showMilAir ? (mil.data?.data ?? null) : null;
+    (map.getSource(MIL_SOURCE) as GeoJSONSource | undefined)?.setData(data ? milFeatures(data) : EMPTY_FC);
+  }, [showMilAir, mil.data, ready]);
+
+  // ---- satellites: SGP4 in the browser, positions every 2 s, track every 30 s ----
+  const preparedSats = useMemo(() => (showSatellites && sats.data ? prepareSats(sats.data.data.sats) : []), [showSatellites, sats.data]);
+  useEffect(() => {
+    const map = liveMap();
+    if (!ready || !map) return;
+    for (const id of SAT_LAYER_IDS) if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", showSatellites ? "visible" : "none");
+    const pts = map.getSource(SAT_SOURCE) as GeoJSONSource | undefined;
+    const track = map.getSource(SAT_TRACK_SOURCE) as GeoJSONSource | undefined;
+    if (!showSatellites || !preparedSats.length) {
+      pts?.setData(EMPTY_FC);
+      track?.setData(EMPTY_FC);
+      return;
+    }
+    const sel = preparedSats.find((s) => s.el.id === selectedSat) ?? null;
+    map.setFilter("sat-selected", ["==", ["get", "id"], sel ? sel.el.id : -1]);
+    let tick = 0;
+    const update = () => {
+      if (document.hidden) return;
+      const now = Date.now();
+      pts?.setData(satFeatures(preparedSats, now, selectedSat));
+      if (tick++ % 15 === 0) track?.setData(sel ? satTrackFeatures(sel, now, SAT_COLORS[sel.el.group]) : EMPTY_FC);
+    };
+    update();
+    const t = setInterval(update, 2_000);
+    return () => clearInterval(t);
+  }, [showSatellites, preparedSats, selectedSat, ready]);
 
   // ---- public cameras ---------------------------------------------------------
   useEffect(() => {
@@ -680,8 +765,9 @@ export default function Globe({ window: win, live }: GlobeProps) {
     if (!ready || !map) return;
     const visibleLayers = new Set(MODE_LAYERS[mapMode] ?? MODE_LAYERS.events);
     map.setLayoutProperty("ev-label", "visibility", showLabels && visibleLayers.has("ev-point") ? "visible" : "none");
+    if (showShips) visibleLayers.add("vessels"); // SHIP overlay works in every mode
     for (const l of ALL_MODE_LAYERS) if (map.getLayer(l)) map.setLayoutProperty(l, "visibility", visibleLayers.has(l) ? "visible" : "none");
-  }, [showLabels, mapMode, ready]);
+  }, [showLabels, mapMode, showShips, ready]);
 
   // ---- selection highlight ------------------------------------------------
   useEffect(() => {
@@ -763,8 +849,47 @@ export default function Globe({ window: win, live }: GlobeProps) {
           </div>
         )}
         {(showIss || showAurora) && <SpaceLegend iss={showIss ? iss : null} aurora={showAurora ? aurora : null} />}
+        {(showShips || showMilAir || showSatellites) && (
+          <TrackingLegend
+            ships={
+              !showShips
+                ? null
+                : mapMode === "maritime"
+                  ? { data: live?.layerId === "maritime" ? (live as LiveLayerResponse<MaritimeData>) : null, error: null, loading: !live }
+                  : ships
+            }
+            mil={showMilAir ? mil : null}
+            sats={showSatellites ? sats : null}
+            selectedSat={preparedSats.find((s) => s.el.id === selectedSat)?.el ?? null}
+            onClearSat={() => setSelectedSat(null)}
+          />
+        )}
       </div>
       <div className="absolute right-3 bottom-[118px] flex flex-col overflow-hidden rounded-md glass">
+        <MapButton
+          title={showShips ? "Hide ships (AIS)" : "Show ships (AIS vessel positions)"}
+          onClick={() => useUI.getState().updateSettings({ showShips: !showShips })}
+          active={showShips}
+        >
+          <span className="text-[9px] font-semibold tracking-wide">{showShips && ships.loading && !ships.data && mapMode !== "maritime" ? "…" : "SHIP"}</span>
+        </MapButton>
+        <MapButton
+          title={showMilAir ? "Hide military-flagged aircraft" : "Show aircraft broadcasting ADS-B identified as military (adsb.lol)"}
+          onClick={() => useUI.getState().updateSettings({ showMilAir: !showMilAir })}
+          active={showMilAir}
+        >
+          <span className="text-[10px] font-semibold tracking-wide">{showMilAir && mil.loading && !mil.data ? "…" : "MIL"}</span>
+        </MapButton>
+        <MapButton
+          title={showSatellites ? "Hide satellites" : "Show satellites and orbits (CelesTrak + SGP4)"}
+          onClick={() => {
+            if (showSatellites) setSelectedSat(null);
+            useUI.getState().updateSettings({ showSatellites: !showSatellites });
+          }}
+          active={showSatellites}
+        >
+          <span className="block text-[8px] leading-[9px] font-semibold tracking-wide">{showSatellites && sats.loading && !sats.data ? "…" : <>SAT<br />ORB</>}</span>
+        </MapButton>
         <MapButton
           title={showIss ? "Hide International Space Station" : "Show International Space Station position and ground track"}
           onClick={() => useUI.getState().updateSettings({ showIss: !showIss })}
