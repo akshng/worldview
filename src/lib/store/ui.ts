@@ -20,6 +20,10 @@ export interface Settings {
   showDayNight: boolean;
   /** Public camera markers on the map */
   showCameras: boolean;
+  /** ISS position + ground track overlay */
+  showIss: boolean;
+  /** NOAA OVATION aurora forecast overlay */
+  showAurora: boolean;
   autoRefresh: boolean;
   defaultRange: PresetRangeId;
   defaultCategories: EventCategory[];
@@ -131,6 +135,8 @@ const DEFAULT_SETTINGS: Settings = {
   showEventLabels: false,
   showDayNight: true,
   showCameras: false,
+  showIss: false,
+  showAurora: false,
   autoRefresh: true,
   defaultRange: "24h",
   defaultCategories: [...EVENT_CATEGORIES],

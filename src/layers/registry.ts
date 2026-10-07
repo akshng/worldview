@@ -6,8 +6,10 @@ import { maritimeLayer } from "./maritime";
 import { weatherRadarLayer } from "./weather-radar";
 import { marketsLayer } from "./markets";
 import { camerasLayer } from "./cameras";
+import { issLayer } from "./iss";
+import { auroraLayer } from "./aurora";
 
-export const LAYERS = [weatherRadarLayer, aviationLayer, maritimeLayer, marketsLayer, camerasLayer] as LiveLayerProvider<unknown>[];
+export const LAYERS = [weatherRadarLayer, aviationLayer, maritimeLayer, marketsLayer, camerasLayer, issLayer, auroraLayer] as LiveLayerProvider<unknown>[];
 
 interface CacheEntry {
   snapshot: LayerSnapshot | null;

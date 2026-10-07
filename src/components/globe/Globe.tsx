@@ -28,7 +28,19 @@ import {
   liveLayers,
   modeLayers,
   nightLayer,
-  toFeatureCollection, CAMERAS_SOURCE, CAMERA_COLOR, cameraLayers, REGIONS_SOURCE, regionLayers } from "./layers";
+  toFeatureCollection, CAMERAS_SOURCE, CAMERA_COLOR, cameraLayers, REGIONS_SOURCE, regionLayers,
+  AURORA_LAYER_IDS,
+  AURORA_SOURCE,
+  AURORA_STOPS,
+  ISS_COLOR,
+  ISS_LAYER_IDS,
+  ISS_SOURCE,
+  ISS_TRACK_SOURCE,
+  auroraLayers,
+  issLayers,
+} from "./layers";
+import { issFeatures, type IssData } from "@/layers/iss";
+import { auroraFeatures, type AuroraData } from "@/layers/aurora";
 import type { LiveLayerResponse } from "@/lib/client/use-live-layer";
 import type { AviationData } from "@/layers/aviation/types";
 import type { MaritimeData } from "@/layers/maritime/types";
@@ -89,6 +101,11 @@ export default function Globe({ window: win, live }: GlobeProps) {
   const radarPlaying = useUI((s) => s.radarPlaying);
   const showCameras = useUI((s) => s.settings.showCameras);
   const cameras = useLiveLayer<CamerasData>(showCameras ? "cameras" : null, 30 * 60_000);
+  const showIss = useUI((s) => s.settings.showIss);
+  const showAurora = useUI((s) => s.settings.showAurora);
+  const iss = useLiveLayer<IssData>(showIss ? "iss" : null, 5_000, { pauseWhenHidden: true });
+  const aurora = useLiveLayer<AuroraData>(showAurora ? "aurora" : null, 10 * 60_000, { pauseWhenHidden: true });
+  const auroraRef = useRef<AuroraData | null>(null);
 
   // ---- init -------------------------------------------------------------
   useEffect(() => {
@@ -127,6 +144,8 @@ export default function Globe({ window: win, live }: GlobeProps) {
 
       map.addSource(COUNTRIES_SOURCE, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
       for (const l of countryLayers()) map.addLayer(l);
+      map.addSource(AURORA_SOURCE, { type: "geojson", data: EMPTY_FC });
+      for (const l of auroraLayers()) map.addLayer(l);
       map.addSource(REGIONS_SOURCE, { type: "geojson", data: EMPTY_FC });
       for (const l of regionLayers(REGION_ZOOM)) map.addLayer(l);
       // States/provinces load the first time the map is zoomed in far enough.
@@ -164,6 +183,9 @@ export default function Globe({ window: win, live }: GlobeProps) {
       for (const l of liveLayers()) map.addLayer(l);
       map.addSource(CAMERAS_SOURCE, { type: "geojson", data: EMPTY_FC, cluster: true, clusterRadius: 38, clusterMaxZoom: 11 });
       for (const l of cameraLayers()) map.addLayer(l);
+      map.addSource(ISS_TRACK_SOURCE, { type: "geojson", data: EMPTY_FC });
+      map.addSource(ISS_SOURCE, { type: "geojson", data: EMPTY_FC });
+      for (const l of issLayers()) map.addLayer(l);
       for (const l of labelLayers()) map.addLayer(l);
 
       // Country polygons are large; load after first paint.
@@ -219,6 +241,21 @@ export default function Globe({ window: win, live }: GlobeProps) {
       if (f.layer.id === "cam-cluster") {
         return popupLines(coords, { text: "Cameras", color: CAMERA_COLOR }, `${p.point_count} public cameras`, "Click to zoom in");
       }
+      if (f.layer.id === "iss-point") {
+        const sunlit = p.visibility === "daylight" ? "station in sunlight" : p.visibility === "eclipsed" ? "station in Earth's shadow" : null;
+        const ground = p.groundDaylight === true ? "daytime below" : p.groundDaylight === false ? "night below" : null;
+        return popupLines(
+          coords,
+          { text: "International Space Station", color: ISS_COLOR },
+          `${Math.round(Number(p.altKm))} km altitude · ${Math.round(Number(p.speedKmh)).toLocaleString("en-US")} km/h`,
+          [sunlit, ground, `computed from orbital elements · ${relativeTime(String(p.time))}`].filter(Boolean).join(" · "),
+        );
+      }
+      if (f.layer.id === "aurora") {
+        const a = auroraRef.current;
+        const at = a?.forecastTime ? new Date(a.forecastTime).toISOString().slice(11, 16) + " UTC" : "time n/a";
+        return popupLines(coords, { text: "Aurora forecast", color: "#2fbf71" }, `${p.p}% chance of visible aurora`, `NOAA OVATION model forecast for ${at}`);
+      }
       if (f.layer.id === "density-fill") {
         // Polygon cell: caller re-anchors the popup at the cursor.
         return popupLines(coords, { text: "Density", color: "#2f9bbf" }, `${p.count} event${p.count === 1 ? "" : "s"} in this cell`, `Highest importance ${p.maxImp}`);
@@ -235,7 +272,7 @@ export default function Globe({ window: win, live }: GlobeProps) {
       );
     };
 
-    const INTERACTIVE = [...EVENT_POINT_LAYERS, "ev-cluster", "cam-point", "cam-cluster", "aircraft", "vessels", "density-fill"];
+    const INTERACTIVE = [...EVENT_POINT_LAYERS, "ev-cluster", "cam-point", "cam-cluster", "aircraft", "vessels", "iss-point", "density-fill", "aurora"];
     const hitAt = (pt: PointLike) =>
       map.queryRenderedFeatures(pt, { layers: INTERACTIVE.filter((l) => map.getLayer(l)) })[0];
 
@@ -244,7 +281,7 @@ export default function Globe({ window: win, live }: GlobeProps) {
       map.getCanvas().style.cursor = top ? "pointer" : "";
       if (top && top.layer.id !== "ev-cluster") {
         showPopup(top);
-        if (top.layer.id === "density-fill") popupRef.current?.setLngLat(e.lngLat);
+        if (top.layer.id === "density-fill" || top.layer.id === "aurora") popupRef.current?.setLngLat(e.lngLat);
       } else {
         popupRef.current?.remove();
       }
@@ -292,7 +329,9 @@ export default function Globe({ window: win, live }: GlobeProps) {
     });
 
     map.on("click", async (e) => {
-      const hit = hitAt(e.point);
+      const top = hitAt(e.point);
+      // The aurora overlay is hover-only; clicks pass through to countries/regions.
+      const hit = top?.layer.id === "aurora" ? undefined : top;
       const ui = useUI.getState();
       if (hit && EVENT_POINT_LAYERS.includes(hit.layer.id)) {
         ui.selectEvent(String(hit.properties.id));
@@ -357,7 +396,7 @@ export default function Globe({ window: win, live }: GlobeProps) {
         map.easeTo({ center: e.lngLat, zoom: Math.max(map.getZoom() + 1.5, 4), duration: 700 });
         return;
       }
-      if (hit) return; // aircraft / vessels: popup only
+      if (hit) return; // aircraft / vessels / ISS: popup only
       if (map.getZoom() >= REGION_ZOOM && ui.mapMode !== "markets" && map.getLayer("region-fill")) {
         const region = map.queryRenderedFeatures(e.point, { layers: ["region-fill"] })[0];
         if (region?.id !== undefined) {
@@ -448,6 +487,26 @@ export default function Globe({ window: win, live }: GlobeProps) {
         : EMPTY_FC,
     );
   }, [showCameras, cameras.data, ready]);
+
+  // ---- space overlays (ISS, aurora) — independent of map modes ----------------
+  useEffect(() => {
+    const map = liveMap();
+    if (!ready || !map) return;
+    for (const id of ISS_LAYER_IDS) if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", showIss ? "visible" : "none");
+    const data = showIss ? (iss.data?.data ?? null) : null;
+    const fc = data ? issFeatures(data) : null;
+    (map.getSource(ISS_SOURCE) as GeoJSONSource | undefined)?.setData(fc?.point ?? EMPTY_FC);
+    (map.getSource(ISS_TRACK_SOURCE) as GeoJSONSource | undefined)?.setData(fc?.track ?? EMPTY_FC);
+  }, [showIss, iss.data, ready]);
+
+  useEffect(() => {
+    const map = liveMap();
+    if (!ready || !map) return;
+    for (const id of AURORA_LAYER_IDS) if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", showAurora ? "visible" : "none");
+    const data = showAurora ? (aurora.data?.data ?? null) : null;
+    auroraRef.current = data;
+    (map.getSource(AURORA_SOURCE) as GeoJSONSource | undefined)?.setData(data ? auroraFeatures(data) : EMPTY_FC);
+  }, [showAurora, aurora.data, ready]);
 
   // ---- markets choropleth -----------------------------------------------------
   const marketStateIds = useRef<number[]>([]);
@@ -599,7 +658,24 @@ export default function Globe({ window: win, live }: GlobeProps) {
           Map could not be initialised: {mapError}
         </div>
       )}
+      {(showIss || showAurora) && (
+        <SpaceLegend iss={showIss ? iss : null} aurora={showAurora ? aurora : null} />
+      )}
       <div className="absolute right-3 bottom-[118px] flex flex-col overflow-hidden rounded-md glass">
+        <MapButton
+          title={showIss ? "Hide International Space Station" : "Show International Space Station position and ground track"}
+          onClick={() => useUI.getState().updateSettings({ showIss: !showIss })}
+          active={showIss}
+        >
+          <span className="text-[10px] font-semibold tracking-wide">{showIss && iss.loading && !iss.data ? "…" : "ISS"}</span>
+        </MapButton>
+        <MapButton
+          title={showAurora ? "Hide aurora forecast" : "Show aurora forecast (NOAA OVATION)"}
+          onClick={() => useUI.getState().updateSettings({ showAurora: !showAurora })}
+          active={showAurora}
+        >
+          <span className="text-[10px] font-semibold tracking-wide">{showAurora && aurora.loading && !aurora.data ? "…" : "AUR"}</span>
+        </MapButton>
         <MapButton
           title={showCameras ? `Hide public cameras${cameras.data ? ` (${cameras.data.count.toLocaleString("en-US")})` : ""}` : "Show public cameras"}
           onClick={() => useUI.getState().updateSettings({ showCameras: !showCameras })}
@@ -623,6 +699,60 @@ export default function Globe({ window: win, live }: GlobeProps) {
           ⌂
         </MapButton>
       </div>
+    </div>
+  );
+}
+
+type LayerState<T> = { data: LiveLayerResponse<T> | null; error: string | null; loading: boolean };
+
+/** Small key for the space overlays: what is forecast vs computed, with times. */
+function SpaceLegend({ iss, aurora }: { iss: LayerState<IssData> | null; aurora: LayerState<AuroraData> | null }) {
+  const utc = (t: string | null | undefined) => (t ? `${new Date(t).toISOString().slice(11, 16)} UTC` : "n/a");
+  const a = aurora?.data?.data;
+  const pos = iss?.data?.data.position;
+  return (
+    <div className="glass pointer-events-auto absolute right-14 bottom-[118px] w-[230px] space-y-2 rounded-md px-3 py-2 text-[11px] leading-snug">
+      {iss && (
+        <div>
+          <div className="meta" style={{ color: ISS_COLOR }}>
+            ISS {iss.data?.stale ? "· stale" : ""}
+          </div>
+          {pos ? (
+            <div className="text-muted">
+              {Math.round(pos.altKm)} km · {Math.round(pos.speedKmh).toLocaleString("en-US")} km/h · {utc(pos.time)}
+              <div className="text-faint">Computed from orbital elements (wheretheiss.at). Track: past 90 min solid, next 90 min dashed.</div>
+            </div>
+          ) : (
+            <div className="text-faint">{iss.error ?? "Loading…"}</div>
+          )}
+        </div>
+      )}
+      {aurora && (
+        <div>
+          <div className="meta" style={{ color: AURORA_STOPS[0][1] }}>
+            Aurora forecast {aurora.data?.stale ? "· stale" : ""}
+          </div>
+          {a ? (
+            <>
+              <div className="mt-1 flex h-2 overflow-hidden rounded-full" aria-label="Aurora probability from 10% (green) to 90% (red)">
+                {AURORA_STOPS.map(([v, c]) => (
+                  <span key={v} className="flex-1" style={{ background: c }} />
+                ))}
+              </div>
+              <div className="meta flex justify-between normal-case tracking-normal text-faint">
+                <span>{a.minProbability}%</span>
+                <span>90%+</span>
+              </div>
+              <div className="text-muted">
+                Forecast for {utc(a.forecastTime)} (model run {utc(a.observationTime)}) · peak {a.maxProbability}%
+              </div>
+              <div className="text-faint">NOAA SWPC OVATION — modelled probability of visible aurora, not observed.</div>
+            </>
+          ) : (
+            <div className="text-faint">{aurora.error ?? "Loading…"}</div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

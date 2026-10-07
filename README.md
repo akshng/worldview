@@ -146,6 +146,8 @@ WorldView then runs as a production server at http://localhost:3000 (bound to th
 
 - **SAT** — satellite view (NASA Blue Marble, then 10 m Sentinel-2 imagery when zoomed in).
 - **CAM** — ~19,000 public traffic/road-weather cameras from official open-data feeds (London, New York City, California, Washington, Illinois, Iowa, Kentucky, Austin, South Dakota, British Columbia, Toronto, Calgary, Spain, Iceland, Finland, Queensland, Hong Kong, Singapore); click for the live image or video.
+- **ISS** — the International Space Station's position (updated every 5 s) and ground track ±90 min (past solid, next 90 min dashed), computed by wheretheiss.at from orbital elements; hover for altitude, speed and day/night.
+- **AUR** — NOAA SWPC OVATION aurora forecast: probability of visible aurora (≥ 10 %), with the forecast time in the legend. A model forecast, not an observation.
 - **Zoom in** past continent level and the map switches from countries to states/provinces — hover to highlight, click for that region's events.
 
 ## Morning briefing
