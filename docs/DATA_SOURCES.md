@@ -49,6 +49,20 @@ All V1 connectors use official or well-established public structured feeds. No w
 
 Top bar → **Planet**: daily CO₂ at Mauna Loa (NOAA GML), monthly global land+ocean temperature anomaly (NOAA NCEI), daily Arctic sea-ice extent (NSIDC), Oceanic Niño Index (NOAA CPC), planetary Kp index, current R/S/G space-weather scales and M/X-class flares in the last 7 days (NOAA SWPC), plus a table of asteroid close approaches within 0.05 au in the next 30 days (JPL SBDB close-approach API; size range estimated from absolute magnitude for albedo 0.25–0.05). Each tile states what its change compares against (a year earlier, previous month, previous season, 3 hours earlier). Cached 3 h.
 
+## Energy panel (`src/lib/energy`)
+
+Top bar → **Energy** (`GET /api/energy`): one card per grid with demand, renewable share, carbon intensity, wholesale price and a generation-mix bar (fixed colour per fuel, always with a text label and %). Every value carries its own UTC timestamp and a note on what it is. Keyless; cached 10 min. Each grid loads independently: a grid that fails keeps its last good copy (marked "showing last good data"), otherwise it is listed as unavailable, and a missing part (e.g. no price feed) shows "Not available" rather than a number.
+
+| Grid | Source | Demand | Mix / renewable share | Carbon intensity | Price |
+| --- | --- | --- | --- | --- | --- |
+| Great Britain | [NESO Carbon Intensity API](https://carbonintensity.org.uk/) (CC BY 4.0) + [Elexon Insights](https://bmrs.elexon.co.uk/) | Elexon demand outturn, 5 min | Half-hourly % by fuel incl. imports; renewable = wind, solar, hydro, biomass | Actual (else forecast) gCO₂/kWh, half-hourly | Elexon Market Index Price (APX), £/MWh, half-hourly |
+| Spain | [Red Eléctrica REData](https://www.ree.es/en/datos/apidata) | Real-time peninsular demand, 5 min | Previous Spanish calendar day, national, MWh by technology; renewable per REE's classification | Previous day, tCO₂/MWh × 1000 | Day-ahead spot (OMIE) for the current 15-min period, €/MWh |
+| France | [RTE éCO2mix](https://www.rte-france.com/en/eco2mix) real-time via [ODRE](https://odre.opendatasoft.com/explore/dataset/eco2mix-national-tr/) (Licence Ouverte) | Consumption, 15 min | Production by fuel; pumped-storage turbining and battery discharge counted as storage, not hydro; exchanges excluded | RTE's CO₂ rate for French production | — (no keyless feed) |
+| Germany | [Bundesnetzagentur SMARD](https://www.smard.de/en) chart data (CC BY 4.0) | Grid load, hourly | Net generation by fuel at the same hour (lignite + hard coal = coal; pumped storage = storage) | — (not published) | Day-ahead DE-LU, hourly average, €/MWh |
+| Australia (NEM) | [AEMO NEM data dashboard](https://aemo.com.au/en/energy-systems/electricity/national-electricity-market-nem/data-nem/data-dashboard-nem) `ELEC_NEM_SUMMARY` (public, attribution) | Sum of 5 regions, 5-min dispatch | — | — | Per-region dispatch prices plus a demand-weighted mean, A$/MWh |
+
+Caveats: real-time figures are provisional and revised by the operators; SMARD lags real time by a few hours; NEM times are AEST (UTC+10) converted to UTC. Not used: US EIA (API key required), Nord Pool (licensed data), ENTSO-E Transparency (token required).
+
 ## Map views
 
 - **Satellite** (map button **SAT**, or Settings → Map style): NASA Blue Marble for the whole globe, then EOX **Sentinel-2 cloudless 2024** (10 m) from zoom 4 — keyless WMTS tiles, CC BY-NC-SA 4.0 (non-commercial use with attribution).

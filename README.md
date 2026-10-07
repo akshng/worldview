@@ -129,6 +129,7 @@ Details, terms and caveats: [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md).
 - **Markets** (top bar): indices, US sectors, Treasury yields + yield curve, FX, commodities, crypto; economic calendar; instrument view with charts, SEC fundamentals and filings; watchlist and in-app price alerts; world events linked to the instruments they could affect; AI market wrap — information only, not advice ([docs/FINANCE.md](docs/FINANCE.md))
 - **Markets map mode**: countries coloured by their main stock index's daily move
 - **Trends** (top bar): what people are searching and sharing — Google Trends trending searches for 41 countries (plus terms trending in several countries at once, and the selected country's searches in its overview), most-read Wikipedia articles in 12 languages, Bluesky and Mastodon (mastodon.social) trending topics, and the Hacker News front page. Keyless, cached 15 min; aggregate trends and public titles only. Not included: X/Twitter (no free or keyless API; no third-party scrapers) and Reddit (refuses unauthenticated API requests; robots.txt disallows automated access). Trends are attention signals, not verified events ([details](docs/DATA_SOURCES.md#trends-panel-srclibtrends))
+- **Energy** (top bar): live electricity grids — demand, generation mix by fuel and renewable share, carbon intensity and wholesale price for Great Britain (NESO Carbon Intensity API, Elexon), Spain (Red Eléctrica), France (RTE éCO2mix), Germany (SMARD) and Australia's NEM (AEMO). Keyless, cached 10 min, all times UTC ([details](docs/DATA_SOURCES.md#energy-panel-srclibenergy))
 - Real areas (warning polygons, fire footprints), uncertainty rings by location precision, and location-correction notes
 - Source health and live-layer status in Settings → Data sources
 - Demo mode with clearly labelled simulated data
@@ -226,6 +227,7 @@ The full walkthrough is in [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md#adding-a-
 | `GET /api/markets/calendar` | Scheduled US economic releases and Treasury auctions |
 | `GET /api/markets/yield-curve` | Treasury par yield curve (latest vs a month earlier) |
 | `GET /api/markets/reaction?symbols=&since=` | Instrument moves since a time |
+| `GET /api/energy` | Live grid demand, generation mix, carbon intensity and prices (GB, ES, FR, DE, AU NEM); cached 10 min |
 | `GET /api/geo-audit` | Developer QA of event coordinates |
 | `POST /api/ai/setup` | Start downloading/loading the local model |
 | `POST /api/ai/unload` | Free the local model's memory (localhost or `ADMIN_TOKEN`) |
