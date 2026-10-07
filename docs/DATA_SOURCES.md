@@ -89,6 +89,20 @@ Map button **CAM** shows ~19,000 traffic and road-weather cameras that transport
 
 **Checked and not added** (Oct 2026): IBI-based 511 systems (Ontario, Alberta, Georgia, Florida, Wisconsin, Pennsylvania, Idaho, Nevada, Utah, Louisiana, Alaska) — `/api/v2/get/cameras` needs a key; WSDOT Traveler API — needs an access code (the public ArcGIS layer is used instead); Oregon TripCheck API — needs registration; NZTA traffic cameras — API access is by request to InfoConnect; Norway Statens vegvesen — DATEX node requires registration; Québec 511 — images behind Cloudflare bot protection; NSW Live Traffic — image URLs return an error page; Taiwan freeway CCTV — endpoint unreachable; Maryland CHART — video only, no still images; Newfoundland and Labrador — no licence stated; Germany Autobahn GmbH API — the `services/webcam` endpoint returns no cameras for any motorway; Denmark Vejdirektoratet — webcams withdrawn from the public site, API needs a registered key; North Carolina TIMS API — retired in favour of an IBI-style DriveNC endpoint; Delaware DelDOT and Missouri MoDOT — video streams only, no still images; New Mexico NMRoads — snapshots served over http only; Main Roads Western Australia — no camera layer in the keyless open-data services; Slovenia promet.si / NAP and Estonia Tark tee — portal unreachable within the time limit or registration-based (not added); Sweden Trafikverket, Czechia, Estonia DATEX — registration required.
 
+## Space overlays (`src/layers/iss`, `src/layers/aurora`)
+
+Map buttons **ISS** and **AUR** are independent of the map mode (like **CAM**), off by default, and fetch only while switched on. Both go through `/api/layers/:id`, so every browser shares one server-side cached copy and never calls the upstream directly. Polling pauses while the tab is hidden.
+
+| ID | Source | Cache | Key | What it shows |
+| --- | --- | --- | --- | --- |
+| `iss` | [wheretheiss.at](https://wheretheiss.at/w/developer) `/v1/satellites/25544` and `/positions?timestamps=…` | position 5 s, track 5 min | — | Station marker (polled every 5 s) and ground track ±90 min: past solid, next 90 min dashed. Popup: altitude, speed, whether the station is sunlit or in Earth's shadow, and whether it is day or night on the ground below (from the API's sub-solar point). |
+| `aurora` | [NOAA SWPC OVATION Prime](https://www.swpc.noaa.gov/products/aurora-30-minute-forecast) `ovation_aurora_latest.json` | 10 min | — | Probability of visible aurora on a 1° grid; cells ≥ 10 % drawn as soft circles (green → red). The legend shows the forecast-valid time and model run time. |
+
+- **Computed and forecast, not observed.** ISS positions and the track are computed by wheretheiss.at from the latest published orbital elements (TLE); the legend and popup say so. OVATION is a short-range model forecast (~30–90 min ahead), labelled "forecast" everywhere.
+- **Etiquette.** wheretheiss.at allows 350 requests per 5 minutes. One cached position per 5 s plus a 61-point track (7 requests of ≤ 10 timestamps, the documented maximum) every 5 minutes uses about 67. The track refreshes in the background, so a failure keeps the last track and never hides the position.
+- **Day/night** comes from the existing terminator layer; the ISS overlay does not draw its own.
+- **Considered but not used:** CelesTrak TLEs + client-side SGP4 (would add a propagation library for no visible gain over wheretheiss.at's computed positions); Open Notify `iss-now.json` (HTTP only, no altitude/speed/track); a MapLibre heatmap for aurora (heatmap intensity reflects point density, not the forecast probability, so graduated circles are used instead); SWPC 3-day Kp forecast (global index, not a map).
+
 ## Trends panel (`src/lib/trends`)
 
 Top bar → **Trends** (`GET /api/trends`): what people are searching for, reading and sharing, as an attention signal next to world events. Trends are **not events**: they never enter the event store, and the panel says they are attention signals, not verified events. All sources are keyless; the whole set is cached 15 minutes, and when a source fails the last good copy is served (listed as "last successful fetch"). A source with no data at all is listed as unavailable — nothing is filled in.
@@ -117,6 +131,8 @@ Live layers are continuously changing observations visualised in map modes. They
 | `weather-radar` | [RainViewer](https://www.rainviewer.com/api.html) weather-maps index + tiles | Weather | 5 min | — | 13 past frames (2 h) + nowcast; coverage only where national radar networks share data; attribution required |
 | `aviation` | [OpenSky Network](https://opensky-network.org/) `/states/all` | Aviation | 20 min | optional `OPENSKY_CLIENT_ID/SECRET` | Anonymous quota is 400 credits/day; a global snapshot costs 4, so the 20-min cache keeps continuous use under ~290/day. Positions older than 2 min are dropped. Non-commercial use terms apply |
 | `maritime` | [AISStream.io](https://aisstream.io/) websocket | Maritime | 1 min | `AISSTREAM_API_KEY` (free) | A websocket stays open while the mode is used (closed after 10 idle minutes); latest position per vessel, last 30 min; terrestrial AIS is sparse in open ocean |
+| `iss` | [wheretheiss.at](https://wheretheiss.at/w/developer) | Map button **ISS** (any mode) | 5 s (track 5 min) | — | See [Space overlays](#space-overlays-srclayersiss-srclayersaurora) |
+| `aurora` | [NOAA SWPC OVATION](https://www.swpc.noaa.gov/products/aurora-30-minute-forecast) | Map button **AUR** (any mode) | 10 min | — | Forecast, not observation |
 
 Adding a layer: create `src/layers/<id>/` with a `LiveLayerProvider` (`load()` returns a snapshot), register it in `src/layers/registry.ts`, add a mode in `src/lib/map-modes.ts` and its map layers in `src/components/globe/layers.ts`.
 
