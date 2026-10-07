@@ -15,8 +15,11 @@ export interface LiveLayerResponse<T> {
 /**
  * Polls a live layer while `enabled`. The server caches upstream data per the
  * layer's TTL, so frequent client polling never exceeds upstream quotas.
+ * With `pauseWhenHidden`, polling stops while the tab is hidden and resumes
+ * (with an immediate refresh) when it becomes visible again.
  */
-export function useLiveLayer<T>(id: string | null, pollMs = 60_000) {
+export function useLiveLayer<T>(id: string | null, pollMs = 60_000, opts: { pauseWhenHidden?: boolean } = {}) {
+  const pauseWhenHidden = !!opts.pauseWhenHidden;
   const [state, setState] = useState<{ id: string | null; data: LiveLayerResponse<T> | null; error: string | null; loading: boolean }>({
     id: null,
     data: null,
@@ -29,6 +32,7 @@ export function useLiveLayer<T>(id: string | null, pollMs = 60_000) {
     let cancelled = false;
     const ctrl = new AbortController();
     const load = async () => {
+      if (pauseWhenHidden && document.hidden) return;
       setState((s) => ({ ...s, id, loading: true, ...(s.id !== id ? { data: null, error: null } : {}) }));
       try {
         const res = await fetch(`/api/layers/${id}`, { signal: ctrl.signal, cache: "no-store" });
@@ -42,12 +46,17 @@ export function useLiveLayer<T>(id: string | null, pollMs = 60_000) {
     };
     void load();
     const t = setInterval(load, pollMs);
+    const onVisible = () => {
+      if (!document.hidden) void load();
+    };
+    if (pauseWhenHidden) document.addEventListener("visibilitychange", onVisible);
     return () => {
       cancelled = true;
       ctrl.abort();
       clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [id, pollMs]);
+  }, [id, pollMs, pauseWhenHidden]);
 
   return state.id === id ? state : { id, data: null, error: null, loading: !!id };
 }

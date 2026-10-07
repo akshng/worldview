@@ -23,6 +23,20 @@ export const AREAS_SOURCE = "areas";
 export const VESSELS_SOURCE = "vessels";
 export const COUNTRIES_SOURCE = "countries";
 export const NIGHT_SOURCE = "night";
+export const ISS_SOURCE = "iss";
+export const ISS_TRACK_SOURCE = "iss-track";
+export const ISS_COLOR = "#ffb703";
+export const AURORA_SOURCE = "aurora";
+/** Aurora probability (%) colour ramp, SWPC-style green → yellow → red */
+export const AURORA_STOPS: Array<[number, string]> = [
+  [10, "#2fbf71"],
+  [30, "#a6e22e"],
+  [50, "#ffd43b"],
+  [70, "#ff922b"],
+  [90, "#f03e3e"],
+];
+export const ISS_LAYER_IDS = ["iss-track-past", "iss-track-future", "iss-halo", "iss-point", "iss-label"];
+export const AURORA_LAYER_IDS = ["aurora"];
 
 export const categoryColor: ExpressionSpecification = [
   "match",
@@ -585,6 +599,78 @@ export function regionLayers(minzoom: number): LayerSpecification[] {
         "line-width": ["case", ["boolean", ["feature-state", "selected"], false], 1.4, 0.5],
         "line-opacity": ["case", ["boolean", ["feature-state", "selected"], false], 0.8, ["boolean", ["feature-state", "hover"], false], 0.5, 0.14],
       },
+    },
+  ];
+}
+
+/** OVATION aurora probability cells (1° grid) as soft graduated circles. Hidden until toggled. */
+export function auroraLayers(): LayerSpecification[] {
+  return [
+    {
+      id: "aurora",
+      type: "circle",
+      source: AURORA_SOURCE,
+      layout: { visibility: "none" },
+      paint: {
+        "circle-color": interpColor(["get", "p"], AURORA_STOPS),
+        // Roughly one grid degree on screen, so neighbouring cells merge into a band.
+        "circle-radius": ["interpolate", ["exponential", 2], ["zoom"], 0, 1.4, 3, 9, 6, 60],
+        "circle-blur": 0.8,
+        "circle-opacity": ["interpolate", ["linear"], ["get", "p"], 10, 0.22, 50, 0.45, 90, 0.6],
+        "circle-pitch-alignment": "map",
+      },
+    },
+  ];
+}
+
+/** ISS ground track (past solid, next 90 min dashed) and station marker. Hidden until toggled. */
+export function issLayers(): LayerSpecification[] {
+  return [
+    {
+      id: "iss-track-past",
+      type: "line",
+      source: ISS_TRACK_SOURCE,
+      filter: ["==", ["get", "part"], "past"],
+      layout: { visibility: "none", "line-cap": "round" },
+      paint: { "line-color": ISS_COLOR, "line-width": 1.4, "line-opacity": 0.55 },
+    },
+    {
+      id: "iss-track-future",
+      type: "line",
+      source: ISS_TRACK_SOURCE,
+      filter: ["==", ["get", "part"], "future"],
+      layout: { visibility: "none" },
+      paint: { "line-color": ISS_COLOR, "line-width": 1.4, "line-opacity": 0.8, "line-dasharray": [2, 2] },
+    },
+    {
+      id: "iss-halo",
+      type: "circle",
+      source: ISS_SOURCE,
+      layout: { visibility: "none" },
+      paint: { "circle-color": ISS_COLOR, "circle-opacity": 0.18, "circle-radius": 13, "circle-blur": 0.4 },
+    },
+    {
+      id: "iss-point",
+      type: "circle",
+      source: ISS_SOURCE,
+      layout: { visibility: "none" },
+      paint: { "circle-color": ISS_COLOR, "circle-radius": 5.5, "circle-stroke-color": "#05070a", "circle-stroke-width": 1.5 },
+    },
+    {
+      id: "iss-label",
+      type: "symbol",
+      source: ISS_SOURCE,
+      layout: {
+        visibility: "none",
+        "text-field": "ISS",
+        "text-font": FONT_BOLD,
+        "text-size": 11,
+        "text-offset": [0, 1.3],
+        "text-anchor": "top",
+        "text-allow-overlap": true,
+        "text-ignore-placement": true,
+      },
+      paint: { "text-color": ISS_COLOR, "text-halo-color": "#05070a", "text-halo-width": 1.2 },
     },
   ];
 }
