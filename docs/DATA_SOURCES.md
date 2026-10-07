@@ -78,7 +78,36 @@ Advisories from different governments are never merged by deduplication (each is
 
 ## Map views
 
-- **Satellite** (map button **SAT**, or Settings → Map style): NASA Blue Marble for the whole globe, then EOX **Sentinel-2 cloudless 2024** (10 m) from zoom 4 — keyless WMTS tiles, CC BY-NC-SA 4.0 (non-commercial use with attribution).
+Map button **SAT** (or Settings → Map → Map style) switches to satellite. A small panel then picks the **satellite source** and always says what is on screen: the imagery's name, its resolution, its image time when there is one, and whether it is a **near-real-time** frame or an **archive mosaic**. Every source below is keyless and credited in the map's attribution control (the ⓘ button).
+
+**Two kinds of imagery — never confuse them.** The very sharp imagery is a *mosaic of past captures* (months to years old, different dates side by side) and is **not live**. The imagery that updates every 10 minutes comes from geostationary weather satellites at **~0.5–2 km per pixel**: good for clouds, storms, smoke and day/night, useless for buildings. Nothing keyless offers both.
+
+| Source (picker option) | Tiles | Resolution / zoom | Cadence | Licence |
+| --- | --- | --- | --- | --- |
+| **Best detail (mosaic)** — NASA Blue Marble | GIBS `BlueMarble_ShadedRelief_Bathymetry` (Level8) | ~500 m, whole globe | static (2004 composite) | NASA, public domain |
+| ↳ EOX Sentinel-2 cloudless 2024 | `tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2024_3857` | 10 m, fades in at zoom 4→5 | yearly mosaic | CC BY-NC-SA 4.0 (non-commercial, attribution) |
+| ↳ Esri World Imagery (default "zoom detail") | `server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}` | 0.3–1 m in many places, fades in at zoom 10.5→11.5, map zooms to **19** | mosaic of captures from various dates | Esri terms of use: attribution required ("Esri, Vantor, Earthstar Geographics, and the GIS User Community" — the service's own credit text, checked Oct 2026; Vantor is the former Maxar imagery business). Treat as **non-commercial use with attribution**; switch it off for anything else |
+| ↳ USGS The National Map (alternative "zoom detail") | `basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}` | ~1 m aerial (USDA NAIP), **US only**; cached tiles to level 16, map zooms to 18 | refreshed periodically ("June 2024" at time of writing) | US government, public domain |
+| **Live — geostationary (≈10 min)** | GIBS `GOES-East_ABI_GeoColor`, `GOES-West_ABI_GeoColor` (Level7), `Himawari_AHI_Band3_Red_Visible_1km` (Level7, local daytime) / `Himawari_AHI_Band13_Clean_Infrared` (Level6, night) | ~0.5–2 km; fades to the mosaic at zoom 7.5→9 | every 10 min, published ~30–60 min after capture | NOAA / JMA data via NASA GIBS, public domain |
+| **Daily — VIIRS (last full day)** | GIBS `VIIRS_NOAA20_CorrectedReflectance_TrueColor` (Level9) | ~375 m; fades to the mosaic at zoom 9.5→11 | one global composite per day | NASA/NOAA, public domain |
+| **Night — VIIRS night band** | GIBS `VIIRS_SNPP_DayNightBand_At_Sensor_Radiance` (Level8) | ~750 m; fades to the mosaic at zoom 8.5→10 | one composite per day | NASA/NOAA, public domain |
+| **Clouds (infrared)** overlay, any map style | GIBS `GOES-East/West_ABI_Band13_Clean_Infrared`, `Himawari_AHI_Band13_Clean_Infrared` (Level6) at 50 % opacity | ~2 km; fades out at zoom 7→9 | every 10 min | NOAA / JMA via NASA GIBS, public domain |
+
+How the updating imagery stays current:
+
+- `GET /api/imagery/latest` returns the latest image time per GIBS layer, cached 5 minutes server-side. It asks GIBS's WMTS **DescribeDomains** for each layer (one ~400-byte request, limited to the last 3 days); if that fails it falls back to the full `WMTSCapabilities.xml` (~6 MB, CDN-cached by GIBS for up to 30 minutes).
+- GIBS lists a new 10-minute frame while its tiles are still being published one by one (other tiles return 404 for several minutes). The server therefore skips the newest step and uses the newest earlier frame whose world tile is actually served — the label's "n min ago" is honest about this lag.
+- Daily composites are built pass by pass, so "today" is partly black; the map uses the **last complete UTC day**.
+- Tiles are requested with that explicit time (never GIBS's `default`), so a new time means new tile URLs. The browser re-checks every 5 minutes, **only while the tab is visible** (and once when it becomes visible again). Each new frame gets its own map source under the old one; the old one is removed after the new tiles render, so the swap does not flash.
+
+Limitations:
+
+- **No keyless geostationary imagery over Europe, Africa, the Middle East or the Indian Ocean**: GIBS carries GOES and Himawari but not Meteosat. In live mode those areas show the mosaic, and the label says so.
+- Geostationary imagery near the disk edge (high latitudes, far east/west) is heavily stretched.
+- Esri and USGS tiles at deep zoom are the *most recent capture available to the provider*, which can be several years old and vary tile to tile. In places without high-resolution coverage, Esri returns a "Map data not yet available" tile.
+- Country and state/province boundaries are simplified (~2 km for states), so at street-level zoom they can sit visibly off the imagery; event location-uncertainty rings are hidden above zoom 15.
+- **Roads & labels** (hybrid, on by default on satellite): road lines and road/place names from OpenFreeMap (OpenStreetMap) drawn over the imagery from zoom 7 (major roads), 11 (suburbs/villages), 12 (minor roads) and 13 (road names).
+- The dark and night-lights map styles stay limited to zoom 14 (the vector tiles' and Black Marble's useful detail); satellite goes to 19 with Esri, 18 with USGS and 16 with zoom detail off.
 - **States and provinces**: `npm run geo:regions` builds `public/geo/regions.geojson` from Natural Earth 10m admin-1 (4,596 regions, simplified to ~2 km; ~1.4 MB gzipped). It loads the first time the map is zoomed past level 3; from there, hover and click switch from countries to states/provinces (markets mode stays per-country). The region panel counts the events currently on the map whose location falls inside the boundary.
 
 ## Public cameras (`src/layers/cameras`)

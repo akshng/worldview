@@ -1,11 +1,16 @@
 /**
  * Basemap style. Vector tiles: OpenFreeMap (OpenMapTiles schema, no key).
- * Imagery: NASA GIBS Blue Marble / Black Marble (public domain, no key), and
- * EOX Sentinel-2 cloudless (10 m, CC BY-NC-SA 4.0, no key) when zoomed in on satellite.
+ * Imagery (all keyless): NASA GIBS Blue Marble / Black Marble (public domain),
+ * EOX Sentinel-2 cloudless 2024 (10 m, CC BY-NC-SA 4.0) from zoom 4, then very-high-
+ * resolution Esri World Imagery (Esri terms, attribution) or USGS National Map
+ * orthoimagery (US, public domain) from zoom ~11. These are mosaics of past
+ * captures; recent GIBS imagery (geostationary / daily) is added at runtime by the
+ * globe (see src/lib/imagery) because its tile URLs change with each new image.
  * All basemap variants live in one style and are toggled by visibility, so
  * switching styles never reloads our data layers.
  */
 import type { ExpressionSpecification, LayerSpecification, StyleSpecification } from "maplibre-gl";
+import { HIRES_FADE, S2_FADE, type HiresProviderId } from "@/lib/imagery";
 
 export const FONT_REGULAR = ["Noto Sans Regular"];
 export const FONT_BOLD = ["Noto Sans Bold"];
@@ -13,6 +18,9 @@ export const FONT_BOLD = ["Noto Sans Bold"];
 const name: ExpressionSpecification = ["coalesce", ["get", "name:en"], ["get", "name_en"], ["get", "name"]];
 
 export type BasemapId = "dark" | "satellite" | "night";
+
+/** Invisible marker layer: recent satellite rasters go below it, the clouds overlay above. */
+export const IMAGERY_TOP = "imagery-top";
 
 /** Layers that belong to each basemap variant (shared ones are always visible). */
 export const BASEMAP_LAYERS: Record<BasemapId, string[]> = {
@@ -29,8 +37,38 @@ export function variantVisibility(id: BasemapId): Record<string, "visible" | "no
   return out;
 }
 
-export function buildStyle(variant: BasemapId): StyleSpecification {
-  const vis = variantVisibility(variant);
+export interface BasemapOptions {
+  /** Very-high-resolution imagery provider on satellite ("off" stops at Sentinel-2) */
+  hires: HiresProviderId;
+  /** Roads and place labels drawn over satellite imagery ("hybrid") */
+  hybrid: boolean;
+}
+
+export const DEFAULT_BASEMAP_OPTIONS: BasemapOptions = { hires: "esri", hybrid: true };
+
+/** Hybrid overlay layers: road lines in the basemap, road/place names with the labels. */
+export const HYBRID_LINE_LAYERS = ["hy-roads-minor", "hy-roads-major"];
+export const HYBRID_LABEL_LAYERS = ["hy-places", "hy-road-labels"];
+
+/** Visibility of every basemap-controlled layer for a variant + options. */
+export function basemapVisibility(id: BasemapId, opts: BasemapOptions): Record<string, "visible" | "none"> {
+  const out = variantVisibility(id);
+  const sat = id === "satellite";
+  out["raster-esri"] = sat && opts.hires === "esri" ? "visible" : "none";
+  out["raster-usgs"] = sat && opts.hires === "usgs" ? "visible" : "none";
+  for (const l of [...HYBRID_LINE_LAYERS, ...HYBRID_LABEL_LAYERS]) out[l] = sat && opts.hybrid ? "visible" : "none";
+  return out;
+}
+
+/**
+ * Esri World Imagery credit, exactly as the service's copyrightText publishes it
+ * (checked Oct 2026: Maxar's imagery business now trades as Vantor).
+ */
+export const ESRI_ATTRIBUTION =
+  'Imagery: <a href="https://www.arcgis.com/home/item.html?id=10df2279f9684e4a9f6a7f08febac2a9" target="_blank" rel="noopener noreferrer">Esri World Imagery</a> — Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community';
+
+export function buildStyle(variant: BasemapId, opts: BasemapOptions = DEFAULT_BASEMAP_OPTIONS): StyleSpecification {
+  const vis = basemapVisibility(variant, opts);
   const v = (id: string) => ({ visibility: vis[id] ?? "visible" }) as const;
 
   const layers: LayerSpecification[] = [
@@ -50,8 +88,38 @@ export function buildStyle(variant: BasemapId): StyleSpecification {
       source: "s2cloudless",
       minzoom: 4,
       layout: v("raster-s2"),
-      paint: { "raster-brightness-max": 0.9, "raster-fade-duration": 200, "raster-opacity": ["interpolate", ["linear"], ["zoom"], 4, 0, 5, 1] },
+      paint: {
+        "raster-brightness-max": 0.9,
+        "raster-fade-duration": 200,
+        "raster-opacity": ["interpolate", ["linear"], ["zoom"], S2_FADE[0], 0, S2_FADE[1], 1],
+      },
     },
+    {
+      // Sub-metre imagery in many places (a mosaic of captures from various dates).
+      id: "raster-esri",
+      type: "raster",
+      source: "esri",
+      minzoom: HIRES_FADE[0],
+      layout: v("raster-esri"),
+      paint: {
+        "raster-fade-duration": 200,
+        "raster-opacity": ["interpolate", ["linear"], ["zoom"], HIRES_FADE[0], 0, HIRES_FADE[1], 1],
+      },
+    },
+    {
+      // USGS The National Map orthoimagery: United States only; elsewhere tiles 404 and Sentinel-2 shows through.
+      id: "raster-usgs",
+      type: "raster",
+      source: "usgs",
+      minzoom: HIRES_FADE[0],
+      layout: v("raster-usgs"),
+      paint: {
+        "raster-fade-duration": 200,
+        "raster-opacity": ["interpolate", ["linear"], ["zoom"], HIRES_FADE[0], 0, HIRES_FADE[1], 1],
+      },
+    },
+    // Recent GIBS imagery is inserted below this marker; the clouds overlay goes above it.
+    { id: IMAGERY_TOP, type: "background", layout: { visibility: "none" }, paint: { "background-opacity": 0 } },
     {
       id: "raster-blackmarble",
       type: "raster",
@@ -121,6 +189,32 @@ export function buildStyle(variant: BasemapId): StyleSpecification {
       filter: ["all", ["==", ["get", "admin_level"], 2], ["==", ["get", "disputed"], 1]],
       paint: { "line-color": "rgba(170,185,205,0.35)", "line-width": 0.8, "line-dasharray": [3, 2] },
     },
+    {
+      id: "hy-roads-minor",
+      type: "line",
+      source: "omt",
+      "source-layer": "transportation",
+      minzoom: 12,
+      filter: ["in", ["get", "class"], ["literal", ["secondary", "tertiary", "minor"]]],
+      layout: { ...v("hy-roads-minor"), "line-cap": "round", "line-join": "round" },
+      paint: {
+        "line-color": "rgba(255,255,255,0.32)",
+        "line-width": ["interpolate", ["exponential", 1.6], ["zoom"], 12, 0.4, 18, 5],
+      },
+    },
+    {
+      id: "hy-roads-major",
+      type: "line",
+      source: "omt",
+      "source-layer": "transportation",
+      minzoom: 7,
+      filter: ["in", ["get", "class"], ["literal", ["motorway", "trunk", "primary"]]],
+      layout: { ...v("hy-roads-major"), "line-cap": "round", "line-join": "round" },
+      paint: {
+        "line-color": "rgba(255,214,120,0.5)",
+        "line-width": ["interpolate", ["exponential", 1.6], ["zoom"], 7, 0.4, 12, 1.4, 18, 9],
+      },
+    },
   ];
 
   return {
@@ -160,6 +254,24 @@ export function buildStyle(variant: BasemapId): StyleSpecification {
         maxzoom: 15,
         attribution:
           '<a href="https://s2maps.eu" target="_blank" rel="noopener noreferrer">Sentinel-2 cloudless – s2maps.eu</a> by EOX IT Services GmbH (contains modified Copernicus Sentinel data 2024)',
+      },
+      esri: {
+        type: "raster",
+        tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
+        tileSize: 256,
+        minzoom: 10,
+        maxzoom: 19,
+        attribution: ESRI_ATTRIBUTION,
+      },
+      usgs: {
+        type: "raster",
+        tiles: ["https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}"],
+        tileSize: 256,
+        minzoom: 10,
+        // Cached tiles stop at level 16 (~2.4 m/px at the equator); deeper zooms over-scale them.
+        maxzoom: 16,
+        attribution:
+          'Imagery: <a href="https://www.usgs.gov/programs/national-geospatial-program/national-map" target="_blank" rel="noopener noreferrer">USGS The National Map</a> orthoimagery (USDA NAIP; public domain)',
       },
       blackmarble: {
         type: "raster",
@@ -230,6 +342,32 @@ export function labelLayers(): LayerSpecification[] {
         "symbol-sort-key": ["coalesce", ["get", "rank"], 99],
       },
       paint: { "text-color": "rgba(190,200,214,0.7)", ...halo },
+    },
+    {
+      id: "hy-places",
+      type: "symbol",
+      source: "omt",
+      "source-layer": "place",
+      minzoom: 11,
+      filter: ["in", ["get", "class"], ["literal", ["village", "suburb", "neighbourhood", "hamlet", "quarter"]]],
+      layout: { visibility: "none", "text-field": name, "text-font": FONT_REGULAR, "text-size": ["interpolate", ["linear"], ["zoom"], 11, 10, 16, 13] },
+      paint: { "text-color": "rgba(235,240,246,0.85)", ...halo },
+    },
+    {
+      id: "hy-road-labels",
+      type: "symbol",
+      source: "omt",
+      "source-layer": "transportation_name",
+      minzoom: 13,
+      layout: {
+        visibility: "none",
+        "symbol-placement": "line",
+        "text-field": name,
+        "text-font": FONT_REGULAR,
+        "text-size": ["interpolate", ["linear"], ["zoom"], 13, 10, 18, 13],
+        "text-max-angle": 30,
+      },
+      paint: { "text-color": "rgba(240,240,232,0.9)", ...halo },
     },
   ];
 }

@@ -7,7 +7,10 @@
 import { useEffect, useRef, useState } from "react";
 import type { GeoJSONSource, Map as MlMap, MapGeoJSONFeature, PointLike, Popup } from "maplibre-gl";
 import { getMaplibre } from "./maplibre";
-import { buildStyle, labelLayers, variantVisibility } from "./style";
+import { basemapVisibility, buildStyle, IMAGERY_TOP, labelLayers } from "./style";
+import { ImageryPanel } from "./ImageryPanel";
+import { desiredRasters, gibsTileUrl, maxZoomFor, rasterId, rasterSlot } from "@/lib/imagery";
+import { useImageryTimes } from "@/lib/client/use-imagery-times";
 import {
   AIRCRAFT_SOURCE,
   ALL_MODE_LAYERS,
@@ -110,21 +113,31 @@ export default function Globe({ window: win, live }: GlobeProps) {
   const iss = useLiveLayer<IssData>(showIss ? "iss" : null, 5_000, { pauseWhenHidden: true });
   const aurora = useLiveLayer<AuroraData>(showAurora ? "aurora" : null, 10 * 60_000, { pauseWhenHidden: true });
   const auroraRef = useRef<AuroraData | null>(null);
+  const wantIdsRef = useRef<Set<string>>(new Set());
+  const satSource = useUI((s) => s.settings.satSource);
+  const hiresProvider = useUI((s) => s.settings.hiresProvider);
+  const satLabels = useUI((s) => s.settings.satLabels);
+  const showClouds = useUI((s) => s.settings.showClouds);
+  const needsTimes = (mapStyle === "satellite" && satSource !== "mosaic") || showClouds;
+  const imagery = useImageryTimes(needsTimes);
+  /** Current view (updated on moveend) for the imagery label. */
+  const [view, setView] = useState({ zoom: HOME_VIEW.zoom, lon: HOME_VIEW.center[0] });
 
   // ---- init -------------------------------------------------------------
   useEffect(() => {
     if (!container.current) return;
     const maplibregl = getMaplibre();
+    const initial = useUI.getState().settings;
     let map: MlMap;
     try {
       map = new maplibregl.Map({
         container: container.current,
-        style: buildStyle(useUI.getState().settings.mapStyle),
+        style: buildStyle(initial.mapStyle, { hires: initial.hiresProvider, hybrid: initial.satLabels }),
         center: HOME_VIEW.center,
         zoom: HOME_VIEW.zoom,
         minZoom: 0.6,
-        // Street level for address / landmark search results (vector tiles overzoom past z14).
-        maxZoom: 17,
+        // Deep zoom (to 18–19) where satellite imagery exists; street level (17) on vector maps for place search.
+        maxZoom: maxZoomFor(initial.mapStyle, initial.hiresProvider),
         attributionControl: { compact: true },
         renderWorldCopies: false,
         maxPitch: 60,
@@ -137,6 +150,8 @@ export default function Globe({ window: win, live }: GlobeProps) {
     }
     mapRef.current = map;
     popupRef.current = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 12, maxWidth: "280px" });
+
+    map.on("moveend", () => setView({ zoom: map.getZoom(), lon: map.getCenter().lng }));
 
     map.on("error", (e) => {
       // Tile/network errors are non-fatal; log once for developers.
@@ -577,11 +592,70 @@ export default function Globe({ window: win, live }: GlobeProps) {
   useEffect(() => {
     const map = liveMap();
     if (!ready || !map) return;
-    for (const [layer, v] of Object.entries(variantVisibility(mapStyle))) {
+    for (const [layer, v] of Object.entries(basemapVisibility(mapStyle, { hires: hiresProvider, hybrid: satLabels }))) {
       if (map.getLayer(layer)) map.setLayoutProperty(layer, "visibility", v);
     }
-    map.setPaintProperty("night", "fill-opacity", mapStyle === "dark" ? 0.16 : mapStyle === "satellite" ? 0.24 : 0.08);
-  }, [mapStyle, ready]);
+    map.setMaxZoom(maxZoomFor(mapStyle, hiresProvider));
+    map.setPaintProperty(
+      "night",
+      "fill-opacity",
+      mapStyle === "dark"
+        ? 0.16
+        : mapStyle === "satellite"
+          ? // GeoColor / night-band imagery already shows night; street-level imagery should stay readable.
+            satSource === "live" || satSource === "night"
+            ? 0.06
+            : ["interpolate", ["linear"], ["zoom"], 8, 0.24, 12, 0.06]
+          : 0.08,
+    );
+  }, [mapStyle, hiresProvider, satLabels, satSource, ready]);
+
+  // ---- recent satellite imagery (NASA GIBS) ---------------------------------
+  // Each new image time gets its own source; the previous one stays underneath
+  // until the new tiles have loaded, so the swap never flashes.
+  const imageryTimes = imagery.data?.times;
+  useEffect(() => {
+    const map = liveMap();
+    if (!ready || !map) return;
+    const want = desiredRasters({ mapStyle, satSource, clouds: showClouds }, imageryTimes ?? {}, new Date());
+    const wantIds = new Set(want.map(rasterId));
+    const current = (map.getStyle().layers ?? []).map((l) => l.id).filter((id) => id.startsWith("gibs-"));
+    const slotOf = rasterSlot;
+    const wantSlots = new Set(want.map((w) => slotOf(rasterId(w))));
+    const remove = (id: string) => {
+      if (map.getLayer(id)) map.removeLayer(id);
+      if (map.getSource(id)) map.removeSource(id);
+    };
+    // Slots no longer wanted go immediately.
+    for (const id of current) if (!wantSlots.has(slotOf(id))) remove(id);
+    for (const w of want) {
+      const id = rasterId(w);
+      if (map.getLayer(id)) continue;
+      const older = current.find((c) => c !== id && slotOf(c) === slotOf(id) && map.getLayer(c));
+      const fadeEnd = Array.isArray(w.opacity) ? Number(w.opacity[w.opacity.length - 2]) : 24;
+      map.addSource(id, {
+        type: "raster",
+        tiles: [gibsTileUrl(w.layer, w.time)],
+        tileSize: 256,
+        maxzoom: w.layer.maxzoom,
+        attribution: `Imagery: ${w.layer.credit} via <a href="https://www.earthdata.nasa.gov/gibs" target="_blank" rel="noopener noreferrer">NASA GIBS</a> — ${w.layer.label}, ${
+          w.layer.cadence === "daily" ? w.time : `${w.time.slice(0, 10)} ${w.time.slice(11, 16)} UTC`
+        }`,
+      });
+      map.addLayer(
+        { id, type: "raster", source: id, maxzoom: fadeEnd, paint: { "raster-opacity": w.opacity, "raster-fade-duration": 300 } },
+        older ?? (w.group === "base" ? IMAGERY_TOP : "boundary-state"),
+      );
+    }
+    // Older frames of a wanted slot are removed once the new tiles have rendered.
+    const prune = () => {
+      const m = liveMap();
+      if (!m) return;
+      for (const l of m.getStyle().layers ?? []) if (l.id.startsWith("gibs-") && !wantIdsRef.current.has(l.id)) remove(l.id);
+    };
+    wantIdsRef.current = wantIds;
+    if (current.some((id) => !wantIds.has(id))) map.once("idle", prune);
+  }, [mapStyle, satSource, showClouds, imageryTimes, ready]);
 
   // ---- day / night --------------------------------------------------------
   useEffect(() => {
@@ -674,9 +748,12 @@ export default function Globe({ window: win, live }: GlobeProps) {
           Map could not be initialised: {mapError}
         </div>
       )}
-      {(showIss || showAurora) && (
-        <SpaceLegend iss={showIss ? iss : null} aurora={showAurora ? aurora : null} />
-      )}
+      <div className="pointer-events-none absolute right-14 bottom-[118px] flex flex-col items-end gap-2">
+        {(mapStyle === "satellite" || showClouds) && (
+          <ImageryPanel view={view} times={imagery.data?.times ?? null} timesError={imagery.error} loadingTimes={needsTimes && !imagery.data && !imagery.error} />
+        )}
+        {(showIss || showAurora) && <SpaceLegend iss={showIss ? iss : null} aurora={showAurora ? aurora : null} />}
+      </div>
       <div className="absolute right-3 bottom-[118px] flex flex-col overflow-hidden rounded-md glass">
         <MapButton
           title={showIss ? "Hide International Space Station" : "Show International Space Station position and ground track"}
@@ -700,7 +777,7 @@ export default function Globe({ window: win, live }: GlobeProps) {
           <span className="text-[10px] font-semibold tracking-wide">{showCameras && cameras.loading && !cameras.data ? "…" : "CAM"}</span>
         </MapButton>
         <MapButton
-          title={mapStyle === "satellite" ? "Switch to map view" : "Switch to satellite view"}
+          title={mapStyle === "satellite" ? "Switch to map view" : "Switch to satellite view (choose mosaic or recent imagery in the panel)"}
           onClick={() => useUI.getState().updateSettings({ mapStyle: mapStyle === "satellite" ? "dark" : "satellite" })}
           active={mapStyle === "satellite"}
         >
@@ -727,7 +804,7 @@ function SpaceLegend({ iss, aurora }: { iss: LayerState<IssData> | null; aurora:
   const a = aurora?.data?.data;
   const pos = iss?.data?.data.position;
   return (
-    <div className="glass pointer-events-auto absolute right-14 bottom-[118px] w-[230px] space-y-2 rounded-md px-3 py-2 text-[11px] leading-snug">
+    <div className="glass pointer-events-auto w-[230px] space-y-2 rounded-md px-3 py-2 text-[11px] leading-snug">
       {iss && (
         <div>
           <div className="meta" style={{ color: ISS_COLOR }}>
