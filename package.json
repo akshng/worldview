@@ -28,7 +28,8 @@
     "service:install": "node scripts/local-service.mjs install",
     "service:restart": "node scripts/local-service.mjs restart",
     "service:uninstall": "node scripts/local-service.mjs uninstall",
-    "geo:regions": "tsx scripts/build-regions.ts"
+    "geo:regions": "tsx scripts/build-regions.ts",
+    "geo:infra": "tsx scripts/build-infra.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",

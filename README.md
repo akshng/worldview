@@ -165,6 +165,7 @@ WorldView then runs as a production server at http://localhost:3000 (bound to th
 - **MIL** — aircraft broadcasting ADS-B identified as military in the community database (adsb.lol, ODbL), refreshed every 30 s; hover for callsign, type, altitude and speed. Most military flights don't broadcast, so this is a partial view.
 - **SAT·ORB** — space stations, operational GPS and the brightest ~150 satellites from CelesTrak elements, positions computed in your browser with SGP4 every 2 s. Click one to draw its orbit (past half orbit and next full orbit).
 - **AUR** — NOAA SWPC OVATION aurora forecast: probability of visible aurora (≥ 10 %), with the forecast time in the legend. A model forecast, not an observation.
+- **INF** — strategic infrastructure panel: subsea cables and landing points, power plants by fuel, nuclear plants, oil & gas pipelines, LNG terminals, ports, data centres, military bases (OpenStreetMap, WRI Global Power Plant Database, NGA World Port Index — static extracts loaded only when toggled) and 13 maritime chokepoints with a monitor of nearby WorldView events and a disruption score. Sources and licences: [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md#strategic-infrastructure-srclibinfra-npm-run-geoinfra).
 - **Zoom in** past continent level and the map switches from countries to states/provinces — hover to highlight, click for that region's events.
 
 ## Morning briefing
