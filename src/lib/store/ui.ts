@@ -93,8 +93,8 @@ interface UIState {
 
   // selection / panels
   selectedEventId: string | null;
-  /** Camera open in the viewer: [id, name, lon, lat, sourceIndex, imageUrl, videoUrl, videoKind] + its source */
-  selectedCamera: { row: import("@/layers/cameras").CameraRow; source: import("@/layers/cameras").CameraSource } | null;
+  /** Camera open in the viewer: [id, name, lon, lat, sourceIndex, flags] + its source and its health */
+  selectedCamera: { row: import("@/lib/cameras").CameraListRow; source: import("@/layers/cameras").CameraSource; health?: import("@/lib/cameras").SourceHealth } | null;
   selectedCountry: string | null;
   /** State/province selected on the map (id in /geo/regions.geojson) */
   selectedRegion: number | null;

@@ -6,8 +6,15 @@
  * Row: [id, name, lon, lat, sourceIndex, imageUrl, videoUrl | null, videoKind | null]
  * imageUrl is "" for video-only cameras (operators that publish live streams but no stills);
  * every row has a still, a video, or both. videoKind "hls" means a live stream.
+ *
+ * The full rows stay on the server. The API serves a compact list without media URLs
+ * (see src/lib/cameras.ts); the viewer gets one camera's media from /api/cameras/[id].
+ * The list loads at server start and refreshes in the background, and a liveness sampler
+ * (./health.ts) hides fully dead sources and flags "live video" only where streams work.
  */
 import type { LayerContext, LayerSnapshot, LiveLayerProvider } from "../types";
+import { cameraFlags, CAM_LIVE, deadSources, videoHealthy, type CameraListRow, type CameraMedia, type SourceHealth } from "@/lib/cameras";
+import { cameraHealth, cameraHealthVersion, probeTargets, startCameraHealth } from "./health";
 
 export type CameraRow = [string, string, number, number, number, string, string | null, "mp4" | "hls" | null];
 
@@ -22,14 +29,75 @@ export interface CameraSource {
   license: string;
   /** How often the operator updates still images, seconds */
   refreshSec: number;
+  /** The still's URL changes with every frame (ask /api/cameras/[id] again on each refresh). */
+  volatileImage?: boolean;
 }
 
-export interface CamerasData {
+/** What the layer caches (full rows, server only). */
+export interface CamerasFull {
   sources: CameraSource[];
   rows: CameraRow[];
-  /** How many rows have a live (HLS) stream */
+  failed: string[];
+}
+
+/** What /api/layers/cameras serves. */
+export interface CamerasData {
+  sources: CameraSource[];
+  rows: CameraListRow[];
+  /** How many rows are flagged live video (HLS on a source with healthy streams) */
   liveCount: number;
   failed: string[];
+  /** Sampled liveness per source id (absent until the first sampling round) */
+  health: Record<string, SourceHealth>;
+  /** Sources hidden because every sampled still and stream failed */
+  hidden: string[];
+}
+
+/** The compact list served to the map: dead sources dropped, media URLs replaced by flags. */
+export function presentCameras(full: CamerasFull, health: Record<string, SourceHealth>): CamerasData {
+  const hidden = deadSources(health);
+  const hide = new Set(hidden.map((id) => full.sources.findIndex((s) => s.id === id)));
+  const healthy = full.sources.map((s) => videoHealthy(health[s.id]));
+  const rows: CameraListRow[] = [];
+  let liveCount = 0;
+  for (const r of full.rows) {
+    if (hide.has(r[4])) continue;
+    const flags = cameraFlags(r[5], r[6], r[7], healthy[r[4]]);
+    if (flags & CAM_LIVE) liveCount++;
+    rows.push([r[0], r[1], r[2], r[3], r[4], flags]);
+  }
+  return { sources: full.sources, rows, liveCount, failed: full.failed, health, hidden };
+}
+
+const rowIndex = new WeakMap<CameraRow[], Map<string, CameraRow>>();
+/** Full row for a camera id (indexed once per snapshot). */
+export function findCamera(full: CamerasFull, id: string): CameraRow | null {
+  let m = rowIndex.get(full.rows);
+  if (!m) rowIndex.set(full.rows, (m = new Map(full.rows.map((r) => [r[0], r]))));
+  return m.get(id) ?? null;
+}
+
+const SG_API = "https://api.data.gov.sg/v1/transport/traffic-images";
+const sgCache = globalThis as unknown as { __worldviewSgImages?: { at: number; images: Map<string, string> } };
+/** Singapore publishes a new URL per frame: look up the current one (shared, cached 60 s). */
+async function sgCurrentImage(id: string, userAgent: string): Promise<string | null> {
+  let c = sgCache.__worldviewSgImages;
+  if (!c || Date.now() - c.at > 60_000) {
+    try {
+      const j = await getJson(SG_API, { signal: AbortSignal.timeout(6_000), userAgent, env: {}, now: Date.now() });
+      c = sgCache.__worldviewSgImages = { at: Date.now(), images: new Map(sgRows(j).map((r) => [r[0], r[5]])) };
+    } catch {
+      return null;
+    }
+  }
+  return c.images.get(id) ?? null;
+}
+
+/** Media URLs for one camera, current at request time. */
+export async function cameraMedia(row: CameraRow, source: CameraSource, userAgent: string): Promise<CameraMedia> {
+  let image = row[5] || null;
+  if (source.id === "sg") image = (await sgCurrentImage(row[0], userAgent)) ?? image;
+  return { id: row[0], image, video: row[6], videoKind: row[7], ...(source.volatileImage ? { volatileImage: true } : {}) };
 }
 
 export const CAMERA_SOURCES: CameraSource[] = [
@@ -38,7 +106,7 @@ export const CAMERA_SOURCES: CameraSource[] = [
   { id: "caltrans", name: "Caltrans CCTV", region: "California, US", homepage: "https://cwwp2.dot.ca.gov/", license: "California Department of Transportation public data", refreshSec: 60 },
   { id: "hk", name: "Hong Kong Transport Department", region: "Hong Kong", homepage: "https://data.gov.hk/en-data/dataset/hk-td-tis_2-traffic-snapshot-images", license: "DATA.GOV.HK terms", refreshSec: 120 },
   { id: "fi", name: "Fintraffic road weather cameras", region: "Finland", homepage: "https://www.digitraffic.fi/en/road-traffic/", license: "Fintraffic / digitraffic.fi, CC BY 4.0", refreshSec: 600 },
-  { id: "sg", name: "Singapore LTA traffic cameras", region: "Singapore", homepage: "https://data.gov.sg/", license: "Singapore Open Data Licence", refreshSec: 60 },
+  { id: "sg", name: "Singapore LTA traffic cameras", region: "Singapore", homepage: "https://data.gov.sg/", license: "Singapore Open Data Licence", refreshSec: 60, volatileImage: true },
   { id: "dgt", name: "DGT traffic cameras", region: "Spain", homepage: "https://nap.dgt.es/", license: "DGT National Access Point open data, reuse with attribution (Ley 37/2007)", refreshSec: 180 },
   { id: "il", name: "Illinois DOT Gateway cameras", region: "Illinois and neighbouring states, US", homepage: "https://www.travelmidwest.com/", license: "Illinois DOT Gateway Traveler Information, CC BY-SA 2.0", refreshSec: 300 },
   { id: "wsdot", name: "WSDOT highway cameras", region: "Washington State, US", homepage: "https://wsdot.com/travel/real-time/map/", license: "WSDOT Travel Information Cameras public data (low-volume use, no warranty)", refreshSec: 300 },
@@ -523,7 +591,13 @@ const ARCGIS = {
 const OKTRAFFIC_CAMERAS = `https://oktraffic.org/api/CameraPoles?filter=${encodeURIComponent(JSON.stringify({ include: [{ relation: "mapCameras", scope: { include: "streamDictionary" } }] }))}`;
 const TORONTO_CAMERAS = "https://ckan0.cf.opendata.inter.prod-toronto.ca/dataset/a3309088-5fd4-4d34-8297-77c8301840ac/resource/4a568300-c7f8-496d-b150-dff6f5dc6d4f/download/traffic-camera-list-4326.geojson";
 
-export const camerasLayer: LiveLayerProvider<CamerasData> = {
+/** No single operator may hold up the list: each feed gets this long. */
+const SOURCE_TIMEOUT_MS = 25_000;
+/** Last good rows per source, reused when a feed fails on a later refresh (for up to 2 days). */
+const lastGood = ((globalThis as unknown as { __worldviewCamLastGood?: Map<string, { at: number; rows: CameraRow[] }> }).__worldviewCamLastGood ??= new Map());
+const LAST_GOOD_MAX_AGE_MS = 48 * 3_600_000;
+
+export const camerasLayer: LiveLayerProvider<CamerasFull> = {
   id: "cameras",
   name: "Public cameras",
   description:
@@ -532,7 +606,18 @@ export const camerasLayer: LiveLayerProvider<CamerasData> = {
   attribution: CAMERA_SOURCES.map((s) => s.name).join(" · "),
   // The camera list changes rarely; images are fetched live by the browser.
   ttlMs: 6 * 3_600_000,
-  async load(ctx): Promise<LayerSnapshot<CamerasData>> {
+  background: true,
+  present: (full) => presentCameras(full, cameraHealth()),
+  presentKey: () => String(cameraHealthVersion()),
+  startBackground({ snapshot, userAgent }) {
+    startCameraHealth(() => {
+      const data = snapshot()?.data;
+      if (!data) return null;
+      return probeTargets(data.rows.map((r) => ({ source: data.sources[r[4]].id, image: r[5], video: r[6], kind: r[7] })));
+    }, userAgent);
+  },
+  async load(parentCtx): Promise<LayerSnapshot<CamerasFull>> {
+    const ctx: LayerContext = { ...parentCtx, signal: AbortSignal.any([parentCtx.signal, AbortSignal.timeout(SOURCE_TIMEOUT_MS)]) };
     const tasks: Array<[string, () => Promise<CameraRow[]>]> = [
       ["tfl", async () => tflRows(await getJson("https://api.tfl.gov.uk/Place/Type/JamCam", ctx))],
       ["nyc", async () => nycRows(await getJson("https://webcams.nyctmc.org/api/cameras", ctx))],
@@ -556,7 +641,7 @@ export const camerasLayer: LiveLayerProvider<CamerasData> = {
         },
       ],
       ["fi", async () => fiRows(await getJson("https://tie.digitraffic.fi/api/weathercam/v1/stations", ctx, { "Digitraffic-User": "WorldView/0.1", "Accept-Encoding": "gzip" }))],
-      ["sg", async () => sgRows(await getJson("https://api.data.gov.sg/v1/transport/traffic-images", ctx))],
+      ["sg", async () => sgRows(await getJson(SG_API, ctx))],
       ["dgt", async () => dgtRows(await getText("https://nap.dgt.es/datex2/v3/dgt/DevicePublication/camaras_datex2_v37.xml", ctx))],
       ["il", async () => ilRows(await arcgisFeatures(ARCGIS.il, "OBJECTID,ImgPath,CameraLocation,CameraDirection,SnapShot,TooOld", ctx))],
       ["wsdot", async () => wsdotRows(await arcgisFeatures(ARCGIS.wsdot, "OBJECTID,CameraTitle,ImageURL", ctx))],
@@ -581,7 +666,21 @@ export const camerasLayer: LiveLayerProvider<CamerasData> = {
     const results = await Promise.allSettled(tasks.map(([, run]) => run()));
     const rows: CameraRow[] = [];
     const failed: string[] = [];
-    results.forEach((r, i) => (r.status === "fulfilled" ? rows.push(...r.value) : failed.push(tasks[i][0])));
+    const notes: string[] = [];
+    results.forEach((r, i) => {
+      const src = tasks[i][0];
+      if (r.status === "fulfilled" && r.value.length) {
+        rows.push(...r.value);
+        lastGood.set(src, { at: Date.now(), rows: r.value });
+        return;
+      }
+      failed.push(src);
+      const prev = lastGood.get(src);
+      if (prev && Date.now() - prev.at < LAST_GOOD_MAX_AGE_MS) {
+        rows.push(...prev.rows);
+        notes.push(`${src}: feed unavailable, showing the list from ${new Date(prev.at).toISOString()}`);
+      }
+    });
     // ~1 m precision is plenty for a map pin and keeps the payload small (some feeds send 15 decimals).
     for (const r of rows) {
       r[2] = Math.round(r[2] * 1e5) / 1e5;
@@ -594,9 +693,9 @@ export const camerasLayer: LiveLayerProvider<CamerasData> = {
       observedAt: now,
       retrievedAt: now,
       count: rows.length,
-      data: { sources: CAMERA_SOURCES, rows, liveCount: rows.filter(isLiveVideo).length, failed },
+      data: { sources: CAMERA_SOURCES, rows, failed },
       attribution: camerasLayer.attribution,
-      notes: failed.length ? [`Unavailable: ${failed.join(", ")}`] : undefined,
+      notes: failed.length ? [`Unavailable: ${failed.join(", ")}`, ...notes] : undefined,
     };
   },
 };
