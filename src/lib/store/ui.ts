@@ -9,6 +9,7 @@ import { EVENT_CATEGORIES, type EventCategory } from "@/types/events";
 import type { ImportanceFilterId } from "@/lib/categories";
 import type { PresetRangeId, TimeRangeId } from "@/lib/time";
 import { MAP_MODE_IDS } from "@/lib/map-modes";
+import type { HiresProviderId, SatSourceId } from "@/lib/imagery";
 
 export type MapStyleId = "dark" | "satellite" | "night";
 export type MapMode = import("@/lib/map-modes").MapModeId;
@@ -16,6 +17,14 @@ export type FeedSort = "recent" | "importance";
 
 export interface Settings {
   mapStyle: MapStyleId;
+  /** Satellite view: mosaic (sharpest, past captures) or recent NASA GIBS imagery */
+  satSource: SatSourceId;
+  /** Very-high-resolution mosaic tiles from zoom ~11 (Esri World Imagery, USGS US-only, or off) */
+  hiresProvider: HiresProviderId;
+  /** Roads and place names over satellite imagery ("hybrid") */
+  satLabels: boolean;
+  /** Semi-transparent geostationary infrared clouds over any basemap */
+  showClouds: boolean;
   showEventLabels: boolean;
   showDayNight: boolean;
   /** Public camera markers on the map */
@@ -136,6 +145,10 @@ interface UIState {
 
 const DEFAULT_SETTINGS: Settings = {
   mapStyle: "dark",
+  satSource: "mosaic",
+  hiresProvider: "esri",
+  satLabels: true,
+  showClouds: false,
   showEventLabels: false,
   showDayNight: true,
   showCameras: false,
@@ -238,6 +251,8 @@ export const useUI = create<UIState>()(
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<UIState>;
         const settings = { ...DEFAULT_SETTINGS, ...(p.settings ?? {}) };
+        if (!["mosaic", "live", "daily", "night"].includes(settings.satSource)) settings.satSource = DEFAULT_SETTINGS.satSource;
+        if (!["esri", "usgs", "off"].includes(settings.hiresProvider)) settings.hiresProvider = DEFAULT_SETTINGS.hiresProvider;
         const valid = settings.defaultCategories.filter((c) => (EVENT_CATEGORIES as readonly string[]).includes(c));
         const mapMode = (MAP_MODE_IDS as readonly string[]).includes(String(p.mapMode)) ? p.mapMode! : "events";
         return {

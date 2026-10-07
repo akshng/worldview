@@ -2,6 +2,7 @@
 import clsx from "clsx";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useUI, type MapStyleId } from "@/lib/store/ui";
+import type { HiresProviderId, SatSourceId } from "@/lib/imagery";
 import { useData } from "@/lib/client/data-store";
 import { api, type SourcesResponse } from "@/lib/client/api";
 import { APP_NAME, APP_TAGLINE, AUTHOR_NAME, AUTHOR_URL } from "@/lib/config/app";
@@ -164,17 +165,48 @@ function MapSettings() {
   const [saved, setSaved] = useState(false);
   return (
     <>
-      <Row label="Map style" hint="Satellite and night imagery: NASA GIBS (public domain).">
+      <Row label="Map style" hint="Satellite: NASA, Sentinel-2 and Esri/USGS imagery. Night lights: NASA Black Marble 2016.">
         <Select<MapStyleId>
           label="Map style"
           value={s.mapStyle}
           options={[
             { id: "dark", label: "Dark vector" },
-            { id: "satellite", label: "Blue Marble" },
+            { id: "satellite", label: "Satellite" },
             { id: "night", label: "Night lights" },
           ]}
           onChange={(v) => update({ mapStyle: v })}
         />
+      </Row>
+      <Row label="Satellite source" hint="Mosaics are sharp but made of past captures. Geostationary frames are ~10 min apart at ~0.5–2 km per pixel.">
+        <Select<SatSourceId>
+          label="Satellite source"
+          value={s.satSource}
+          options={[
+            { id: "mosaic", label: "Best detail (mosaic)" },
+            { id: "live", label: "Live — geostationary" },
+            { id: "daily", label: "Daily — VIIRS" },
+            { id: "night", label: "Night — VIIRS night band" },
+          ]}
+          onChange={(v) => update({ satSource: v })}
+        />
+      </Row>
+      <Row label="Zoom detail imagery" hint="From zoom ~11. Esri World Imagery: worldwide, sub-metre in many places, Esri terms (non-commercial use with attribution). USGS: US only, public domain.">
+        <Select<HiresProviderId>
+          label="Zoom detail imagery"
+          value={s.hiresProvider}
+          options={[
+            { id: "esri", label: "Esri World Imagery" },
+            { id: "usgs", label: "USGS (US only)" },
+            { id: "off", label: "Off (Sentinel-2 10 m)" },
+          ]}
+          onChange={(v) => update({ hiresProvider: v })}
+        />
+      </Row>
+      <Row label="Roads & labels on satellite" hint="Hybrid view: roads and place names from OpenStreetMap.">
+        <Toggle label="Roads & labels on satellite" on={s.satLabels} onChange={(v) => update({ satLabels: v })} />
+      </Row>
+      <Row label="Clouds overlay" hint="Geostationary infrared (GOES, Himawari), every 10 min, on any map style. No coverage over Europe/Africa.">
+        <Toggle label="Clouds overlay" on={s.showClouds} onChange={(v) => update({ showClouds: v })} />
       </Row>
       <Row label="Show event labels" hint="Event titles appear when zoomed in.">
         <Toggle label="Show event labels" on={s.showEventLabels} onChange={(v) => update({ showEventLabels: v })} />
