@@ -59,7 +59,7 @@ export function airportByCode(code: string): Airport | undefined {
   return airportIndex.get(c) ?? (c.length === 3 ? airportIndex.get(`K${c}`) : undefined);
 }
 
-const US_STATE_ABBR: Record<string, string> = {
+export const US_STATE_ABBR: Record<string, string> = {
   AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA: "California", CO: "Colorado", CT: "Connecticut", DE: "Delaware",
   DC: "District of Columbia", FL: "Florida", GA: "Georgia", HI: "Hawaii", ID: "Idaho", IL: "Illinois", IN: "Indiana", IA: "Iowa",
   KS: "Kansas", KY: "Kentucky", LA: "Louisiana", ME: "Maine", MD: "Maryland", MA: "Massachusetts", MI: "Michigan", MN: "Minnesota",
@@ -116,7 +116,7 @@ const nameIndex = new Map<string, Country>();
 for (const c of COUNTRIES) {
   for (const n of [c.name, c.nameLong]) nameIndex.set(n.toLowerCase(), c);
 }
-const ALIASES: Record<string, string> = {
+export const COUNTRY_ALIASES: Record<string, string> = {
   "united states": "US", usa: "US", "u.s.": "US", "us": "US", america: "US",
   uk: "GB", "united kingdom": "GB", britain: "GB", "great britain": "GB", england: "GB",
   russia: "RU", "south korea": "KR", "north korea": "KP", iran: "IR", syria: "SY",
@@ -127,7 +127,7 @@ const ALIASES: Record<string, string> = {
 export function findCountryByName(name: string): Country | undefined {
   const k = name.trim().toLowerCase();
   if (!k) return undefined;
-  const alias = ALIASES[k];
+  const alias = COUNTRY_ALIASES[k];
   if (alias) return byCode.get(alias);
   return nameIndex.get(k);
 }

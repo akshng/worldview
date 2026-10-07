@@ -9,15 +9,24 @@ import { relativeTime } from "@/lib/time";
 import { GlobeIcon, LayersIcon, PinIcon, SearchIcon, SparkIcon } from "@/components/ui/icons";
 import { focusEvent } from "@/components/event-feed/EventFeed";
 import type { EventCategory } from "@/types/events";
+import {
+  GEOCODE_MIN_CHARS,
+  PHOTON_ATTRIBUTION,
+  coordinateResult,
+  mergePlaces,
+  parseCoordinates,
+  placeView,
+  type PlaceResult,
+} from "@/lib/geo/place-search";
 
 type Item =
   | { kind: "ask-ai"; data: null }
   | { kind: "intent"; data: NonNullable<SearchResponse["intent"]> }
-  | { kind: "location"; data: SearchResponse["locations"][number] }
+  | { kind: "place"; data: PlaceResult }
   | { kind: "event"; data: SearchResponse["events"][number] }
   | { kind: "topic"; data: SearchResponse["topics"][number] };
 
-const EXAMPLES = ["Japan", "earthquakes over magnitude 5", "What is happening in Europe?", "California fires", "protests last 6 hours", "launches"];
+const EXAMPLES = ["Japan", "Eiffel Tower", "JFK", "48.85, 2.35", "earthquakes over magnitude 5", "What is happening in Europe?", "California fires", "protests last 6 hours", "launches"];
 
 export function SearchPalette() {
   const open = useUI((s) => s.searchOpen);
@@ -26,6 +35,8 @@ export function SearchPalette() {
   const [res, setRes] = useState<SearchResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [active, setActive] = useState(0);
+  /** Online (Photon) place results for `q` */
+  const [geo, setGeo] = useState<{ q: string; results: PlaceResult[]; busy: boolean }>({ q: "", results: [], busy: false });
   const [aiState, setAiState] = useState<{ q: string; busy: boolean; error: string | null }>({ q: "", busy: false, error: null });
   const aiEnabled = useData((s) => s.meta?.ai.enabled ?? false);
   const input = useRef<HTMLInputElement>(null);
@@ -66,18 +77,49 @@ export function SearchPalette() {
     };
   }, [q]);
 
+  // Typed coordinates resolve instantly, without any request.
+  const coords = useMemo(() => parseCoordinates(q), [q]);
+
+  // Online place search (addresses, landmarks, small towns): slower debounce, ≥ 3 chars, via our caching proxy.
+  useEffect(() => {
+    const term = q.trim();
+    if (term.length < GEOCODE_MIN_CHARS || parseCoordinates(term)) return;
+    const ctrl = new AbortController();
+    const t = setTimeout(() => {
+      setGeo({ q: term, results: [], busy: true });
+      api
+        .geocode(term, ctrl.signal)
+        .then((r) => setGeo({ q: term, results: r.results, busy: false }))
+        .catch(() => !ctrl.signal.aborted && setGeo({ q: term, results: [], busy: false }));
+    }, 300);
+    return () => {
+      clearTimeout(t);
+      ctrl.abort();
+    };
+  }, [q]);
+
+  const places: PlaceResult[] = useMemo(() => {
+    const term = q.trim();
+    if (!term) return [];
+    if (coords) return [coordinateResult(coords)];
+    const local = res?.places ?? [];
+    const online = geo.q === term ? geo.results : [];
+    return mergePlaces(local, online, 10);
+  }, [q, coords, res, geo]);
+
   const items: Item[] = useMemo(() => {
+    const placeItems = places.map((d) => ({ kind: "place" as const, data: d }));
     // Ignore stale results once the query is cleared.
-    if (!res || !q.trim()) return [];
+    if (!res || !q.trim()) return placeItems;
     const offerAI = aiEnabled && res.intent?.source !== "ai" && q.trim().split(/\s+/).length >= 3;
     return [
       ...(offerAI ? [{ kind: "ask-ai" as const, data: null }] : []),
       ...(res.intent ? [{ kind: "intent" as const, data: res.intent }] : []),
-      ...res.locations.map((d) => ({ kind: "location" as const, data: d })),
+      ...placeItems,
       ...res.events.map((d) => ({ kind: "event" as const, data: d })),
       ...res.topics.map((d) => ({ kind: "topic" as const, data: d })),
     ];
-  }, [res, q, aiEnabled]);
+  }, [res, q, aiEnabled, places]);
 
   if (!open) return null;
 
@@ -85,6 +127,16 @@ export function SearchPalette() {
     setOpen(false);
     setQ("");
     setRes(null);
+    setGeo({ q: "", results: [], busy: false });
+  };
+
+  const choosePlace = (p: PlaceResult) => {
+    const ui = useUI.getState();
+    // Countries / continents are highlighted by their own layers; everything else gets a temporary pin.
+    ui.setSearchPin(p.kind === "country" || p.kind === "continent" ? null : { lon: p.lon, lat: p.lat, name: p.name });
+    if (p.kind === "country" && p.countryCode) ui.selectCountry(p.countryCode); // country panel fits the country bbox
+    else if (p.regionId !== null) ui.selectRegion(p.regionId); // region panel fits the state/province bbox
+    else ui.requestFlyTo(placeView(p));
   };
 
   const askAI = async () => {
@@ -103,10 +155,8 @@ export function SearchPalette() {
   const choose = (it: Item) => {
     if (it.kind === "ask-ai") return void askAI();
     const ui = useUI.getState();
-    if (it.kind === "location") {
-      const l = it.data;
-      if (l.kind === "country" && l.code) ui.selectCountry(l.code);
-      else ui.requestFlyTo({ lon: l.lon, lat: l.lat, zoom: l.zoom, bbox: l.bbox ?? undefined });
+    if (it.kind === "place") {
+      choosePlace(it.data);
     } else if (it.kind === "event") {
       focusEvent(it.data);
     } else if (it.kind === "topic") {
@@ -166,13 +216,17 @@ export function SearchPalette() {
             ref={input}
             autoFocus
             value={q}
-            onChange={(e) => setQ(e.target.value)}
+            onChange={(e) => {
+              setQ(e.target.value);
+              // A new search clears the previous place marker.
+              if (useUI.getState().searchPin) useUI.getState().setSearchPin(null);
+            }}
             onKeyDown={onKeyDown}
-            placeholder="Search countries, cities, events, topics…"
+            placeholder="Search places, addresses, airports, coordinates, events…"
             className="h-12 flex-1 bg-transparent text-[14px] outline-none placeholder:text-faint"
             aria-label="Search query"
           />
-          {loading && <span className="meta text-faint">Searching…</span>}
+          {(loading || (geo.busy && geo.q === q.trim())) && <span className="meta text-faint">Searching…</span>}
           <kbd className="meta rounded border border-line px-1.5 text-faint">Esc</kbd>
         </div>
         <div className="scroll-thin max-h-[56vh] overflow-y-auto">
@@ -187,16 +241,17 @@ export function SearchPalette() {
                 ))}
               </div>
               <p className="mt-4 text-[11.5px] leading-relaxed text-faint">
-                Structured search: places, categories, time phrases (“last 6 hours”) and magnitudes are recognised. Natural-language questions will be routed to an AI command layer in a future version.
+                Places: countries, states, cities, addresses, landmarks, airport codes (“JFK”) and coordinates (“48.85, 2.35”). Structured search: categories, time phrases (“last 6 hours”) and magnitudes are recognised. Natural-language questions will be routed to an AI command layer in a future version.
               </p>
             </div>
           )}
-          {q.trim() && res?.query === q.trim() && items.length === 0 && <div className="p-6 text-center text-[12.5px] text-muted">No results for “{q}”.</div>}
+          {q.trim() && res?.query === q.trim() && items.length === 0 && !(geo.busy && geo.q === q.trim()) && <div className="p-6 text-center text-[12.5px] text-muted">No results for “{q}”.</div>}
           {group("ask-ai", "AI")}
           {aiState.q === q.trim() && aiState.busy && <div className="px-4 py-2 text-[12px] text-ai">Interpreting with AI…</div>}
           {aiState.q === q.trim() && aiState.error && <div className="px-4 py-2 text-[12px] text-danger">{aiState.error}</div>}
           {group("intent", "Interpretation")}
-          {group("location", "Locations")}
+          {group("place", "Places")}
+          {places.some((p) => p.source === "photon") && <div className="meta -mt-1 px-4 pb-1.5 normal-case tracking-[0.02em] text-faint">{PHOTON_ATTRIBUTION}</div>}
           {group("event", "Events")}
           {group("topic", "Topics")}
         </div>
@@ -231,14 +286,17 @@ function Row({ it }: { it: Item }) {
       </>
     );
   }
-  if (it.kind === "location") {
+  if (it.kind === "place") {
+    const p = it.data;
+    const area = p.kind === "continent" || p.kind === "country" || p.kind === "state";
     return (
       <>
-        {it.data.kind === "region" || it.data.kind === "country" ? <GlobeIcon className="shrink-0 text-muted" /> : <PinIcon className="shrink-0 text-muted" />}
+        {area ? <GlobeIcon className="shrink-0 text-muted" /> : <PinIcon className="shrink-0 text-muted" />}
         <div className="min-w-0 flex-1">
-          <div className="text-[13px]">{it.data.name}</div>
-          <div className="meta normal-case tracking-[0.02em] text-faint">{it.data.kind} · {it.data.detail}</div>
+          <div className="truncate text-[13px]">{p.name}</div>
+          <div className="meta truncate normal-case tracking-[0.02em] text-faint">{p.detail}</div>
         </div>
+        {p.source === "photon" && <span className="meta shrink-0 text-faint">OSM</span>}
       </>
     );
   }

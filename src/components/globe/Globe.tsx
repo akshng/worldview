@@ -38,6 +38,9 @@ import {
   ISS_TRACK_SOURCE,
   auroraLayers,
   issLayers,
+  SEARCH_PIN_SOURCE,
+  searchPinCollection,
+  searchPinLayers,
 } from "./layers";
 import { issFeatures, type IssData } from "@/layers/iss";
 import { auroraFeatures, type AuroraData } from "@/layers/aurora";
@@ -97,6 +100,7 @@ export default function Globe({ window: win, live }: GlobeProps) {
   const selectedCountry = useUI((s) => s.selectedCountry);
   const hoveredEventId = useUI((s) => s.hoveredEventId);
   const flyTo = useUI((s) => s.flyTo);
+  const searchPin = useUI((s) => s.searchPin);
   const radarFrame = useUI((s) => s.radarFrame);
   const radarPlaying = useUI((s) => s.radarPlaying);
   const showCameras = useUI((s) => s.settings.showCameras);
@@ -119,7 +123,8 @@ export default function Globe({ window: win, live }: GlobeProps) {
         center: HOME_VIEW.center,
         zoom: HOME_VIEW.zoom,
         minZoom: 0.6,
-        maxZoom: 14,
+        // Street level for address / landmark search results (vector tiles overzoom past z14).
+        maxZoom: 17,
         attributionControl: { compact: true },
         renderWorldCopies: false,
         maxPitch: 60,
@@ -187,6 +192,8 @@ export default function Globe({ window: win, live }: GlobeProps) {
       map.addSource(ISS_SOURCE, { type: "geojson", data: EMPTY_FC });
       for (const l of issLayers()) map.addLayer(l);
       for (const l of labelLayers()) map.addLayer(l);
+      map.addSource(SEARCH_PIN_SOURCE, { type: "geojson", data: searchPinCollection(useUI.getState().searchPin) });
+      for (const l of searchPinLayers()) map.addLayer(l);
 
       // Country polygons are large; load after first paint.
       fetch("/geo/countries.geojson")
@@ -333,6 +340,8 @@ export default function Globe({ window: win, live }: GlobeProps) {
       // The aurora overlay is hover-only; clicks pass through to countries/regions.
       const hit = top?.layer.id === "aurora" ? undefined : top;
       const ui = useUI.getState();
+      // Any click on the map dismisses the place-search marker.
+      if (ui.searchPin) ui.setSearchPin(null);
       if (hit && EVENT_POINT_LAYERS.includes(hit.layer.id)) {
         ui.selectEvent(String(hit.properties.id));
         return;
@@ -629,6 +638,13 @@ export default function Globe({ window: win, live }: GlobeProps) {
     if (selectedRegion !== null) map.setFeatureState({ source: REGIONS_SOURCE, id: selectedRegion }, { selected: true });
     selectedRegionFid.current = selectedRegion;
   }, [selectedRegion, ready]);
+
+  // ---- place-search marker ---------------------------------------------------
+  useEffect(() => {
+    const map = liveMap();
+    if (!ready || !map) return;
+    (map.getSource(SEARCH_PIN_SOURCE) as GeoJSONSource | undefined)?.setData(searchPinCollection(searchPin));
+  }, [searchPin, ready]);
 
   // ---- camera -------------------------------------------------------------
   useEffect(() => {

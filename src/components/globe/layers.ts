@@ -27,6 +27,8 @@ export const ISS_SOURCE = "iss";
 export const ISS_TRACK_SOURCE = "iss-track";
 export const ISS_COLOR = "#ffb703";
 export const AURORA_SOURCE = "aurora";
+export const SEARCH_PIN_SOURCE = "search-pin";
+export const SEARCH_PIN_COLOR = "#ff4d6d";
 /** Aurora probability (%) colour ramp, SWPC-style green → yellow → red */
 export const AURORA_STOPS: Array<[number, string]> = [
   [10, "#2fbf71"],
@@ -673,4 +675,45 @@ export function issLayers(): LayerSpecification[] {
       paint: { "text-color": ISS_COLOR, "text-halo-color": "#05070a", "text-halo-width": 1.2 },
     },
   ];
+}
+
+/** Temporary marker for the place picked in search: a pulse ring, a dot and its name. */
+export function searchPinLayers(): LayerSpecification[] {
+  return [
+    {
+      id: "search-pin-halo",
+      type: "circle",
+      source: SEARCH_PIN_SOURCE,
+      paint: { "circle-color": SEARCH_PIN_COLOR, "circle-opacity": 0.2, "circle-radius": 16, "circle-blur": 0.35 },
+    },
+    {
+      id: "search-pin-point",
+      type: "circle",
+      source: SEARCH_PIN_SOURCE,
+      paint: { "circle-color": SEARCH_PIN_COLOR, "circle-radius": 6, "circle-stroke-color": "#ffffff", "circle-stroke-width": 2 },
+    },
+    {
+      id: "search-pin-label",
+      type: "symbol",
+      source: SEARCH_PIN_SOURCE,
+      layout: {
+        "text-field": ["get", "name"],
+        "text-font": FONT_BOLD,
+        "text-size": 12,
+        "text-offset": [0, 1.25],
+        "text-anchor": "top",
+        "text-max-width": 14,
+        "text-allow-overlap": true,
+        "text-ignore-placement": true,
+      },
+      paint: { "text-color": "#ffffff", "text-halo-color": "#05070a", "text-halo-width": 1.5 },
+    },
+  ];
+}
+
+export function searchPinCollection(pin: { lon: number; lat: number; name: string } | null): GeoJSON.FeatureCollection {
+  return {
+    type: "FeatureCollection",
+    features: pin ? [{ type: "Feature", properties: { name: pin.name }, geometry: { type: "Point", coordinates: [pin.lon, pin.lat] } }] : [],
+  };
 }
