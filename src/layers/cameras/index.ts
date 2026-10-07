@@ -4,10 +4,15 @@
  * The browser loads each image/stream directly from the operator.
  *
  * Row: [id, name, lon, lat, sourceIndex, imageUrl, videoUrl | null, videoKind | null]
+ * imageUrl is "" for video-only cameras (operators that publish live streams but no stills);
+ * every row has a still, a video, or both. videoKind "hls" means a live stream.
  */
 import type { LayerContext, LayerSnapshot, LiveLayerProvider } from "../types";
 
 export type CameraRow = [string, string, number, number, number, string, string | null, "mp4" | "hls" | null];
+
+/** True when the camera has a live (HLS) stream rather than only stills or a recorded clip. */
+export const isLiveVideo = (r: CameraRow) => r[7] === "hls" && !!r[6];
 
 export interface CameraSource {
   id: string;
@@ -22,6 +27,8 @@ export interface CameraSource {
 export interface CamerasData {
   sources: CameraSource[];
   rows: CameraRow[];
+  /** How many rows have a live (HLS) stream */
+  liveCount: number;
   failed: string[];
 }
 
@@ -44,6 +51,17 @@ export const CAMERA_SOURCES: CameraSource[] = [
   { id: "qld", name: "QLDTraffic webcams", region: "Queensland, Australia", homepage: "https://www.data.qld.gov.au/dataset/qldtraffic-geojson-api", license: "Queensland Department of Transport and Main Roads, CC BY 4.0", refreshSec: 60 },
   { id: "atx", name: "City of Austin traffic cameras", region: "Austin, Texas, US", homepage: "https://data.austintexas.gov/Transportation-and-Mobility/Traffic-Cameras/b4k4-adkb", license: "City of Austin open data, Public Domain", refreshSec: 300 },
   { id: "sd", name: "SD511 road cameras", region: "South Dakota, US", homepage: "https://www.sd511.org/", license: "South Dakota DOT SD511 public camera feed (no warranty)", refreshSec: 300 },
+  { id: "va", name: "VDOT 511 Virginia cameras", region: "Virginia, US", homepage: "https://511.vdot.virginia.gov/", license: "Virginia DOT 511 public camera feed (real-time viewing only, not recorded)", refreshSec: 120 },
+  { id: "sc", name: "SCDOT SC511 cameras", region: "South Carolina, US", homepage: "https://www.511sc.org/", license: "South Carolina DOT SC511 public camera feed (no warranty)", refreshSec: 120 },
+  { id: "md", name: "Maryland CHART cameras", region: "Maryland, US", homepage: "https://chart.maryland.gov/", license: "Maryland SHA CHART public data feed", refreshSec: 60 },
+  { id: "de", name: "DelDOT traffic cameras", region: "Delaware, US", homepage: "https://deldot.gov/map/", license: "Delaware DOT TMC public camera feed", refreshSec: 60 },
+  { id: "mo", name: "MoDOT Traveler cameras", region: "Missouri, US", homepage: "https://traveler.modot.org/map/", license: "Missouri DOT Traveler Information public feed (incl. Ozarks Traffic, Springfield)", refreshSec: 60 },
+  { id: "co", name: "COtrip cameras", region: "Colorado, US", homepage: "https://www.cotrip.org/", license: "Colorado DOT COtrip public camera feed", refreshSec: 120 },
+  { id: "in", name: "INDOT TrafficWise cameras", region: "Indiana, US", homepage: "https://511in.org/", license: "Indiana DOT 511IN public camera feed", refreshSec: 120 },
+  { id: "al", name: "ALGO Traffic cameras", region: "Alabama, US", homepage: "https://algotraffic.com/", license: "Alabama DOT ALGO Traffic public camera feed", refreshSec: 60 },
+  { id: "ok", name: "OKTraffic cameras", region: "Oklahoma, US", homepage: "https://oktraffic.org/", license: "Oklahoma DOT OKTraffic public camera feed", refreshSec: 60 },
+  { id: "ks", name: "KanDrive cameras", region: "Kansas, US", homepage: "https://www.kandrive.gov/", license: "Kansas DOT KanDrive public camera feed (no warranty)", refreshSec: 300 },
+  { id: "ne", name: "Nebraska 511 cameras", region: "Nebraska, US", homepage: "https://511.nebraska.gov/", license: "Nebraska DOT 511 public camera feed (no warranty)", refreshSec: 300 },
 ];
 const IDX = Object.fromEntries(CAMERA_SOURCES.map((s, i) => [s.id, i]));
 
@@ -87,7 +105,8 @@ export function caltransRows(list: CaltransItem[]): CameraRow[] {
     const lat = Number(c.location.latitude), lon = Number(c.location.longitude);
     const img = https(c.imageData?.static?.currentImageURL);
     if (c.inService !== "true" || !img || !ok(lat, lon)) continue;
-    const vid = https(c.imageData?.streamingVideoURL);
+    // A few District 8 entries are published as "http://" or "ttps://" — the same server serves them over https.
+    const vid = hlsUrl((c.imageData?.streamingVideoURL ?? "").trim().replace(/^(?:https?|ttps):\/\/wzmedia\.dot\.ca\.gov\//, "https://wzmedia.dot.ca.gov/"));
     rows.push([`caltrans:${c.location.district}:${c.index}`, c.location.locationName.replace(/^\S+\s+--\s+/, ""), lon, lat, IDX.caltrans, img, vid, vid ? "hls" : null]);
   }
   return rows;
@@ -325,6 +344,162 @@ export function sdRows(fc: { features?: Array<GeoFeature<{ name?: string; route?
   return rows;
 }
 
+/** An https HLS playlist URL, else null. Rejects URLs carrying a short-lived `token` (they expire long before the 6 h cache). */
+const hlsUrl = (u: unknown) => {
+  const v = https(typeof u === "string" ? u.trim() : u);
+  return v && /\.m3u8(\?|$)/i.test(v) && !/[?&]token=/i.test(v) ? v : null;
+};
+
+/**
+ * Iteris / Skyline 511 camera features (VDOT 511 Virginia, SC511): each has an HLS stream and a
+ * thumbnail. Cameras the operator flags inactive or as a problem stream are skipped.
+ */
+export function skylineRows(
+  features: Array<GeoFeature<{ id?: string; name?: string; description?: string; route?: string; direction?: string; https_url?: string; image_url?: string; active?: boolean; problem_stream?: boolean }>> | undefined,
+  src: "va" | "sc",
+): CameraRow[] {
+  const rows: CameraRow[] = [];
+  const seen = new Set<string>();
+  for (const f of features ?? []) {
+    const p = f.properties ?? {};
+    const [lon, lat] = lonLat(f.geometry);
+    const vid = hlsUrl(p.https_url);
+    const img = https(p.image_url) ?? "";
+    if (p.active === false || p.problem_stream === true || (!vid && !img) || !ok(lat, lon)) continue;
+    const id = `${src}:${p.id ?? p.name ?? fileId(vid ?? img)}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const name = (p.description ?? "").trim() || [p.route, p.direction].filter(Boolean).join(" ") || "Traffic camera";
+    rows.push([id, name, lon, lat, IDX[src], img, vid, vid ? "hls" : null]);
+  }
+  return rows;
+}
+
+const MD_STREAMER = /^strmr\d+\.sha\.maryland\.gov$/;
+/**
+ * Maryland CHART camera list. Video only: CHART publishes no stills. The stream URL follows the
+ * operator's own player (chart.maryland.gov/Video/GetVideo/{id}): https://{cctvIp}/rtplive/{id}/playlist.m3u8.
+ * Cameras offline or in communication failure are skipped.
+ */
+export function mdRows(list: Array<{ id?: string; name?: string; description?: string; lat?: number; lon?: number; cctvIp?: string; commMode?: string; opStatus?: string }>): CameraRow[] {
+  const rows: CameraRow[] = [];
+  for (const c of list ?? []) {
+    const lat = num(c.lat), lon = num(c.lon);
+    if (c.commMode !== "ONLINE" || c.opStatus === "COMM_FAILURE" || !c.id || !/^[0-9a-f]+$/i.test(c.id) || !MD_STREAMER.test(c.cctvIp ?? "") || !ok(lat, lon)) continue;
+    const vid = `https://${c.cctvIp}/rtplive/${c.id}/playlist.m3u8`;
+    rows.push([`md:${c.id}`, (c.description || c.name || "CHART camera").trim(), lon, lat, IDX.md, "", vid, "hls"]);
+  }
+  return rows;
+}
+
+/** DelDOT video cameras (tmc.deldot.gov). Video only; only enabled cameras with status "Active". */
+export function deRows(j: { videoCameras?: Array<{ id?: string; title?: string; lat?: number; lon?: number; enabled?: boolean; status?: string; urls?: { m3u8s?: string } }> }): CameraRow[] {
+  const rows: CameraRow[] = [];
+  for (const c of j?.videoCameras ?? []) {
+    const lat = num(c.lat), lon = num(c.lon);
+    const vid = hlsUrl(c.urls?.m3u8s);
+    if (!c.enabled || c.status !== "Active" || !vid || !c.id || !ok(lat, lon)) continue;
+    rows.push([`de:${c.id}`, titleCase((c.title ?? "").trim()) || `DelDOT ${c.id}`, lon, lat, IDX.de, "", vid, "hls"]);
+  }
+  return rows;
+}
+
+const MO_HOSTS = /(^|\.)(modot\.mo\.gov|ozarkstrafficoneview\.com)$/;
+/**
+ * MoDOT Traveler streaming cameras. Video only. Keeps streams on MoDOT's own servers and Ozarks
+ * Traffic (MoDOT / City of Springfield); KC Scout streams behind traveler.modot.org/tisvc refuse
+ * direct playback (HTTP 403) and are skipped.
+ */
+export function moRows(list: Array<{ location?: string; x?: number; y?: number; html?: string | null }>): CameraRow[] {
+  const rows: CameraRow[] = [];
+  const seen = new Set<string>();
+  for (const c of list ?? []) {
+    const lat = num(c.y), lon = num(c.x);
+    let vid = hlsUrl(c.html);
+    if (!vid || !ok(lat, lon)) continue;
+    const u = new URL(vid);
+    u.hostname = u.hostname.toLowerCase();
+    if (!MO_HOSTS.test(u.hostname)) continue;
+    vid = u.toString();
+    const stream = /\/rtplive\/([^/]+)\//.exec(u.pathname)?.[1] ?? fileId(vid);
+    const id = `mo:${u.hostname.includes("ozarks") ? "oz:" : ""}${stream}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    rows.push([id, (c.location ?? "").trim() || "MoDOT camera", lon, lat, IDX.mo, "", vid, "hls"]);
+  }
+  return rows;
+}
+
+type CarsCamera = {
+  id?: number | string;
+  public?: boolean;
+  active?: boolean;
+  name?: string;
+  location?: { latitude?: number; longitude?: number };
+  views?: Array<{ name?: string; type?: string; url?: string; videoPreviewUrl?: string }>;
+};
+/**
+ * Castle Rock CARS 511 camera list (COtrip, 511IN, KanDrive, Nebraska 511): one row per view.
+ * "WMP" views are HLS streams with a preview still; "STILL_IMAGE" views are stills. Streams that
+ * need a short-lived token are kept as stills only; other view types (e.g. MJPEG relays) are skipped.
+ */
+export function carsRows(list: CarsCamera[], src: "co" | "in" | "ks" | "ne"): CameraRow[] {
+  const rows: CameraRow[] = [];
+  const seen = new Set<string>();
+  for (const c of list ?? []) {
+    const lat = num(c.location?.latitude), lon = num(c.location?.longitude);
+    if (c.public === false || c.active === false || !ok(lat, lon)) continue;
+    const site = (c.name ?? "").trim() || "Traffic camera";
+    const views = c.views ?? [];
+    views.forEach((v, i) => {
+      let vid: string | null = null, img: string | null = null;
+      if (v.type === "WMP") {
+        vid = hlsUrl(v.url);
+        img = https(v.videoPreviewUrl);
+      } else if (v.type === "STILL_IMAGE") img = https(v.url);
+      const key = vid ?? img;
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      const vn = (v.name ?? "").trim();
+      const name = views.length > 1 && vn && vn !== site ? `${site}: ${vn}` : site;
+      rows.push([`${src}:${c.id}:${i}`, name, lon, lat, IDX[src], img ?? "", vid, vid ? "hls" : null]);
+    });
+  }
+  return rows;
+}
+
+/** ALGO Traffic (Alabama DOT) cameras: public cameras with an HLS stream and a snapshot. */
+export function alRows(list: Array<{ id?: number; accessLevel?: string; location?: { latitude?: number; longitude?: number; city?: string; displayRouteDesignator?: string; displayCrossStreet?: string; direction?: string }; playbackUrls?: { hls?: string }; snapshotImageUrl?: string }>): CameraRow[] {
+  const rows: CameraRow[] = [];
+  for (const c of list ?? []) {
+    const l = c.location ?? {};
+    const lat = num(l.latitude), lon = num(l.longitude);
+    const vid = hlsUrl(c.playbackUrls?.hls);
+    const img = https(c.snapshotImageUrl) ?? "";
+    if (c.accessLevel !== "Public" || (!vid && !img) || c.id === undefined || !ok(lat, lon)) continue;
+    const road = [l.displayRouteDesignator, l.displayCrossStreet].filter(Boolean).join(" at ");
+    const name = [road, l.city].filter(Boolean).join(", ") || `ALGO camera ${c.id}`;
+    rows.push([`al:${c.id}`, name, lon, lat, IDX.al, img, vid, vid ? "hls" : null]);
+  }
+  return rows;
+}
+
+/** OKTraffic (Oklahoma DOT) camera poles → cameras. Video only; skips cameras out of service or blocked from public view. */
+export function okRows(poles: Array<{ mapCameras?: Array<{ id?: number; location?: string; latitude?: string | number; longitude?: string | number; status?: string; blockAtis?: string; streamDictionary?: { streamSrc?: string } | null }> }>): CameraRow[] {
+  const rows: CameraRow[] = [];
+  const seen = new Set<string>();
+  for (const p of poles ?? []) {
+    for (const m of p.mapCameras ?? []) {
+      const lat = num(m.latitude), lon = num(m.longitude);
+      const vid = hlsUrl(m.streamDictionary?.streamSrc);
+      if (m.status === "Out Of Service" || m.blockAtis === "1" || !vid || m.id === undefined || seen.has(vid) || !ok(lat, lon)) continue;
+      seen.add(vid);
+      rows.push([`ok:${m.id}`, (m.location ?? "").trim() || "OKTraffic camera", lon, lat, IDX.ok, "", vid, "hls"]);
+    }
+  }
+  return rows;
+}
+
 /** All features of an ArcGIS layer as WGS84 GeoJSON, following the server's page size. */
 async function arcgisFeatures<T>(layerUrl: string, outFields: string, ctx: LayerContext, orderBy = "OBJECTID", maxPages = 10): Promise<{ features: T[] }> {
   const features: T[] = [];
@@ -345,13 +520,14 @@ const ARCGIS = {
   ia: "https://services.arcgis.com/8lRhdTsQyJpO52F1/arcgis/rest/services/Traffic_Cameras_View/FeatureServer/0",
   ky: "https://services2.arcgis.com/CcI36Pduqd0OR4W9/arcgis/rest/services/trafficCamerasCur_Prd/FeatureServer/0",
 };
+const OKTRAFFIC_CAMERAS = `https://oktraffic.org/api/CameraPoles?filter=${encodeURIComponent(JSON.stringify({ include: [{ relation: "mapCameras", scope: { include: "streamDictionary" } }] }))}`;
 const TORONTO_CAMERAS = "https://ckan0.cf.opendata.inter.prod-toronto.ca/dataset/a3309088-5fd4-4d34-8297-77c8301840ac/resource/4a568300-c7f8-496d-b150-dff6f5dc6d4f/download/traffic-camera-list-4326.geojson";
 
 export const camerasLayer: LiveLayerProvider<CamerasData> = {
   id: "cameras",
   name: "Public cameras",
   description:
-    "Traffic and road-weather cameras published as open data by transport agencies in London, New York City, California, Washington, Illinois, Iowa, Kentucky, Texas (Austin), South Dakota, British Columbia, Toronto, Calgary, Spain, Iceland, Finland, Queensland, Hong Kong and Singapore.",
+    "Traffic and road-weather cameras published by transport agencies in London, New York City, California, Virginia, Maryland, Delaware, South Carolina, Alabama, Missouri, Oklahoma, Colorado, Indiana, Kansas, Nebraska, Washington, Illinois, Iowa, Kentucky, Texas (Austin), South Dakota, British Columbia, Toronto, Calgary, Spain, Iceland, Finland, Queensland, Hong Kong and Singapore. Thousands stream live video.",
   homepage: "https://tfl.gov.uk/info-for/open-data-users/",
   attribution: CAMERA_SOURCES.map((s) => s.name).join(" · "),
   // The camera list changes rarely; images are fetched live by the browser.
@@ -393,6 +569,14 @@ export const camerasLayer: LiveLayerProvider<CamerasData> = {
       ["qld", async () => qldRows(await getJson("https://data.qldtraffic.qld.gov.au/webcameras.geojson", ctx))],
       ["atx", async () => atxRows(await getJson("https://data.austintexas.gov/resource/b4k4-adkb.json?$select=camera_id,location_name,camera_status,screenshot_address,location&$limit=5000", ctx))],
       ["sd", async () => sdRows(await getJson("https://sd.cdn.iteris-atis.com/geojson/icons/metadata/icons.cameras.geojson", ctx))],
+      ["va", async () => skylineRows((await getJson("https://511.vdot.virginia.gov/services/511/map/array/cameras", ctx)).data, "va")],
+      ["sc", async () => skylineRows((await getJson("https://sc.cdn.iteris-atis.com/geojson/icons/metadata/icons.cameras.geojson", ctx)).features, "sc")],
+      ["md", async () => mdRows(await getJson("https://chart.maryland.gov/DataFeeds/GetCamerasJson", ctx))],
+      ["de", async () => deRows(await getJson("https://tmc.deldot.gov/json/videocamera.json", ctx))],
+      ["mo", async () => moRows(await getJson("https://traveler.modot.org/timconfig/feed/desktop/StreamingCams2.json", ctx))],
+      ...(["co", "in", "ks", "ne"] as const).map((st): [string, () => Promise<CameraRow[]>] => [st, async () => carsRows(await getJson(`https://${st}tg.carsprogram.org/cameras_v1/api/cameras`, ctx), st)]),
+      ["al", async () => alRows(await getJson("https://api.algotraffic.com/v4.0/Cameras", ctx))],
+      ["ok", async () => okRows(await getJson(OKTRAFFIC_CAMERAS, ctx))],
     ];
     const results = await Promise.allSettled(tasks.map(([, run]) => run()));
     const rows: CameraRow[] = [];
@@ -410,7 +594,7 @@ export const camerasLayer: LiveLayerProvider<CamerasData> = {
       observedAt: now,
       retrievedAt: now,
       count: rows.length,
-      data: { sources: CAMERA_SOURCES, rows, failed },
+      data: { sources: CAMERA_SOURCES, rows, liveCount: rows.filter(isLiveVideo).length, failed },
       attribution: camerasLayer.attribution,
       notes: failed.length ? [`Unavailable: ${failed.join(", ")}`] : undefined,
     };

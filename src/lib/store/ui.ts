@@ -29,6 +29,8 @@ export interface Settings {
   showDayNight: boolean;
   /** Public camera markers on the map */
   showCameras: boolean;
+  /** Only show cameras with a live video stream */
+  camerasLiveOnly: boolean;
   /** ISS position + ground track overlay */
   showIss: boolean;
   /** NOAA OVATION aurora forecast overlay */
@@ -161,6 +163,7 @@ const DEFAULT_SETTINGS: Settings = {
   showEventLabels: false,
   showDayNight: true,
   showCameras: false,
+  camerasLiveOnly: false,
   showIss: false,
   showAurora: false,
   autoRefresh: true,
