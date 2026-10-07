@@ -91,6 +91,9 @@ export function TopBar() {
         <IconButton onClick={() => useUI.getState().setEnergyOpen(true)} title="Energy: live electricity grids" aria-label="Energy" className="meta px-2.5">
           Energy
         </IconButton>
+        <IconButton onClick={() => useUI.getState().setSecurityOpen(true)} title="Security: exploited vulnerabilities, critical CVEs, travel advisories" aria-label="Security" className="meta px-2.5">
+          Security
+        </IconButton>
         <IconButton onClick={() => useUI.getState().setTrendsOpen(true)} title="Trends: what people are searching and sharing" aria-label="Trends" className="meta px-2.5">
           Trends
         </IconButton>

@@ -27,6 +27,9 @@ import { nifcConnector } from "./nifc";
 import { newsRssConnector } from "./news-rss";
 import { federalRegisterConnector } from "./federal-register";
 import { travelAdvisoriesConnector } from "./travel-advisories";
+import { fcdoTravelConnector } from "./fcdo-travel";
+import { canadaTravelConnector } from "./canada-travel";
+import { smartravellerConnector } from "./smartraveller";
 import { cdcTravelConnector } from "./cdc-travel";
 import { adsbEmergencyConnector } from "./adsb-emergency";
 import { wikipediaEventsConnector } from "./wikipedia-events";
@@ -81,6 +84,9 @@ export const CONNECTORS = [
   cdcTravelConnector,
   airQualityConnector,
   travelAdvisoriesConnector,
+  fcdoTravelConnector,
+  canadaTravelConnector,
+  smartravellerConnector,
   federalRegisterConnector,
   secConnector,
   fdicFailuresConnector,

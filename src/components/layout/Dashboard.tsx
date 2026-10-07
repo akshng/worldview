@@ -23,6 +23,7 @@ import { BriefingModal } from "@/components/briefing/BriefingModal";
 import { MarketsPanel } from "@/components/markets/MarketsPanel";
 import { PlanetPanel } from "@/components/planet/PlanetPanel";
 import { EnergyPanel } from "@/components/energy/EnergyPanel";
+import { SecurityPanel } from "@/components/security/SecurityPanel";
 import { TrendsPanel } from "@/components/trends/TrendsPanel";
 import { InstrumentDetail } from "@/components/markets/InstrumentDetail";
 import { Toasts, useAlertChecker } from "@/components/markets/Alerts";
@@ -109,6 +110,7 @@ export function Dashboard() {
       <MarketsPanel />
       <PlanetPanel />
       <EnergyPanel />
+      <SecurityPanel />
       <TrendsPanel />
       <InstrumentDetail />
       <Toasts />

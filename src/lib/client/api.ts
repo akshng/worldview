@@ -213,6 +213,7 @@ export const api = {
     getJSON<import("@/lib/finance/dividends").Dividends>(`/api/markets/dividends/${encodeURIComponent(symbol)}`, signal),
   planet: (signal?: AbortSignal) => getJSON<import("@/lib/planet").PlanetDashboard>("/api/planet", signal),
   energy: (signal?: AbortSignal) => getJSON<import("@/lib/energy").EnergyDashboard>("/api/energy", signal),
+  cyber: (signal?: AbortSignal) => getJSON<import("@/lib/cyber").SecurityDashboard>("/api/cyber", signal),
   trends: (signal?: AbortSignal) => getJSON<import("@/lib/trends").Trends>("/api/trends", signal),
   countryTrends: (geo: string, signal?: AbortSignal) =>
     getJSON<{ geo: string; country: import("@/lib/trends").GoogleCountry | null; generatedAt: string }>(`/api/trends?geo=${encodeURIComponent(geo)}`, signal),

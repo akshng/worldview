@@ -141,6 +141,8 @@ export function matchScore(a: Comparable, b: Comparable, opts: MatchOptions): Ma
   const onlySameSource =
     shared.length > 0 && a.dataSourceIds.length === 1 && b.dataSourceIds.length === 1;
   if (onlySameSource && !opts.mergeWithinSource.has(shared[0])) return null;
+  // Each government's travel advisory is its own official record (US, UK, Canada, Australia).
+  if (a.subtype === "travel advisory" && b.subtype === "travel advisory") return null;
 
   const ta = tokenize(a.title), tb = tokenize(b.title);
   const text = headlineSimilarity(ta, tb);
