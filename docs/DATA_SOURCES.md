@@ -217,9 +217,21 @@ Live layers are continuously changing observations visualised in map modes. They
 | --- | --- | --- | --- | --- | --- |
 | `weather-radar` | [RainViewer](https://www.rainviewer.com/api.html) weather-maps index + tiles | Weather | 5 min | — | 13 past frames (2 h) + nowcast; coverage only where national radar networks share data; attribution required |
 | `aviation` | [OpenSky Network](https://opensky-network.org/) `/states/all` | Aviation | 20 min | optional `OPENSKY_CLIENT_ID/SECRET` | Anonymous quota is 400 credits/day; a global snapshot costs 4, so the 20-min cache keeps continuous use under ~290/day. Positions older than 2 min are dropped. Non-commercial use terms apply |
-| `maritime` | [AISStream.io](https://aisstream.io/) websocket | Maritime | 1 min | `AISSTREAM_API_KEY` (free) | A websocket stays open while the mode is used (closed after 10 idle minutes); latest position per vessel, last 30 min; terrestrial AIS is sparse in open ocean |
+| `maritime` | With a key: [AISStream.io](https://aisstream.io/) websocket. Without: [Fintraffic Digitraffic marine](https://www.digitraffic.fi/en/marine-traffic/) `meri.digitraffic.fi/api/ais/v1/locations` + `/vessels` | Maritime, and map button **SHIP** (any mode) | 1 min (vessel metadata 30 min) | optional `AISSTREAM_API_KEY` (free) | AISStream: a websocket stays open while the layer is used (closed after 10 idle minutes); latest position per vessel, last 30 min; terrestrial AIS is sparse in open ocean. Digitraffic: keyless, **CC BY 4.0** ("Source: Fintraffic / digitraffic.fi"), requests carry the required `Digitraffic-User` header; Finnish coastal receivers only (Gulf of Finland, Gulf of Bothnia, northern Baltic — ~800–1,000 vessels), positions from the last 60 min joined with name, AIS ship type and destination |
+| `military-aircraft` | [adsb.lol](https://api.adsb.lol/docs) `/v2/mil` | Map button **MIL** (any mode) | 30 s | — | Aircraft broadcasting ADS-B **identified as military in the community database** (~200 at a time); data under **ODbL 1.0**. Most military aircraft do not broadcast, so this is never complete; positions older than 2 min dropped. `/v2/ladd` and `/v2/pia` (privacy-program aircraft) deliberately not used |
+| `satellites` | [CelesTrak](https://celestrak.org/NORAD/elements/) GP data (OMM JSON): groups `stations`, `gps-ops`, `visual` | Map button **SAT·ORB** (any mode) | 2 h | — | See [Satellites](#satellites-srclayerssatellites) |
 | `iss` | [wheretheiss.at](https://wheretheiss.at/w/developer) | Map button **ISS** (any mode) | 5 s (track 5 min) | — | See [Space overlays](#space-overlays-srclayersiss-srclayersaurora) |
 | `aurora` | [NOAA SWPC OVATION](https://www.swpc.noaa.gov/products/aurora-30-minute-forecast) | Map button **AUR** (any mode) | 10 min | — | Forecast, not observation |
+
+### Satellites (`src/layers/satellites`)
+
+- **Elements**: CelesTrak GP data, keyless. CelesTrak refreshes GP data about every 2 hours and asks clients not to re-download unchanged data, so the server fetches three groups (`stations`, `gps-ops`, `visual`) at most once per 2 h and every browser shares that copy. Capped at 40 stations, 40 GPS and 200 "visual" (brightest) objects (~200 in practice); duplicate NORAD ids and objects sharing identical elements (ISS modules) are dropped. Attribution: "Orbital elements: CelesTrak".
+- **Propagation**: positions are computed **in the browser** every 2 s with a bundled SGP4 (`sgp4.ts`, the near-Earth branch of Vallado et al. 2006, WGS-72; `satellite.js` is not a dependency). It reproduces the Spacetrack Report #3 reference vectors to within a few metres (see `tests/live-tracking.test.ts`) and agrees with wheretheiss.at's ISS position to ~1 km. **Deep-space objects** (period ≥ 225 min, e.g. GPS) use the same model without the SDP4 lunisolar/resonance terms — tens of km near the element epoch, fine for a globe, not for precise work.
+- **Orbit track**: click a satellite to draw its ground track (past half orbit faint, next full orbit bright), recomputed every 30 s. These are model positions, not observations.
+
+### GPS jamming — not added
+
+[gpsjam.org](https://gpsjam.org/) does publish daily files (`gpsjam.org/data/YYYY-MM-DD-h3_4.csv`: H3 resolution-4 hex, good/bad aircraft counts, with a `manifest.csv`). They are **not used** because neither the site, its FAQ nor the files state any licence or permission for reuse — the map is "free to use", but redistributing the data in another app is not granted — and the data is derived from third-party ADS-B aggregator feeds whose own terms apply. Rendering H3 cells would also need `h3-js`, which is not a dependency. Revisit if the author publishes terms.
 
 Adding a layer: create `src/layers/<id>/` with a `LiveLayerProvider` (`load()` returns a snapshot), register it in `src/layers/registry.ts`, add a mode in `src/lib/map-modes.ts` and its map layers in `src/components/globe/layers.ts`.
 
@@ -246,6 +258,8 @@ Natural Earth countries (1:50m), populated places, and admin-1 states/provinces 
 - **Nasdaq earnings calendar** API blocks non-browser clients.
 - **GeoNet (NZ) volcanic alert levels** carry no timestamp, so they can't be placed in time without inventing one.
 - **OFAC recent actions**: OFAC's only RSS (`ofac.treasury.gov/rss.xml`) lists sanctions-program pages, not recent actions; the recent-actions page is HTML only, so sanctions actions aren't in the Security panel.
+- **Norwegian Coastal Administration (Kystverket) open AIS** is a raw NMEA TCP stream (`153.44.253.27:5631`), not HTTP/JSON; connections from here timed out, and using it would need an AIVDM decoder and a long-lived socket. Other keyless AIS (AISHub, MarineTraffic, VesselFinder) require an account, a feeding station or a commercial licence; Danish DMA AIS is published only as daily historical CSV archives.
+- **gpsjam.org** daily GPS-interference hexes: no stated licence (see [GPS jamming](#gps-jamming--not-added)).
 - **Canadian CWFIS active fires** WFS layer is no longer published under its documented name; NASA FIRMS covers Canadian fires.
 
 ## Caveats you should know
