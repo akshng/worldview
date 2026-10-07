@@ -34,4 +34,15 @@ export interface LiveLayerProvider<T = unknown> {
   ttlMs: number;
   checkConfiguration?(env: Record<string, string | undefined>): string | null;
   load(ctx: LayerContext): Promise<LayerSnapshot<T>>;
+  /**
+   * Load at server start and refresh in the background before the TTL runs out; requests
+   * never wait on upstream once a snapshot exists (an expired one is served while it refreshes).
+   */
+  background?: boolean;
+  /** Turns the cached data into what the API serves (e.g. a compact form). Defaults to the data itself. */
+  present?(data: T): unknown;
+  /** Changes whenever `present` would return something different for the same data. */
+  presentKey?(): string;
+  /** Extra background work started once per process alongside the refresh (e.g. liveness sampling). */
+  startBackground?(ctx: { snapshot: () => LayerSnapshot<T> | null; userAgent: string }): void;
 }

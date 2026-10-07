@@ -74,6 +74,7 @@ import { nightCollection } from "./terminator";
 import { useUI } from "@/lib/store/ui";
 import { useLiveLayer } from "@/lib/client/use-live-layer";
 import type { CamerasData } from "@/layers/cameras";
+import { hasLive } from "@/lib/cameras";
 import { CameraViewer } from "@/components/cameras/CameraViewer";
 import { loadRegions, REGION_ZOOM } from "@/lib/client/regions";
 import { useData } from "@/lib/client/data-store";
@@ -552,7 +553,7 @@ export default function Globe({ window: win, live }: GlobeProps) {
       if (hit?.layer.id === "cam-point") {
         const data = camerasRef.current;
         const row = data?.rows.find((r) => r[0] === hit.properties.id);
-        if (data && row) ui.selectCamera({ row, source: data.sources[row[4]] });
+        if (data && row) ui.selectCamera({ row, source: data.sources[row[4]], health: data.health?.[data.sources[row[4]].id] });
         return;
       }
       if (hit?.layer.id === "density-fill") {
@@ -1104,8 +1105,8 @@ function SpaceLegend({ iss, aurora }: { iss: LayerState<IssData> | null; aurora:
   );
 }
 
-/** Camera rows with a live (HLS) stream; matches isLiveVideo in the cameras layer. */
-const isLiveRow = (r: CamerasData["rows"][number]) => r[7] === "hls" && !!r[6];
+/** Camera rows flagged live video (an HLS stream on a source whose sampled streams are healthy). */
+const isLiveRow = hasLive;
 
 /** Key for the camera markers, with the "Live video only" filter. */
 function CameraLegend({ data, liveOnly }: { data: CamerasData | null; liveOnly: boolean }) {
@@ -1129,6 +1130,11 @@ function CameraLegend({ data, liveOnly }: { data: CamerasData | null; liveOnly: 
         <input type="checkbox" checked={liveOnly} onChange={(e) => useUI.getState().updateSettings({ camerasLiveOnly: e.target.checked })} />
         Live video only
       </label>
+      {data && data.hidden?.length > 0 && (
+        <div className="mt-1 text-faint" title="Every sampled image and stream from these operators failed in the last liveness check">
+          Hidden, not responding: {data.hidden.map((id) => data.sources.find((s) => s.id === id)?.region ?? id).join(", ")}
+        </div>
+      )}
       <div className="mt-1 text-faint">Streams and images load from each operator only while a viewer is open.</div>
     </div>
   );

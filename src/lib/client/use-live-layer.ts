@@ -35,7 +35,8 @@ export function useLiveLayer<T>(id: string | null, pollMs = 60_000, opts: { paus
       if (pauseWhenHidden && document.hidden) return;
       setState((s) => ({ ...s, id, loading: true, ...(s.id !== id ? { data: null, error: null } : {}) }));
       try {
-        const res = await fetch(`/api/layers/${id}`, { signal: ctrl.signal, cache: "no-store" });
+        // "no-cache": revalidate with the ETag, so an unchanged layer comes back as a tiny 304.
+        const res = await fetch(`/api/layers/${id}`, { signal: ctrl.signal, cache: "no-cache" });
         const body = await res.json();
         if (cancelled) return;
         if (!res.ok) setState({ id, data: null, error: body?.error ?? `Layer unavailable (${res.status})`, loading: false });
