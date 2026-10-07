@@ -88,6 +88,9 @@ export function TopBar() {
         <IconButton onClick={() => useUI.getState().setPlanetOpen(true)} title="Planet: climate & space weather" aria-label="Planet" className="meta px-2.5">
           Planet
         </IconButton>
+        <IconButton onClick={() => useUI.getState().setEnergyOpen(true)} title="Energy: live electricity grids" aria-label="Energy" className="meta px-2.5">
+          Energy
+        </IconButton>
         <IconButton onClick={() => useUI.getState().setTrendsOpen(true)} title="Trends: what people are searching and sharing" aria-label="Trends" className="meta px-2.5">
           Trends
         </IconButton>
