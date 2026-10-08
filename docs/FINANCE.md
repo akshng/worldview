@@ -32,6 +32,7 @@ WorldView connects world events to markets so you can see **what is moving and w
 | **Crypto top 20** by market cap: price, 24 h and 7 d change, market cap, 7-day sparkline | Markets panel | CoinGecko (cached 5 min) |
 | **US stock movers**: today's top gainers, losers and most active US stocks; click for the instrument view | Markets panel | Yahoo Finance predefined screeners (unofficial, delayed; cached 5 min) |
 | **10-K analysis** ("Analyze" on any 10-K in the instrument view): a computed table of the fiscal year vs the prior year as reported in that filing — revenue, gross/operating/net income and margins, diluted EPS, operating cash flow, capex, free cash flow (OCF − capex), R&D and R&D % of revenue, cash, total debt (long-term debt incl. current portion + commercial paper / short-term borrowings), equity, debt/equity, diluted share count — with YoY change (margins in percentage points); plus an **AI analysis** (business summary, key financial changes, top risks, MD&A / outlook highlights, notable changes, questions an investor might ask) written only from those figures and Items 1, 1A, 7 and 7A of the filing. Without `WORLDVIEW_CONTACT` it is **financials-only** (SEC's archive rejects automated clients without a contact email), and the text-derived AI sections stay empty. AI off → figures only. Each finished analysis is cached in `DATA_DIR/filings/<accession>.json` | Instrument view → Annual reports | SEC XBRL company facts (`data.sec.gov`), the 10-K document (`www.sec.gov/Archives`, contact required); local or hosted AI |
+| **Fund holdings (13F)**: 27 tracked managers (Berkshire, Bridgewater, Pershing Square, Scion, Renaissance, Citadel, Appaloosa, Duquesne, Tiger Global, ARK, Soros, Third Point, BlackRock, Two Sigma, Millennium, D. E. Shaw, Elliott, Baupost, Lone Pine, Coatue, Viking, Icahn, Gates Foundation Trust, Altimeter, Trian, ValueAct, Himalaya) with report quarter, 13F value and position count; each opens a holdings table — weight, value, shares, change vs the prior quarter (▲/▼ % of shares, NEW, sold-out list), filter / sort, link to the filing; holdings with a ticker open the instrument view. The instrument view shows **Held by tracked funds** | Markets panel; instrument view | SEC EDGAR Form 13F-HR information tables (needs `WORLDVIEW_CONTACT`; see below) |
 | **In-app price alerts** (above/below), checked every 3 minutes while the app is open; fire once per crossing | Instrument view; toasts | Delayed quotes |
 
 All upstream calls are server-side and cached (quotes 3 min, Treasury 6 h, macro 6 h); clients share the cache. Macro changes are shown in neutral ink with an arrow — a rising number isn't inherently good or bad.
@@ -60,6 +61,32 @@ The movers list shows at most two events per identical set of instruments so one
 
 Up/down uses a validated diverging pair on the dark surface — up `#3f8de8` (blue), down `#e5534b` (red), gray midpoint — and always pairs colour with ▲/▼ and a signed number (colour-blind safe; red/green is avoided on purpose).
 
+## 13F institutional holdings (`src/lib/finance/thirteenf.ts`, `thirteenf-service.ts`)
+
+**API**
+
+| Endpoint | Returns |
+| --- | --- |
+| `GET /api/markets/13f` | Tracked managers: report period, filing date, total 13F value, position count, top 3 holdings. Managers still loading have `status: "loading"` and are counted in `pending` — the UI polls every 5 s until it is 0 |
+| `GET /api/markets/13f/:cik?limit=250` | One manager's latest 13F: holdings by value (weight %, value, shares, put/call, QoQ change, ticker), up to 100 sold-out positions, change counts, filing links, value unit |
+| `GET /api/markets/13f/by-ticker/:ticker` | Tracked managers whose latest 13F holds that ticker (value, weight, rank, change) — used by the instrument view |
+
+All three return 503 when `WORLDVIEW_CONTACT` is unset (www.sec.gov/Archives rejects clients without a contact in the User-Agent).
+
+**Pipeline.** `data.sec.gov/submissions/CIK##########.json` → the two newest report periods among `13F-HR` / `13F-HR/A` filings → for each filing `Archives/edgar/data/<cik>/<accession>/index.json`, `primary_doc.xml` (cover page: period, amendment type) and the information-table XML (the largest other `.xml` in the filing). Each `infoTable` gives `nameOfIssuer`, `titleOfClass`, `cusip`, `value`, `sshPrnamt` / `sshPrnamtType` (SH or PRN), `putCall`, `investmentDiscretion`; namespace prefixes are tolerated.
+
+- **Amendments.** Per period the newest `RESTATEMENT` amendment replaces the original; `NEW HOLDINGS` amendments filed after the base filing are added to it; other amendments are ignored. (Citadel's Q2 2026 report, for example, is a restatement.)
+- **Value units.** Filings made **on or after 3 January 2023** report `value` in **dollars** (SEC's amended Form 13F); earlier filings in **thousands** (multiplied by 1,000). The filing date decides; without one, the report period does (periods ending 2022-12-31 or later). A sanity check on the median implied price per share (value ÷ shares over common-share rows) catches filers that used the other unit: below 1 in a "dollars" filing ⇒ thousands, above 5 in a "thousands" filing ⇒ dollars. The unit and how it was decided are returned per filing.
+- **Aggregation.** One position per CUSIP **and** put/call: rows split across other included managers or discretion types are summed; calls and puts stay separate from the shares (their value is the underlying's, not the premium). Weight = position value ÷ total reported value.
+- **Quarter-over-quarter.** By share count (values move with prices): `new` (not in the prior 13F), `added`, `reduced`, `unchanged`, plus the sold-out list (in the prior 13F, not in this one) and the share-count change and %.
+- **CUSIP → ticker.** There's no keyless official CUSIP map, so tickers are a **best-effort name match** against SEC `company_tickers.json`: names are normalized (case, punctuation, `/DE/`-style tags, legal suffixes, common CUSIP abbreviations such as PETE / FINL / HLDGS), then matched exactly, without spaces, or word-by-word allowing abbreviations and truncation (`GENERAL MTRS` ~ `GENERAL MOTORS`; 13F names are cut at ~28 characters). No ticker is given when the name matches several registrants, for multi-series trusts (iShares, SPDR), debt / warrants / preferreds, or when a company lists several share classes and the class can't be told from the title (BRK-A / BRK-B and FOXA are resolved; Alphabet's two classes are resolved from their CUSIPs). The UI labels these tickers "matched by name"; about 80% of a broad portfolio (D. E. Shaw) matches.
+
+**Caching and fair access.** All SEC requests share one throttle (≤ 8 per second, 2 retries on 429/503). Parsed filings are immutable and stored forever as `DATA_DIR/13f/filing-<accession>.json`; submissions and `company_tickers.json` are cached in memory and in `DATA_DIR/13f/` for 24 h; computed holdings are kept in memory for 24 h and served stale while refreshing. At most three managers load at once (BlackRock's information table is ~23 MB). A cold start fetches ~150 documents, roughly 1–2 minutes; after that, nothing until a cache expires.
+
+**Not covered.** Vanguard (its recent 13F filings are crowded out of the submissions index by other forms, and the table is enormous) and Greenlight Capital (no 13F under its CIK since February 2024). Scion's latest 13F is for Q3 2025 — the firm stopped filing after that.
+
+**Caveats shown in the UI.** 13Fs are filed up to 45 days after quarter end; only long positions in 13(f) securities (US-listed stocks, some ETFs, convertibles, listed options) are reported — no shorts, cash, bonds or non-US holdings; confidential positions may be omitted; information only, not investment advice.
+
 ## Data caveats
 
 - Yahoo Finance's chart endpoint is **unofficial and delayed**; it can change or rate-limit without notice. Quotes are labelled as delayed; failures show "n/a" per tile, never stale numbers presented as live.
@@ -70,7 +97,6 @@ Up/down uses a validated diverging pair on the dark surface — up `#3f8de8` (bl
 
 - **Analyst ratings and price targets.** Yahoo serves these only behind a session token, and WorldView doesn't work around access controls. A free-tier key from a provider such as Finnhub would enable them as an optional, server-side integration.
 - **Company fundamentals outside the US.** SEC EDGAR covers US filers only; foreign listings show prices and charts.
-- **13F fund holdings** (e.g. Berkshire, Bridgewater). SEC's filing archive requires a real contact email in the User-Agent; set `WORLDVIEW_CONTACT` to enable it once implemented.
 - **Market-wide insider trades.** SEC's "current filings" feed refuses automated clients.
 - **VIX futures prices.** Yahoo returns 404 for VIX contract symbols (e.g. `VXZ26.CBF`); the VIX curve uses Cboe's constant-maturity indices instead.
 - **India and Brazil 10-year yields.** The OECD series on FRED (`IRLTLT01INM156N`, `IRLTLT01BRM156N`) return 404. Some OECD policy-rate series (Canada central-bank rate, Switzerland overnight, India discount rate) stopped updating in 2022–2024 and are left out in favour of current interbank-rate series.

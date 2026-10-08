@@ -25,6 +25,7 @@ import { Positioning } from "./Positioning";
 import { PredictionMarkets } from "./PredictionMarkets";
 import { TermStructure } from "./TermStructure";
 import { EarningsReleases } from "./EarningsReleases";
+import { FundHoldings } from "./FundHoldings";
 
 const GROUPS: Array<{ id: keyof MarketSnapshot["groups"]; title: string }> = [
   { id: "indices", title: "Equity indices" },
@@ -173,6 +174,12 @@ export function MarketsPanel() {
               <section className="mb-5">
                 <h3 className="meta mb-2 text-faint">Futures positioning · speculators (CFTC, weekly)</h3>
                 <Positioning />
+              </section>
+            )}
+            {snap && (
+              <section className="mb-5">
+                <h3 className="meta mb-2 text-faint">Fund holdings (13F) · tracked managers, quarterly</h3>
+                <FundHoldings />
               </section>
             )}
             {snap && (

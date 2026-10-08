@@ -3,6 +3,7 @@
 import clsx from "clsx";
 import { useCallback, useEffect, useState } from "react";
 import { ShortVolume } from "./ShortVolume";
+import { HeldByFunds } from "./HeldByFunds";
 import { BalanceSheet, Dividends, RevenueHistory } from "./CompanyExtras";
 import { FilingAnalysisModal } from "./FilingAnalysis";
 import type { AnnualReport } from "@/lib/finance/company";
@@ -241,6 +242,7 @@ export function InstrumentDetail() {
 
           <section>
             {symbol && <ShortVolume symbol={symbol} />}
+            {symbol && <HeldByFunds symbol={symbol} />}
             {symbol && <Dividends symbol={symbol} />}
             <h3 className="meta mb-2 text-faint">Price alert (in-app)</h3>
             {alert && (
