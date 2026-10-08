@@ -40,6 +40,8 @@ export interface Settings {
   showShips: boolean;
   /** adsb.lol military-flagged aircraft overlay */
   showMilAir: boolean;
+  /** adsb.lol live aircraft around the map view */
+  showAircraft: boolean;
   /** CelesTrak satellites propagated with SGP4 */
   showSatellites: boolean;
   /** Strategic infrastructure layers switched on (independent of map modes) */
@@ -77,6 +79,15 @@ export interface SearchPin {
   name: string;
 }
 
+/** A live tracked object open in the detail panel. */
+export interface TrackRef {
+  kind: "ship" | "aircraft" | "sat";
+  /** MMSI, ICAO hex or NORAD id */
+  id: string;
+  /** Aircraft from the MIL overlay */
+  mil?: boolean;
+}
+
 export interface FlyToRequest {
   lon: number;
   lat: number;
@@ -107,6 +118,10 @@ interface UIState {
   selectedCountry: string | null;
   /** State/province selected on the map (id in /geo/regions.geojson) */
   selectedRegion: number | null;
+  /** Ship / aircraft / satellite open in the track panel (exclusive with event/country/region) */
+  selectedTrack: TrackRef | null;
+  /** Keep the map centred on the selected track */
+  followTrack: boolean;
   hoveredEventId: string | null;
   flyTo: FlyToRequest | null;
   searchPin: SearchPin | null;
@@ -146,6 +161,8 @@ interface UIState {
   selectCamera: (c: UIState["selectedCamera"]) => void;
   selectCountry: (code: string | null) => void;
   selectRegion: (id: number | null) => void;
+  selectTrack: (t: TrackRef | null) => void;
+  setFollowTrack: (v: boolean) => void;
   setHovered: (id: string | null) => void;
   requestFlyTo: (r: Omit<FlyToRequest, "nonce">) => void;
   setSearchPin: (p: SearchPin | null) => void;
@@ -181,6 +198,7 @@ const DEFAULT_SETTINGS: Settings = {
   showAurora: false,
   showShips: false,
   showMilAir: false,
+  showAircraft: false,
   showSatellites: false,
   infraLayers: [],
   autoRefresh: true,
@@ -220,6 +238,8 @@ export const useUI = create<UIState>()(
       selectedCamera: null,
       selectedCountry: null,
       selectedRegion: null,
+      selectedTrack: null,
+      followTrack: false,
       hoveredEventId: null,
       flyTo: null,
       searchPin: null,
@@ -257,9 +277,17 @@ export const useUI = create<UIState>()(
       setRadarFrame: (radarFrame) => set({ radarFrame }),
       setRadarPlaying: (radarPlaying) => set({ radarPlaying }),
       selectCamera: (selectedCamera) => set({ selectedCamera }),
-      selectEvent: (selectedEventId) => set({ selectedEventId, ...(selectedEventId ? { selectedCountry: null, selectedRegion: null } : {}) }),
-      selectCountry: (selectedCountry) => set({ selectedCountry, ...(selectedCountry ? { selectedEventId: null, selectedRegion: null } : {}) }),
-      selectRegion: (selectedRegion) => set({ selectedRegion, ...(selectedRegion !== null ? { selectedEventId: null, selectedCountry: null } : {}) }),
+      selectEvent: (selectedEventId) => set({ selectedEventId, ...(selectedEventId ? { selectedCountry: null, selectedRegion: null, selectedTrack: null } : {}) }),
+      selectCountry: (selectedCountry) => set({ selectedCountry, ...(selectedCountry ? { selectedEventId: null, selectedRegion: null, selectedTrack: null } : {}) }),
+      selectRegion: (selectedRegion) => set({ selectedRegion, ...(selectedRegion !== null ? { selectedEventId: null, selectedCountry: null, selectedTrack: null } : {}) }),
+      selectTrack: (selectedTrack) =>
+        set((s) => ({
+          selectedTrack,
+          // Following stays on when switching between objects, off when the panel closes.
+          followTrack: selectedTrack ? s.followTrack : false,
+          ...(selectedTrack ? { selectedEventId: null, selectedCountry: null, selectedRegion: null } : {}),
+        })),
+      setFollowTrack: (followTrack) => set({ followTrack }),
       setHovered: (hoveredEventId) => set({ hoveredEventId }),
       requestFlyTo: (r) => set({ flyTo: { ...r, nonce: Date.now() + Math.random() } }),
       setSearchPin: (searchPin) => set({ searchPin }),

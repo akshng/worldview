@@ -104,17 +104,17 @@ export function TrendsPanel() {
   const nameOf = (g: string) => data?.google.find((c) => c.geo === g)?.name ?? g;
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-center overflow-y-auto bg-black/60 py-8" onMouseDown={() => setOpen(false)}>
-      <div className="glass h-fit w-[940px] max-w-[calc(100vw-32px)] rounded-lg shadow-2xl shadow-black/60" onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Trends">
-        <div className="flex items-start justify-between border-b border-line px-6 pt-5 pb-4">
+    <div className="fixed inset-0 z-50 flex justify-center overflow-y-auto bg-black/60 px-4 py-8" onMouseDown={() => setOpen(false)}>
+      <div className="glass h-fit w-[940px] max-w-full rounded-lg shadow-2xl shadow-black/60" onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Trends">
+        <div className="flex items-start justify-between gap-4 border-b border-line px-6 pt-5 pb-4">
           <div>
             <div className="meta text-accent">Trends</div>
-            <h2 className="mt-1 text-[20px] font-semibold">What the world is searching and sharing</h2>
+            <h2 className="mt-1 text-[20px] leading-tight font-semibold tracking-tight">What the world is searching and sharing</h2>
             <p className="mt-1 text-[12px] text-muted">
               Search, reading and social trends from keyless public sources.{data && ` Updated ${relativeTime(data.generatedAt)}.`} Attention signals, not verified events.
             </p>
           </div>
-          <button onClick={() => setOpen(false)} className="rounded p-1 text-muted hover:bg-panel-hover hover:text-fg" aria-label="Close trends panel">
+          <button onClick={() => setOpen(false)} className="shrink-0 rounded-md p-1.5 text-muted hover:bg-panel-hover hover:text-fg" title="Close (Esc)" aria-label="Close trends panel">
             <CloseIcon />
           </button>
         </div>

@@ -116,18 +116,18 @@ export function MarketsPanel() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-center overflow-y-auto bg-black/60 py-8" onMouseDown={() => setOpen(false)}>
-      <div className="glass h-fit w-[1040px] rounded-lg shadow-2xl shadow-black/60" onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Markets">
-        <div className="flex items-start justify-between border-b border-line px-6 pt-5 pb-4">
+    <div className="fixed inset-0 z-50 flex justify-center overflow-y-auto bg-black/60 px-4 py-8" onMouseDown={() => setOpen(false)}>
+      <div className="glass h-fit w-[1040px] max-w-full rounded-lg shadow-2xl shadow-black/60" onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Markets">
+        <div className="flex items-start justify-between gap-4 border-b border-line px-6 pt-5 pb-4">
           <div>
             <div className="meta text-accent">Markets</div>
-            <h2 className="mt-1 text-[20px] font-semibold tracking-tight">Cross-asset view & world events</h2>
+            <h2 className="mt-1 text-[20px] leading-tight font-semibold tracking-tight">Cross-asset view & world events</h2>
             <p className="mt-1 text-[11.5px] text-faint">
               Information only — not investment advice. Index/FX/commodity quotes are delayed (unofficial Yahoo Finance); crypto from Coinbase; yields from the U.S. Treasury.
               {snap && ` Updated ${relativeTime(snap.generatedAt)}.`}
             </p>
           </div>
-          <button onClick={() => setOpen(false)} className="rounded p-1 text-muted hover:bg-panel-hover hover:text-fg" aria-label="Close markets">
+          <button onClick={() => setOpen(false)} className="shrink-0 rounded-md p-1.5 text-muted hover:bg-panel-hover hover:text-fg" title="Close (Esc)" aria-label="Close markets">
             <CloseIcon />
           </button>
         </div>

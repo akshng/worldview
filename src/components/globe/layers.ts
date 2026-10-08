@@ -649,8 +649,8 @@ export function milLayers(): LayerSpecification[] {
       source: MIL_SOURCE,
       layout: {
         visibility: "none",
-        "icon-image": "arrow",
-        "icon-size": ["interpolate", ["linear"], ["zoom"], 1, 0.38, 6, 0.7],
+        "icon-image": "plane",
+        "icon-size": ["interpolate", ["linear"], ["zoom"], 1, 0.4, 5, 0.58, 9, 0.8],
         "icon-rotate": ["coalesce", ["get", "track"], 0],
         "icon-rotation-alignment": "map",
         "icon-allow-overlap": true,
@@ -824,4 +824,149 @@ export function searchPinCollection(pin: { lon: number; lat: number; name: strin
     type: "FeatureCollection",
     features: pin ? [{ type: "Feature", properties: { name: pin.name }, geometry: { type: "Point", coordinates: [pin.lon, pin.lat] } }] : [],
   };
+}
+
+// ---- live aircraft (adsb.lol, AIR overlay) ------------------------------------
+
+export const AIR_SOURCE = "air-live";
+export const AIR_LAYER_IDS = ["air", "air-label"];
+/** Altitude colours for the AIR overlay, in feet (adsb.lol reports barometric feet). */
+export const AIR_ALT_STOPS_FT: Array<[number, string]> = [
+  [0, "#ffd43b"],
+  [10000, "#69db7c"],
+  [26000, "#4dabf7"],
+  [38000, "#b197fc"],
+];
+export const AIR_GROUND_COLOR = "#868e96";
+
+/** Plane silhouette (SDF, so it can be recoloured), nose up. */
+export function planeImage(size = 44): { width: number; height: number; data: Uint8Array } {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  const u = size / 44;
+  const pts: Array<[number, number]> = [
+    [25, 12], [25, 18], [40, 26], [40, 29], [25, 25], [24.5, 34], [30, 38], [30, 40.5], [22, 38.5],
+    [14, 40.5], [14, 38], [19.5, 34], [19, 25], [4, 29], [4, 26], [19, 18], [19, 12],
+  ];
+  ctx.fillStyle = "#fff";
+  ctx.beginPath();
+  ctx.moveTo(22 * u, 3 * u);
+  ctx.bezierCurveTo(24.5 * u, 3 * u, 25 * u, 8 * u, 25 * u, 12 * u);
+  for (const [x, y] of pts) ctx.lineTo(x * u, y * u);
+  ctx.bezierCurveTo(19 * u, 8 * u, 19.5 * u, 3 * u, 22 * u, 3 * u);
+  ctx.closePath();
+  ctx.fill();
+  const img = ctx.getImageData(0, 0, size, size);
+  return { width: size, height: size, data: new Uint8Array(img.data.buffer) };
+}
+
+/** AIR overlay: plane icons rotated by track, coloured by altitude; callsigns from zoom 6.5. Hidden until toggled. */
+export function aircraftLiveLayers(): LayerSpecification[] {
+  return [
+    {
+      id: "air",
+      type: "symbol",
+      source: AIR_SOURCE,
+      layout: {
+        visibility: "none",
+        "icon-image": "plane",
+        "icon-size": ["interpolate", ["linear"], ["zoom"], 1, 0.34, 5, 0.5, 9, 0.75],
+        "icon-rotate": ["coalesce", ["get", "track"], 0],
+        "icon-rotation-alignment": "map",
+        "icon-allow-overlap": true,
+        "icon-ignore-placement": true,
+      },
+      paint: {
+        "icon-color": ["case", ["get", "onGround"], AIR_GROUND_COLOR, interpColor(["coalesce", ["get", "alt"], 0], AIR_ALT_STOPS_FT)] as unknown as ExpressionSpecification,
+        "icon-opacity": ["case", ["get", "onGround"], 0.6, 0.95],
+      },
+    },
+    {
+      id: "air-label",
+      type: "symbol",
+      source: AIR_SOURCE,
+      minzoom: 6.5,
+      layout: {
+        visibility: "none",
+        "text-field": ["coalesce", ["get", "label"], ""],
+        "text-font": FONT_REGULAR,
+        "text-size": 10,
+        "text-offset": [0, 1.2],
+        "text-anchor": "top",
+        "text-optional": true,
+      },
+      paint: { "text-color": "#cfd8e3", "text-halo-color": "#05070a", "text-halo-width": 1.1 },
+    },
+  ];
+}
+
+// ---- selection / hover highlight + trail for tracked objects --------------------
+
+export const TRACK_HL_SOURCE = "track-highlight";
+export const TRACK_HL_COLOR = "#ffffff";
+
+export function trackHighlightLayers(): LayerSpecification[] {
+  return [
+    {
+      id: "track-trail",
+      type: "line",
+      source: TRACK_HL_SOURCE,
+      filter: ["==", ["get", "role"], "trail"],
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": TRACK_HL_COLOR, "line-width": 1.6, "line-opacity": 0.7, "line-dasharray": [1.5, 1.5] },
+    },
+    {
+      id: "track-hover",
+      type: "circle",
+      source: TRACK_HL_SOURCE,
+      filter: ["==", ["get", "role"], "hover"],
+      paint: { "circle-radius": 11, "circle-color": "rgba(255,255,255,0.12)", "circle-stroke-color": "rgba(255,255,255,0.65)", "circle-stroke-width": 1.2 },
+    },
+    {
+      id: "track-selected",
+      type: "circle",
+      source: TRACK_HL_SOURCE,
+      filter: ["==", ["get", "role"], "selected"],
+      paint: { "circle-radius": 14, "circle-color": "rgba(255,255,255,0.08)", "circle-stroke-color": TRACK_HL_COLOR, "circle-stroke-width": 2 },
+    },
+  ];
+}
+
+// ---- keyless AIS coverage outline ---------------------------------------------------
+
+export const SHIP_COVERAGE_SOURCE = "ship-coverage";
+/** Rough reception areas of the keyless AIS feeds (shown so empty seas aren't mistaken for "no ships"). */
+export const SHIP_COVERAGE_AREAS: Array<{ id: string; name: string; bbox: [number, number, number, number]; center: [number, number]; zoom: number }> = [
+  { id: "digitraffic", name: "Baltic AIS (Fintraffic)", bbox: [16, 53.8, 31, 66.2], center: [22.5, 60.2], zoom: 5 },
+  { id: "kystverket", name: "Norway AIS (Kystverket)", bbox: [-1, 57.5, 33, 81], center: [12, 64.5], zoom: 3.8 },
+];
+
+export function shipCoverageCollection(ids: string[]): GeoJSON.FeatureCollection {
+  return {
+    type: "FeatureCollection",
+    features: SHIP_COVERAGE_AREAS.filter((a) => ids.includes(a.id)).map(({ name, bbox: [w, s, e, n] }) => ({
+      type: "Feature",
+      properties: { name },
+      geometry: { type: "LineString", coordinates: [[w, s], [e, s], [e, n], [w, n], [w, s]] },
+    })),
+  };
+}
+
+export function shipCoverageLayers(): LayerSpecification[] {
+  return [
+    {
+      id: "ship-coverage",
+      type: "line",
+      source: SHIP_COVERAGE_SOURCE,
+      paint: { "line-color": "#4dd4ff", "line-width": 1, "line-opacity": 0.35, "line-dasharray": [4, 3] },
+    },
+    {
+      id: "ship-coverage-label",
+      type: "symbol",
+      source: SHIP_COVERAGE_SOURCE,
+      layout: { "symbol-placement": "line", "text-field": ["get", "name"], "text-font": FONT_REGULAR, "text-size": 10, "text-offset": [0, -0.7] },
+      paint: { "text-color": "#4dd4ff", "text-opacity": 0.6, "text-halo-color": "#05070a", "text-halo-width": 1 },
+    },
+  ];
 }
