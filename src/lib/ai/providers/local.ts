@@ -10,8 +10,9 @@ import { existsSync, readdirSync } from "node:fs";
 import type { WorldEvent } from "@/types/events";
 import type { DailyBriefing } from "@/lib/briefing";
 import { EVENT_CATEGORIES } from "@/types/events";
-import { CommandIntentSchema, type AIProvider, type CommandIntent, type MarketBriefInput } from "../types";
+import { CommandIntentSchema, FilingSectionsSchema, type AIProvider, type CommandIntent, type FilingAnalysisInput, type FilingSections, type MarketBriefInput } from "../types";
 import { BRIEFING_SYSTEM, COMMAND_SYSTEM, INTERPRET_SYSTEM, MARKET_SYSTEM, briefingPayload, interpretPayload, marketPayload } from "../prompts";
+import { runFilingAnalysis } from "../filing";
 
 export const DEFAULT_LOCAL_MODEL = "hf:unsloth/Qwen3-4B-Instruct-2507-GGUF:Q4_K_M";
 const CONTEXT_SIZE = 12_288;
@@ -44,6 +45,19 @@ const COMMAND_JSON_SCHEMA = {
     place: { oneOf: [{ type: "string" }, { type: "null" }] },
     keywords: { oneOf: [{ type: "string" }, { type: "null" }] },
     explanation: { type: "string" },
+  },
+} as const;
+
+const strings = (minItems: number, maxItems: number) => ({ type: "array", items: { type: "string" }, minItems, maxItems }) as const;
+const FILING_JSON_SCHEMA = {
+  type: "object",
+  properties: {
+    businessSummary: { type: "string" },
+    keyFinancialChanges: strings(3, 7),
+    topRisks: strings(0, 6),
+    outlook: strings(0, 6),
+    notableChanges: strings(2, 5),
+    investorQuestions: strings(3, 6),
   },
 } as const;
 
@@ -168,6 +182,32 @@ export class LocalProvider implements AIProvider {
     const text = await this.run((_, s) => s.prompt(marketPayload(input), { maxTokens: 900, temperature: 0.2 }), MARKET_SYSTEM);
     if (!text.trim()) throw new Error("The local model returned no text.");
     return text.trim().slice(0, 5000);
+  }
+
+  /**
+   * 10-K analysis within the 12k-token context: filing text is summarised in
+   * ~4k-token chunks first, then one grammar-constrained call (~7k tokens in,
+   * <=1.8k out) writes the structured sections.
+   */
+  async analyzeFiling(input: FilingAnalysisInput): Promise<FilingSections> {
+    return runFilingAnalysis(
+      {
+        chunkChars: 16_000,
+        sectionBudget: { business: 4_000, riskFactors: 7_000, mdna: 7_000, marketRisk: 2_500 },
+        maxSectionChars: 120_000,
+        complete: async (system, user, maxTokens) => {
+          const text = await this.run((_, s) => s.prompt(user, { maxTokens, temperature: 0.1 }), system);
+          return text.trim();
+        },
+        structured: (system, user) =>
+          this.run(async (rt, s) => {
+            const grammar = await rt.llama.createGrammarForJsonSchema(FILING_JSON_SCHEMA as never);
+            const out = await s.prompt(user, { grammar, maxTokens: 1800, temperature: 0.2 });
+            return FilingSectionsSchema.parse(grammar.parse(out));
+          }, system),
+      },
+      input,
+    );
   }
 
   async parseCommand(query: string): Promise<CommandIntent> {

@@ -16,6 +16,8 @@ export interface CompanyFiling {
 /** An annual report (10-K, or 20-F / 40-F for foreign private issuers). */
 export interface AnnualReport {
   form: string;
+  /** SEC accession number, dashed (0000320193-25-000079) */
+  accession: string;
   filed: string;
   /** Fiscal period end the report covers (YYYY-MM-DD), when SEC lists it */
   period: string | null;
@@ -39,6 +41,7 @@ export function annualReports(cik: string, r: Record<string, string[] | undefine
     const base = `https://www.sec.gov/Archives/edgar/data/${Number(cik)}/${acc}`;
     out.push({
       form,
+      accession: accDashed,
       filed: r.filingDate?.[i] ?? "",
       period: r.reportDate?.[i] || null,
       url: `${base}/${r.primaryDocument[i]}`,

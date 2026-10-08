@@ -3,8 +3,9 @@ import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import type { WorldEvent } from "@/types/events";
 import type { DailyBriefing } from "@/lib/briefing";
-import { CommandIntentSchema, type AIProvider, type CommandIntent, type MarketBriefInput } from "../types";
+import { CommandIntentSchema, FilingSectionsSchema, type AIProvider, type CommandIntent, type FilingAnalysisInput, type FilingSections, type MarketBriefInput } from "../types";
 import { BRIEFING_SYSTEM, COMMAND_SYSTEM, INTERPRET_SYSTEM, MARKET_SYSTEM, briefingPayload, interpretPayload, marketPayload } from "../prompts";
+import { runFilingAnalysis } from "../filing";
 
 export const DEFAULT_ANTHROPIC_MODEL = "claude-opus-5-5";
 
@@ -92,5 +93,48 @@ export class AnthropicProvider implements AIProvider {
     if (response.stop_reason === "refusal") throw new Error("The AI model declined to interpret this query.");
     if (!response.parsed_output) throw new Error("The AI model returned an unparseable interpretation.");
     return CommandIntentSchema.parse(response.parsed_output);
+  }
+
+  /** 10-K analysis. The hosted model's large context usually takes whole sections verbatim (no map step). */
+  async analyzeFiling(input: FilingAnalysisInput): Promise<FilingSections> {
+    return runFilingAnalysis(
+      {
+        chunkChars: 120_000,
+        sectionBudget: { business: 60_000, riskFactors: 120_000, mdna: 120_000, marketRisk: 20_000 },
+        maxSectionChars: 150_000,
+        complete: async (system, user) => {
+          const response = await this.client.beta.messages.create({
+            model: this.model,
+            max_tokens: 16000,
+            betas: ["server-side-fallback-2026-07-01"],
+            fallbacks: "default",
+            output_config: { effort: "low" },
+            system,
+            messages: [{ role: "user", content: user }],
+          });
+          if (response.stop_reason === "refusal") throw new Error("The AI model declined to summarise this filing.");
+          return response.content
+            .filter((c): c is Anthropic.Beta.BetaTextBlock => c.type === "text")
+            .map((c) => c.text)
+            .join("\n")
+            .trim();
+        },
+        structured: async (system, user) => {
+          const response = await this.client.beta.messages.parse({
+            model: this.model,
+            max_tokens: 16000,
+            betas: ["server-side-fallback-2026-07-01"],
+            fallbacks: "default",
+            output_config: { effort: "medium", format: betaZodOutputFormat(FilingSectionsSchema) },
+            system,
+            messages: [{ role: "user", content: user }],
+          });
+          if (response.stop_reason === "refusal") throw new Error("The AI model declined to analyse this filing.");
+          if (!response.parsed_output) throw new Error("The AI model returned an unparseable analysis.");
+          return FilingSectionsSchema.parse(response.parsed_output);
+        },
+      },
+      input,
+    );
   }
 }

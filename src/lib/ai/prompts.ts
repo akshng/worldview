@@ -94,3 +94,62 @@ export function marketPayload(input: import("./types").MarketBriefInput) {
     linked_events: input.movers.slice(0, 12),
   })}`;
 }
+
+// ── 10-K filing analysis ────────────────────────────────────────────────────
+
+const FILING_SECTION_FOCUS = {
+  business: "what the company does: products/services, segments, customers, geographies, competition, employees, notable strategy statements",
+  riskFactors: "the most material, company-specific risks (skip generic boilerplate that applies to any company); name each risk briefly with its specific driver",
+  mdna: "management's discussion: drivers of revenue and margin changes, segment trends, liquidity and capital return, capital spending plans, guidance or outlook statements, anything management flags as new or changed",
+  marketRisk: "market-risk exposures: interest rates, foreign currency, commodity or equity price exposure, hedging approach and sensitivity figures",
+} as const;
+export type FilingSectionKey = keyof typeof FILING_SECTION_FOCUS;
+
+export const FILING_SECTION_TITLES: Record<FilingSectionKey, string> = {
+  business: "Item 1 — Business",
+  riskFactors: "Item 1A — Risk Factors",
+  mdna: "Item 7 — Management's Discussion and Analysis",
+  marketRisk: "Item 7A — Market Risk",
+};
+
+/** Map step: condense one chunk of a 10-K section into short factual notes. */
+export function filingChunkSystem(section: FilingSectionKey) {
+  return `You take notes on one excerpt of a company's annual report (Form 10-K), section "${FILING_SECTION_TITLES[section]}".
+Write 4–8 terse bullet points ("- ") covering ${FILING_SECTION_FOCUS[section]}.
+Rules:
+- Use ONLY the excerpt. Never add facts, numbers or names from memory.
+- Keep numbers exactly as written in the excerpt, with their units and periods.
+- No opinions, no investment advice, no buy/sell language.
+- If the excerpt is only a table of contents, legal boilerplate or cross-references, write "- (no substantive content)".`;
+}
+
+export const FILING_CONDENSE_SYSTEM = `You merge bullet-point notes taken from consecutive parts of one section of a company's Form 10-K.
+Write at most 10 terse bullet points ("- ") that keep the most important, specific points; drop duplicates and "(no substantive content)" lines.
+Use ONLY the notes; keep numbers exactly as written. No opinions or investment advice.`;
+
+export const FILING_SYSTEM = `You write a structured analysis of a company's annual report (Form 10-K) for an information dashboard.
+You receive (1) financial figures the application computed from the filing's XBRL data — current fiscal year vs prior year, already formatted — and (2) notes taken from the filing's own text sections (may be absent).
+Return JSON with:
+- businessSummary: 2–4 sentences on what the company does, from the Business notes. Empty string if there are no Business notes.
+- keyFinancialChanges: 4–7 items describing the most important changes in the computed figures (cite the figures exactly as given).
+- topRisks: up to 6 of the most material company-specific risks, each one sentence, from the Risk Factors notes. Empty array if there are no Risk Factors notes.
+- outlook: up to 6 MD&A highlights or management outlook statements, from the MD&A / market-risk notes. Empty array if there are no such notes.
+- notableChanges: up to 5 notable changes versus the prior year (from the figures and the notes).
+- investorQuestions: 4–6 open questions an investor might ask management or research further.
+Rules:
+- Use ONLY the figures and notes provided. Never add numbers, events, products or names from memory.
+- Do not recompute or round the figures differently; quote them as given.
+- Information only: never recommend buying, selling or holding, never give price targets or valuations, never predict the share price.
+- Use hedged, neutral language; each item is one or two plain sentences without markdown.`;
+
+export function filingPayload(input: import("./types").FilingAnalysisInput, notes: Partial<Record<FilingSectionKey, string>>) {
+  const parts = [
+    `Company: ${input.company}\nReport: ${input.form}, ${input.period}`,
+    `Computed financial figures (JSON; current = this fiscal year, prior = previous fiscal year):\n${JSON.stringify(input.facts)}`,
+  ];
+  for (const k of Object.keys(FILING_SECTION_TITLES) as FilingSectionKey[]) {
+    if (notes[k]?.trim()) parts.push(`Notes from ${FILING_SECTION_TITLES[k]}:\n${notes[k]!.trim()}`);
+  }
+  if (!Object.values(notes).some((n) => n?.trim())) parts.push("The filing's text sections were not available; base the analysis on the figures only.");
+  return parts.join("\n\n");
+}
