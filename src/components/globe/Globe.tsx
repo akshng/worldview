@@ -1508,7 +1508,7 @@ export default function Globe({ window: win, live }: GlobeProps) {
       <CameraViewer />
       {mapError && <div className="absolute inset-0 grid place-items-center text-sm text-muted">Map could not be initialised: {mapError}</div>}
       <div
-        className={`scroll-thin pointer-events-none absolute right-14 bottom-[118px] flex max-h-[calc(100%-230px)] flex-col items-end gap-2 overflow-y-auto ${sidePanelOpen ? "hidden" : ""}`}
+        className={`scroll-thin pointer-events-none absolute right-14 bottom-[118px] flex max-h-[calc(100%-230px)] flex-col items-end gap-2 overflow-y-auto ${sidePanelOpen || layersOpen ? "hidden" : ""}`}
         data-legend-stack
       >
         {(mapStyle === "satellite" || showClouds) && (
@@ -1919,7 +1919,7 @@ function LayersMenu({ items, onClose }: { items: LayerItem[]; onClose: () => voi
       ref={ref}
       role="menu"
       aria-label="Map overlays"
-      className="glass panel-in scroll-thin absolute right-14 bottom-[118px] z-10 max-h-[calc(100%-200px)] w-[268px] overflow-y-auto rounded-md py-1.5 shadow-2xl shadow-black/50"
+      className="glass panel-in scroll-thin absolute right-14 bottom-[118px] z-10 max-h-[calc(100%-200px)] w-[240px] overflow-y-auto rounded-md py-1.5 shadow-2xl shadow-black/50"
     >
       <div className="flex items-baseline justify-between px-3 pt-1 pb-1.5">
         <span className="text-[12.5px] font-semibold text-fg">Layers</span>
@@ -1936,7 +1936,7 @@ function LayersMenu({ items, onClose }: { items: LayerItem[]; onClose: () => voi
             data-layer={it.id}
             title={it.hint}
             onClick={it.toggle}
-            className="flex w-full items-start gap-2.5 px-3 py-1.5 text-left hover:bg-panel-hover"
+            className="flex w-full items-start gap-2.5 px-3 py-1 text-left hover:bg-panel-hover"
           >
             <span
               className={`mt-[3px] grid h-3.5 w-3.5 shrink-0 place-items-center rounded-[3px] border ${it.active ? "border-accent bg-accent text-white" : "border-line"}`}
@@ -1948,7 +1948,6 @@ function LayersMenu({ items, onClose }: { items: LayerItem[]; onClose: () => voi
                 {it.label}
                 {it.status && <span className={`meta normal-case tracking-normal ${it.status === "error" ? "text-danger" : "text-faint"}`}>{it.status}</span>}
               </span>
-              <span className="block text-[11px] leading-snug text-faint">{it.hint}</span>
             </span>
           </button>
         </div>

@@ -17,7 +17,8 @@ function readCollapsed(): Record<string, boolean> {
 }
 
 export function LegendCard({ id, title, color, children }: { id: string; title: ReactNode; color?: string; children: ReactNode }) {
-  const [collapsed, setCollapsed] = useState(() => !!readCollapsed()[id]);
+  // Collapsed to a one-line title (with counts) until opened, so several legends never cover the globe.
+  const [collapsed, setCollapsed] = useState(() => readCollapsed()[id] ?? true);
   const toggle = () => {
     const next = !collapsed;
     setCollapsed(next);
