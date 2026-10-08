@@ -157,6 +157,8 @@ export interface InstrumentResponse {
     hq: string | null;
     filings: Array<{ form: string; filed: string; description: string; url: string }>;
     insiderFilings30d: number;
+    annualReports?: import("@/lib/finance/company").AnnualReport[];
+    annualReportsUrl?: string;
     fundamentals: Array<{ label: string; value: number; unit: string; period: string; priorValue: number | null; filed: string }>;
     balanceSheet?: import("@/lib/finance/company").BalanceItem[];
     revenueHistory?: import("@/lib/finance/company").QuarterValue[];

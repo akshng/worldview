@@ -79,10 +79,10 @@ export function SectionTitle({ children, right }: { children: ReactNode; right?:
 }
 
 /** External link that never leaks referrer/opener and only allows http(s). */
-export function SafeLink({ href, children, className }: { href: string | null; children: ReactNode; className?: string }) {
-  if (!href || !/^https?:\/\//i.test(href)) return <span className={className}>{children}</span>;
+export function SafeLink({ href, children, className, title }: { href: string | null; children: ReactNode; className?: string; title?: string }) {
+  if (!href || !/^https?:\/\//i.test(href)) return <span className={className} title={title}>{children}</span>;
   return (
-    <a href={href} target="_blank" rel="noopener noreferrer nofollow" className={className}>
+    <a href={href} target="_blank" rel="noopener noreferrer nofollow" className={className} title={title}>
       {children}
     </a>
   );

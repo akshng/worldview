@@ -188,6 +188,29 @@ export function InstrumentDetail() {
                   <span className="text-muted">Insider (Form 4) filings, last 30 days: </span>
                   <span className="tabular">{d.company.insiderFilings30d}</span>
                 </div>
+                {(d.company.annualReports?.length ?? 0) > 0 && (
+                  <>
+                    <h4 className="meta mt-3 mb-1 flex items-baseline justify-between text-faint">
+                      <span>Annual reports (10-K)</span>
+                      <SafeLink href={d.company.annualReportsUrl ?? "https://www.sec.gov/edgar/search/"} className="normal-case tracking-normal text-accent hover:underline">All on EDGAR</SafeLink>
+                    </h4>
+                    <ul className="scroll-thin max-h-48 space-y-0.5 overflow-y-auto text-[12px]">
+                      {(d.company.annualReports ?? []).map((a) => (
+                        <li key={a.url} className="flex items-center gap-2">
+                          <SafeLink href={a.url} className="flex min-w-0 flex-1 items-center gap-2 hover:text-accent" title={`${a.form} filed ${a.filed}`}>
+                            <span className="meta w-14 shrink-0 text-faint normal-case tracking-normal">{a.form}</span>
+                            <span className="w-24 shrink-0 tabular">{a.period ? `FY ending ${a.period.slice(0, 7)}` : "—"}</span>
+                            <span className="tabular text-muted">filed {a.filed}</span>
+                            <ExternalIcon width={11} height={11} className="shrink-0 opacity-50" />
+                          </SafeLink>
+                          <SafeLink href={a.indexUrl} className="shrink-0 text-[11px] text-faint hover:text-accent" title="Filing index: exhibits, XBRL and financial statements">
+                            index
+                          </SafeLink>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
                 <h4 className="meta mt-3 mb-1 text-faint">Recent filings</h4>
                 <ul className="space-y-0.5 text-[12px]">
                   {d.company.filings.slice(0, 8).map((f) => (

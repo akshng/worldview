@@ -13,6 +13,41 @@ export interface CompanyFiling {
   url: string;
 }
 
+/** An annual report (10-K, or 20-F / 40-F for foreign private issuers). */
+export interface AnnualReport {
+  form: string;
+  filed: string;
+  /** Fiscal period end the report covers (YYYY-MM-DD), when SEC lists it */
+  period: string | null;
+  /** The report document itself */
+  url: string;
+  /** The filing's index page (all exhibits, XBRL, financial statements) */
+  indexUrl: string;
+}
+
+const ANNUAL_FORMS = new Set(["10-K", "10-K/A", "10-KT", "20-F", "20-F/A", "40-F", "40-F/A"]);
+
+/** Annual reports from SEC submissions `filings.recent` columns, newest first. */
+export function annualReports(cik: string, r: Record<string, string[] | undefined>, max = 25): AnnualReport[] {
+  const out: AnnualReport[] = [];
+  const n = r.form?.length ?? 0;
+  for (let i = 0; i < n && out.length < max; i++) {
+    const form = r.form![i];
+    if (!ANNUAL_FORMS.has(form) || !r.accessionNumber?.[i] || !r.primaryDocument?.[i]) continue;
+    const accDashed = String(r.accessionNumber[i]);
+    const acc = accDashed.replace(/-/g, "");
+    const base = `https://www.sec.gov/Archives/edgar/data/${Number(cik)}/${acc}`;
+    out.push({
+      form,
+      filed: r.filingDate?.[i] ?? "",
+      period: r.reportDate?.[i] || null,
+      url: `${base}/${r.primaryDocument[i]}`,
+      indexUrl: `${base}/${accDashed}-index.htm`,
+    });
+  }
+  return out;
+}
+
 export interface Fundamental {
   label: string;
   value: number;
@@ -31,6 +66,10 @@ export interface CompanyProfile {
   hq: string | null;
   fiscalYearEnd: string | null;
   filings: CompanyFiling[];
+  /** Every annual report in SEC's recent-filings window (typically 10+ years), newest first */
+  annualReports: AnnualReport[];
+  /** EDGAR page listing all of the company's 10-K filings */
+  annualReportsUrl: string;
   insiderFilings30d: number;
   fundamentals: Fundamental[];
   /** Latest reported balance-sheet items (point-in-time) */
@@ -219,6 +258,8 @@ export async function companyProfile(ticker: string): Promise<CompanyProfile | n
     hq: [b.city, b.stateOrCountryDescription ?? b.stateOrCountry].filter(Boolean).join(", ") || null,
     fiscalYearEnd: sub.fiscalYearEnd ?? null,
     filings,
+    annualReports: annualReports(cik, r),
+    annualReportsUrl: `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${cik}&type=10-K&dateb=&owner=include&count=40`,
     insiderFilings30d: insider,
     fundamentals,
     balanceSheet,

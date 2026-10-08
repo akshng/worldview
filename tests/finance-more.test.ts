@@ -149,3 +149,25 @@ describe("macro additions", () => {
     expect(MACRO_SERIES.find((d) => d.id === "IT_DE_10Y")).toMatchObject({ fred: "IRLTLT01ITM156N", minus: "IRLTLT01DEM156N", group: "Global" });
   });
 });
+
+import { annualReports } from "@/lib/finance/company";
+
+describe("annual reports (10-K)", () => {
+  it("keeps 10-K / 20-F filings with period, document and index links", () => {
+    const r = {
+      form: ["8-K", "10-K", "10-Q", "10-K/A", "20-F"],
+      accessionNumber: ["0000320193-26-000001", "0000320193-25-000079", "x", "0000320193-24-000010", "0001234567-23-000002"],
+      filingDate: ["2026-01-30", "2025-10-31", "2025-08-01", "2024-03-01", "2023-04-01"],
+      reportDate: ["2026-01-29", "2025-09-27", "2025-06-28", "2023-09-30", ""],
+      primaryDocument: ["a.htm", "aapl-20250927.htm", "q.htm", "amend.htm", "f20.htm"],
+    };
+    const out = annualReports("0000320193", r);
+    expect(out.map((a) => a.form)).toEqual(["10-K", "10-K/A", "20-F"]);
+    expect(out[0]).toMatchObject({
+      period: "2025-09-27",
+      url: "https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/aapl-20250927.htm",
+      indexUrl: "https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/0000320193-25-000079-index.htm",
+    });
+    expect(out[2].period).toBeNull();
+  });
+});
