@@ -243,6 +243,14 @@ export const api = {
     if (!res.ok) throw new Error(body?.error ?? `Request failed (${res.status})`);
     return body as { summary: { text: string; provider: string; model: string; generatedAt: string }; disclaimer: string };
   },
+  filingAnalysisStatus: (accession: string, signal?: AbortSignal) =>
+    getJSON<import("@/lib/finance/filing-format").FilingJobStatus>(`/api/markets/filing-analysis?accession=${encodeURIComponent(accession)}`, signal),
+  async startFilingAnalysis(ticker: string, accession: string): Promise<import("@/lib/finance/filing-format").FilingJobStatus> {
+    const res = await fetch("/api/markets/filing-analysis", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ticker, accession }) });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body?.error ?? `Request failed (${res.status})`);
+    return body;
+  },
   sources: (signal?: AbortSignal) => getJSON<SourcesResponse>("/api/sources", signal),
   meta: (signal?: AbortSignal) => getJSON<MetaResponse>("/api/meta", signal),
   /** Online place search (Photon by komoot, proxied + cached by our server) */

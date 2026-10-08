@@ -30,6 +30,40 @@ export const CommandIntentSchema = z.object({
 });
 export type CommandIntent = z.infer<typeof CommandIntentSchema>;
 
+/**
+ * AI-written sections of a 10-K analysis. Written ONLY from the numbers the app
+ * computed from XBRL and the text extracted from the filing itself.
+ */
+export const FilingSectionsSchema = z.object({
+  businessSummary: z.string(),
+  keyFinancialChanges: z.array(z.string()),
+  topRisks: z.array(z.string()),
+  outlook: z.array(z.string()),
+  notableChanges: z.array(z.string()),
+  investorQuestions: z.array(z.string()),
+});
+export type FilingSections = z.infer<typeof FilingSectionsSchema>;
+
+/** One computed figure handed to the model, already formatted by the app. */
+export interface FilingFactForAI {
+  label: string;
+  current: string;
+  prior: string;
+  change: string;
+}
+
+export interface FilingAnalysisInput {
+  company: string;
+  form: string;
+  /** e.g. "fiscal year ended 2025-09-27" */
+  period: string;
+  facts: FilingFactForAI[];
+  /** Extracted filing text per section; absent when the document couldn't be read */
+  text: { business?: string; riskFactors?: string; mdna?: string; marketRisk?: string } | null;
+  /** Called with human-readable progress ("Summarizing risk factors (2/5)…") */
+  onProgress?: (step: string) => void;
+}
+
 export interface AIProvider {
   readonly name: string;
   readonly model: string;
@@ -41,6 +75,8 @@ export interface AIProvider {
   parseCommand(query: string): Promise<CommandIntent>;
   /** Descriptive summary of market moves alongside world events. Never advice. */
   writeMarketBrief(input: MarketBriefInput): Promise<string>;
+  /** Structured 10-K analysis from computed facts + extracted filing text (map-reduce for long text). Never advice. */
+  analyzeFiling(input: FilingAnalysisInput): Promise<FilingSections>;
 }
 
 /**

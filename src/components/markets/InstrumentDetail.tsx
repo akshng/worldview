@@ -1,9 +1,11 @@
 "use client";
 /** Instrument view: price chart with ranges, stats, SEC company data and related events. Information only. */
 import clsx from "clsx";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ShortVolume } from "./ShortVolume";
 import { BalanceSheet, Dividends, RevenueHistory } from "./CompanyExtras";
+import { FilingAnalysisModal } from "./FilingAnalysis";
+import type { AnnualReport } from "@/lib/finance/company";
 import { api, type InstrumentResponse } from "@/lib/client/api";
 import { useUI } from "@/lib/store/ui";
 import { DOWN, UP } from "@/lib/finance/format";
@@ -33,6 +35,8 @@ export function InstrumentDetail() {
   const [error, setError] = useState<string | null>(null);
   const [above, setAbove] = useState("");
   const [below, setBelow] = useState("");
+  const [analyzing, setAnalyzing] = useState<AnnualReport | null>(null);
+  const closeAnalysis = useCallback(() => setAnalyzing(null), []);
 
   useEffect(() => {
     if (!symbol) return;
@@ -206,6 +210,11 @@ export function InstrumentDetail() {
                           <SafeLink href={a.indexUrl} className="shrink-0 text-[11px] text-faint hover:text-accent" title="Filing index: exhibits, XBRL and financial statements">
                             index
                           </SafeLink>
+                          {/^10-K/.test(a.form) && a.accession && (
+                            <button onClick={() => setAnalyzing(a)} className="shrink-0 rounded border border-ai/30 px-1.5 text-[11px] text-ai hover:bg-ai/10" title="Computed financials vs prior year, plus an AI reading of the filing">
+                              Analyze
+                            </button>
+                          )}
                         </li>
                       ))}
                     </ul>
@@ -277,6 +286,7 @@ export function InstrumentDetail() {
         </div>
         <p className="border-t border-line px-6 py-2.5 text-[10.5px] text-faint">{d?.note ?? "Information only — not investment advice."}</p>
       </div>
+      {analyzing && <FilingAnalysisModal ticker={symbol} report={analyzing} onClose={closeAnalysis} />}
     </div>
   );
 }
