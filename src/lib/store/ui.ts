@@ -192,6 +192,17 @@ const DEFAULT_SETTINGS: Settings = {
   alerts: [],
 };
 
+// Escape hatch: open the app with ?reset to clear saved settings (e.g. too many heavy
+// overlays left on for a low-memory machine). Runs before the store rehydrates.
+if (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("reset")) {
+  try {
+    window.localStorage.removeItem("worldview-ui");
+    window.history.replaceState(null, "", window.location.pathname);
+  } catch {
+    /* storage unavailable */
+  }
+}
+
 export const useUI = create<UIState>()(
   persist(
     (set) => ({
