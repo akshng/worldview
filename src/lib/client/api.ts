@@ -215,6 +215,15 @@ export const api = {
     getJSON<{ hits: import("@/lib/finance/search").SearchHit[] }>(`/api/markets/search?q=${encodeURIComponent(q)}`, signal),
   shortVolume: (symbol: string, signal?: AbortSignal) =>
     getJSON<import("@/lib/finance/short-volume").ShortVolume>(`/api/markets/short-volume/${encodeURIComponent(symbol)}`, signal),
+  thirteenFManagers: (signal?: AbortSignal) =>
+    getJSON<{ managers: import("@/lib/finance/thirteenf").ManagerSummary[]; pending: number; caveats: string[]; source: string }>("/api/markets/13f", signal),
+  thirteenFHoldings: (cik: string, signal?: AbortSignal) =>
+    getJSON<import("@/lib/finance/thirteenf").ManagerHoldings>(`/api/markets/13f/${encodeURIComponent(cik)}`, signal),
+  thirteenFByTicker: (ticker: string, signal?: AbortSignal) =>
+    getJSON<{ ticker: string; holders: import("@/lib/finance/thirteenf").FundHolder[]; checked: number; total: number; pending: number; caveats: string[] }>(
+      `/api/markets/13f/by-ticker/${encodeURIComponent(ticker)}`,
+      signal,
+    ),
   ipos: (signal?: AbortSignal) => getJSON<{ filings: import("@/lib/finance/ipos").Registration[]; source: string }>("/api/markets/ipos", signal),
   predictions: (signal?: AbortSignal) => getJSON<import("@/lib/finance/prediction-markets").PredictionMarkets>("/api/markets/predictions", signal),
   auctions: (signal?: AbortSignal) => getJSON<{ auctions: import("@/lib/finance/auctions").AuctionResult[]; source: string }>("/api/markets/auctions", signal),
