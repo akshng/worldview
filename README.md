@@ -56,7 +56,7 @@ cp .env.example .env.local
 | `ADMIN_TOKEN` | — | If set, `POST /api/ingest/:source` and `POST /api/ai/unload` require `Authorization: Bearer <token>`; otherwise only localhost may trigger |
 | `NASA_FIRMS_MAP_KEY` | — | Optional FIRMS API key; without it the public 24 h VIIRS file is used |
 | `OPENSKY_CLIENT_ID` / `OPENSKY_CLIENT_SECRET` | — | Optional OpenSky API client (raises the anonymous aviation quota) |
-| `AISSTREAM_API_KEY` | — | Optional free key from aisstream.io — global vessels for Maritime / SHIP (without it: keyless Baltic-only Fintraffic feed) |
+| `AISSTREAM_API_KEY` | — | Optional free key from aisstream.io — global terrestrial AIS for Maritime / SHIP, merged with the keyless feeds (Fintraffic, Kystverket, Open Waters AIS) |
 | `AI_PROVIDER` | `local` | `local` = keyless on-device model (no account), `anthropic` = hosted Claude, `none` = off |
 | `AI_LOCAL_MODEL` | Qwen3-4B-Instruct Q4_K_M | Override the on-device model (node-llama-cpp URI) |
 | `AI_IDLE_UNLOAD_MINUTES` | `5` | Unload the local model after this many idle minutes (reloads on the next AI request); `0` = keep loaded |
@@ -119,7 +119,8 @@ Live layers (shown in map modes, not stored as events, fetched only while in use
 | --- | --- | --- | --- |
 | Precipitation radar (past 2 h, animated) | Weather | RainViewer | none |
 | Aircraft positions | Aviation | OpenSky Network | none (optional client) |
-| Vessel positions (AIS) | Maritime, **SHIP** button | AISStream.io (global) or, keyless, Fintraffic Digitraffic (Baltic) | optional `AISSTREAM_API_KEY` |
+| Vessel positions (AIS) | Maritime, **SHIP** button | Keyless: Fintraffic Digitraffic (Baltic, CC BY 4.0), Kystverket open AIS (Norway, NLOD; raw NMEA over TCP 153.44.253.27:5631), Open Waters AIS around the view (anonymous tier, ≤10°×10° per request). With a key: AISStream.io (global) merged in | optional `AISSTREAM_API_KEY` |
+| Live aircraft | **AIR** button | adsb.lol `/v2/lat/…/lon/…/dist/…` around the view (ODbL), 6° cells cached ~25 s, throttled to adsb.lol's per-IP limit | none |
 | Military-flagged aircraft | **MIL** button | adsb.lol `/v2/mil` (ODbL) | none |
 | Satellites + orbits | **SAT·ORB** button | CelesTrak GP data, SGP4 in the browser | none |
 
@@ -161,7 +162,8 @@ WorldView then runs as a production server at http://localhost:3000 (bound to th
   - The panel shows what is on screen, its image time ("17:50 UTC, 40 min ago") and whether it is near-real-time or an archive mosaic. Recent imagery re-checks for a new frame every 5 min while the tab is visible. Sources, licences and limits: [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md#map-views).
 - **CAM** — ~28,000 public traffic/road-weather cameras from official operator feeds, ~9,500 with live video (Virginia, California, Colorado, South Carolina, Indiana, Iowa, Oklahoma, Missouri, Alabama, Maryland, Delaware), plus stills from London (with MP4 clips), New York City, Washington, Illinois, Kentucky, Kansas, Nebraska, Austin, South Dakota, British Columbia, Toronto, Calgary, Spain, Iceland, Finland, Queensland, Hong Kong and Singapore. Live-video cameras are ringed on the map; the camera key has a "Live video only" toggle. Click to watch the stream or the live image.
 - **ISS** — the International Space Station's position (updated every 5 s) and ground track ±90 min (past solid, next 90 min dashed), computed by wheretheiss.at from orbital elements; hover for altitude, speed and day/night.
-- **SHIP** — live AIS vessels in any map mode, coloured by type (cargo, tanker, passenger, fishing, service, pleasure); stationary ones dimmed; hover for name, MMSI, speed, heading, status and destination. Without `AISSTREAM_API_KEY` it uses the keyless Fintraffic Digitraffic feed, which covers only the Finnish coast / northern Baltic (CC BY 4.0); with a key, AISStream's global terrestrial network. Refreshed every minute.
+- **SHIP** — live AIS vessels around the map view in any map mode, coloured by type (cargo, tanker, passenger, fishing, service, pleasure); stationary ones dimmed. Keyless: Fintraffic (Baltic), Kystverket (Norway) and Open Waters AIS cells around the view (worldwide where receivers exist; on very wide views the busiest sea areas are loaded first). With `AISSTREAM_API_KEY`, AISStream's global stream is merged in. **Click a ship** for name, MMSI/IMO, call sign, type, flag (from the MMSI), speed, course, status, destination, ETA, draught, size, a recent trail and links.
+- **AIR** — live aircraft around the view (adsb.lol), plane icons rotated by track and coloured by altitude. **Click a plane** for callsign, registration, type, operator, altitude, speed, heading, vertical rate, squawk, registration country (from the ICAO address), a recent trail and adsb.lol / OpenSky links. A **Follow** toggle in the panel keeps the map centred on the selected ship, plane or satellite; Esc closes the panel.
 - **MIL** — aircraft broadcasting ADS-B identified as military in the community database (adsb.lol, ODbL), refreshed every 30 s; hover for callsign, type, altitude and speed. Most military flights don't broadcast, so this is a partial view.
 - **SAT·ORB** — space stations, operational GPS and the brightest ~150 satellites from CelesTrak elements, positions computed in your browser with SGP4 every 2 s. Click one to draw its orbit (past half orbit and next full orbit).
 - **AUR** — NOAA SWPC OVATION aurora forecast: probability of visible aurora (≥ 10 %), with the forecast time in the legend. A model forecast, not an observation.

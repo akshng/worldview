@@ -79,12 +79,12 @@ export function BriefingModal() {
   const maxCmp = Math.max(1, ...(data?.comparison ?? []).flatMap((c) => [c.today, c.yesterday]));
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-center overflow-y-auto bg-black/60 py-10" onMouseDown={() => setOpen(false)}>
-      <div className="glass h-fit w-[880px] rounded-lg shadow-2xl shadow-black/60" onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Daily briefing">
-        <div className="flex items-start justify-between border-b border-line px-7 pt-6 pb-5">
+    <div className="fixed inset-0 z-50 flex justify-center overflow-y-auto bg-black/60 px-4 py-8" onMouseDown={() => setOpen(false)}>
+      <div className="glass h-fit w-[880px] max-w-full rounded-lg shadow-2xl shadow-black/60" onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Daily briefing">
+        <div className="flex items-start justify-between gap-4 border-b border-line px-6 pt-5 pb-4">
           <div>
             <div className="meta text-accent">{greeting()}</div>
-            <h2 className="mt-1 text-[22px] font-semibold tracking-tight">{data?.greeting ?? "World briefing"}</h2>
+            <h2 className="mt-1 text-[20px] leading-tight font-semibold tracking-tight">{data?.greeting ?? "World briefing"}</h2>
             {data && (
               <div className="mt-3 flex flex-wrap gap-2">
                 {(Object.keys(data.changes) as Array<keyof DailyBriefing["changes"]>).map((k) => (
@@ -96,16 +96,16 @@ export function BriefingModal() {
               </div>
             )}
           </div>
-          <button onClick={() => setOpen(false)} className="rounded p-1 text-muted hover:bg-panel-hover hover:text-fg" aria-label="Close briefing">
+          <button onClick={() => setOpen(false)} className="shrink-0 rounded-md p-1.5 text-muted hover:bg-panel-hover hover:text-fg" title="Close (Esc)" aria-label="Close briefing">
             <CloseIcon />
           </button>
         </div>
 
-        {error && <p className="px-7 py-6 text-[13px] text-danger">{error}</p>}
-        {!data && !error && <p className="px-7 py-6 text-[13px] text-muted">Building briefing…</p>}
+        {error && <p className="px-6 py-6 text-[13px] text-danger">{error}</p>}
+        {!data && !error && <p className="px-6 py-6 text-[13px] text-muted">Building briefing…</p>}
 
         {data && (
-          <div className="px-7 py-5">
+          <div className="px-6 py-5">
             {/* AI summary — separate from the factual list below */}
             <section className="mb-6 rounded-md border border-ai/25 bg-ai-soft px-4 py-3">
               <div className="mb-1.5 flex items-center justify-between">

@@ -98,10 +98,10 @@ export function CountryPanel() {
   const list = d ? (tab === "top" ? d.topEvents : d.recentEvents) : [];
 
   return (
-    <div className="glass panel-in pointer-events-auto flex max-h-full self-start w-[400px] flex-col rounded-md shadow-2xl shadow-black/50">
+    <div className="glass panel-in pointer-events-auto flex max-h-full w-[400px] max-w-[calc(100vw-24px)] flex-col self-start rounded-md shadow-2xl shadow-black/50">
       <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
         <span className="meta text-faint">Country overview</span>
-        <button onClick={() => useUI.getState().selectCountry(null)} className="rounded p-1 text-muted hover:bg-panel-hover hover:text-fg" aria-label="Close country overview">
+        <button onClick={() => useUI.getState().selectCountry(null)} className="rounded-md p-1.5 text-muted hover:bg-panel-hover hover:text-fg" aria-label="Close country overview" title="Close (Esc)">
           <CloseIcon width={14} height={14} />
         </button>
       </div>

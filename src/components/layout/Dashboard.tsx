@@ -14,6 +14,7 @@ import { EventFeed } from "@/components/event-feed/EventFeed";
 import { EventPanel } from "@/components/event-panel/EventPanel";
 import { CountryPanel } from "@/components/country-panel/CountryPanel";
 import { RegionPanel } from "@/components/region-panel/RegionPanel";
+import { TrackPanel } from "@/components/track-panel/TrackPanel";
 import { Timeline } from "@/components/timeline/Timeline";
 import { StatsStrip } from "@/components/stats/StatsStrip";
 import { SearchPalette } from "@/components/search/SearchPalette";
@@ -50,6 +51,7 @@ export function Dashboard() {
   const selectedEventId = useUI((s) => s.selectedEventId);
   const selectedCountry = useUI((s) => s.selectedCountry);
   const selectedRegion = useUI((s) => s.selectedRegion);
+  const selectedTrack = useUI((s) => s.selectedTrack);
   const mapMode = useUI((s) => s.mapMode);
   const now = useNow(30_000);
   const modeInfo = modeMeta(mapMode);
@@ -65,6 +67,19 @@ export function Dashboard() {
     useData.setState({ visible: filterEvents(events, { categories: cats, minImportance: min, window: win }) });
   }, [events, categories, importance, win, modeInfo.categories]);
 
+  // Esc closes the country / region panel (event and track panels handle their own Esc).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      const ui = useUI.getState();
+      if (ui.searchOpen || ui.settingsOpen || ui.selectedEventId || ui.selectedTrack) return;
+      if (ui.selectedRegion !== null) ui.selectRegion(null);
+      else if (ui.selectedCountry) ui.selectCountry(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   return (
     <div className="flex h-full flex-col">
       <TopBar />
@@ -79,7 +94,7 @@ export function Dashboard() {
         <main className="relative min-w-0 flex-1 overflow-hidden bg-bg">
           <Globe window={globeWindow} live={live.data} />
           <div className="pointer-events-none absolute inset-0 flex flex-col p-3">
-            <div className="flex items-start">
+            <div className={`flex items-start overflow-hidden ${selectedEventId || selectedCountry || selectedRegion !== null || selectedTrack ? "max-w-[calc(100%-412px)]" : ""}`}>
               <StatsStrip />
             </div>
             <div className="flex-1" />
@@ -96,9 +111,9 @@ export function Dashboard() {
             </div>
           </div>
           {/* Detail panels float over the globe's right edge; the camera pads for them. */}
-          {(selectedEventId || selectedCountry || selectedRegion !== null) && (
+          {(selectedEventId || selectedCountry || selectedRegion !== null || selectedTrack) && (
             <div className="pointer-events-none absolute top-3 right-3 bottom-[104px] flex">
-              {selectedEventId ? <EventPanel /> : selectedRegion !== null ? <RegionPanel /> : <CountryPanel />}
+              {selectedTrack ? <TrackPanel /> : selectedEventId ? <EventPanel /> : selectedRegion !== null ? <RegionPanel /> : <CountryPanel />}
             </div>
           )}
         </main>

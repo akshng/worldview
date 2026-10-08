@@ -27,6 +27,18 @@ const LABEL: Record<MediaStep, string> = { hls: "Live video", mp4: "Video clip",
 
 export function CameraViewer() {
   const cam = useUI((s) => s.selectedCamera);
+  const open = !!cam;
+  // Esc closes the viewer (before any side panel: it is the most recent thing opened on the map).
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || useUI.getState().searchOpen) return;
+      e.stopImmediatePropagation();
+      useUI.getState().selectCamera(null);
+    };
+    window.addEventListener("keydown", onKey, { capture: true });
+    return () => window.removeEventListener("keydown", onKey, { capture: true });
+  }, [open]);
   // Keyed by camera so each camera starts fresh.
   return cam ? <Viewer key={cam.row[0]} cam={cam} /> : null;
 }
@@ -294,7 +306,7 @@ function Viewer({ cam }: { cam: Cam }) {
           </div>
           <div className="mt-0.5 truncate text-[13px] font-medium" title={name}>{name}</div>
         </div>
-        <button onClick={close} className="rounded p-1 text-muted hover:bg-panel-hover hover:text-fg" aria-label="Close camera (stops the feed)">
+        <button onClick={close} className="rounded-md p-1.5 text-muted hover:bg-panel-hover hover:text-fg" aria-label="Close camera (stops the feed)" title="Close (Esc)">
           <CloseIcon />
         </button>
       </div>

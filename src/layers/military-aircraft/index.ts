@@ -3,9 +3,9 @@
  * military, from adsb.lol (keyless, data under ODbL 1.0). Many military
  * aircraft do not broadcast at all, so this is never a complete picture.
  */
-import { httpGet } from "@/data-sources/types";
 import type { LiveLayerProvider } from "../types";
 import { parseAdsbLolMil, type AdsbLolResponse, type MilitaryAircraftData } from "./parser";
+import { adsbLolGet, recordAircraft } from "@/layers/aircraft";
 
 export type { MilitaryAircraftData, MilRow } from "./parser";
 
@@ -17,8 +17,10 @@ export const militaryAircraftLayer: LiveLayerProvider<MilitaryAircraftData> = {
   attribution: "adsb.lol, ODbL 1.0",
   ttlMs: 30_000,
   async load(ctx) {
-    const raw = (await (await httpGet("https://api.adsb.lol/v2/mil", ctx)).json()) as AdsbLolResponse;
+    // Shares adsb.lol's per-IP rate limit with the AIR overlay, so it goes through the same throttle.
+    const raw = await adsbLolGet<AdsbLolResponse>("https://api.adsb.lol/v2/mil");
     const rows = parseAdsbLolMil(raw);
+    recordAircraft(raw.ac, ctx.now);
     return {
       layerId: "military-aircraft",
       observedAt: new Date(typeof raw.now === "number" ? raw.now : ctx.now).toISOString(),
