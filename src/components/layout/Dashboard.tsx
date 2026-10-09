@@ -27,6 +27,7 @@ import { EnergyPanel } from "@/components/energy/EnergyPanel";
 import { SecurityPanel } from "@/components/security/SecurityPanel";
 import { TrendsPanel } from "@/components/trends/TrendsPanel";
 import { InstrumentDetail } from "@/components/markets/InstrumentDetail";
+import { AnalystPanel } from "@/components/analyst/AnalystPanel";
 import { Toasts, useAlertChecker } from "@/components/markets/Alerts";
 import { modeMeta } from "@/lib/map-modes";
 import { useLiveLayer } from "@/lib/client/use-live-layer";
@@ -127,6 +128,7 @@ export function Dashboard() {
       <EnergyPanel />
       <SecurityPanel />
       <TrendsPanel />
+      <AnalystPanel />
       <InstrumentDetail />
       <Toasts />
     </div>

@@ -82,6 +82,14 @@ export function TopBar() {
           <span className="flex-1">Search</span>
           <kbd className="meta rounded border border-line px-1 text-faint">⌘K</kbd>
         </button>
+        <IconButton
+          onClick={() => useUI.getState().setAnalystOpen(!useUI.getState().analystOpen)}
+          title="AI analyst: ask questions about markets and world events (answers cite the app's data)"
+          aria-label="Analyst"
+          className="meta px-2 text-ai min-[1400px]:px-2.5"
+        >
+          Analyst
+        </IconButton>
         <IconButton onClick={() => setMarketsOpen(true)} title="Markets" aria-label="Markets" className="meta px-2 min-[1400px]:px-2.5">
           Markets
         </IconButton>

@@ -6,6 +6,8 @@ import type { DailyBriefing } from "@/lib/briefing";
 import { CommandIntentSchema, FilingSectionsSchema, type AIProvider, type CommandIntent, type FilingAnalysisInput, type FilingSections, type MarketBriefInput } from "../types";
 import { BRIEFING_SYSTEM, COMMAND_SYSTEM, INTERPRET_SYSTEM, MARKET_SYSTEM, briefingPayload, interpretPayload, marketPayload } from "../prompts";
 import { runFilingAnalysis } from "../filing";
+import type { NativeHistoryItem, NativeTurn } from "@/lib/analyst/llm";
+import { inputSchema, type ToolDef } from "@/lib/analyst/tools";
 
 export const DEFAULT_ANTHROPIC_MODEL = "claude-opus-5-5";
 
@@ -93,6 +95,38 @@ export class AnthropicProvider implements AIProvider {
     if (response.stop_reason === "refusal") throw new Error("The AI model declined to interpret this query.");
     if (!response.parsed_output) throw new Error("The AI model returned an unparseable interpretation.");
     return CommandIntentSchema.parse(response.parsed_output);
+  }
+
+  /** One analyst turn with native tool use. Assistant content is replayed unchanged (thinking blocks included). */
+  async analystTurn(input: { system: string; history: NativeHistoryItem[]; tools: ToolDef[]; allowTools: boolean }): Promise<NativeTurn> {
+    const messages: Anthropic.Beta.BetaMessageParam[] = input.history.map((h) =>
+      h.role === "user"
+        ? { role: "user", content: h.text }
+        : h.role === "assistant"
+          ? { role: "assistant", content: h.turn.raw as Anthropic.Beta.BetaContentBlockParam[] }
+          : { role: "user", content: h.results.map((r) => ({ type: "tool_result" as const, tool_use_id: r.id, content: r.content, is_error: r.isError || undefined })) },
+    );
+    const response = await this.client.beta.messages.create({
+      model: this.model,
+      max_tokens: 16000,
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
+      output_config: { effort: "medium" },
+      system: input.system,
+      tools: input.tools.map((t) => ({ name: t.name, description: t.description, input_schema: inputSchema(t) })),
+      tool_choice: input.allowTools ? { type: "auto" } : { type: "none" },
+      messages,
+    });
+    const text = response.content
+      .filter((c): c is Anthropic.Beta.BetaTextBlock => c.type === "text")
+      .map((c) => c.text)
+      .join("\n")
+      .trim();
+    const calls = response.content
+      .filter((c): c is Anthropic.Beta.BetaToolUseBlock => c.type === "tool_use")
+      .map((c) => ({ id: c.id, name: c.name, input: c.input }));
+    const stop = response.stop_reason === "tool_use" || response.stop_reason === "end_turn" || response.stop_reason === "refusal" || response.stop_reason === "max_tokens" ? response.stop_reason : "other";
+    return { text, calls, stop, raw: response.content };
   }
 
   /** 10-K analysis. The hosted model's large context usually takes whole sections verbatim (no map step). */

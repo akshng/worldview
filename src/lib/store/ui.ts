@@ -132,6 +132,8 @@ interface UIState {
   briefingOpen: boolean;
   marketsOpen: boolean;
   planetOpen: boolean;
+  /** AI analyst chat panel */
+  analystOpen: boolean;
   energyOpen: boolean;
   securityOpen: boolean;
   trendsOpen: boolean;
@@ -171,6 +173,7 @@ interface UIState {
   setBriefingOpen: (v: boolean) => void;
   setMarketsOpen: (v: boolean) => void;
   setPlanetOpen: (v: boolean) => void;
+  setAnalystOpen: (v: boolean) => void;
   setEnergyOpen: (v: boolean) => void;
   setSecurityOpen: (v: boolean) => void;
   setTrendsOpen: (v: boolean) => void;
@@ -248,6 +251,7 @@ export const useUI = create<UIState>()(
       briefingOpen: false,
       marketsOpen: false,
       planetOpen: false,
+      analystOpen: false,
       energyOpen: false,
       securityOpen: false,
       trendsOpen: false,
@@ -296,6 +300,7 @@ export const useUI = create<UIState>()(
       setBriefingOpen: (briefingOpen) => set({ briefingOpen }),
       setMarketsOpen: (marketsOpen) => set({ marketsOpen }),
       setPlanetOpen: (planetOpen) => set({ planetOpen }),
+      setAnalystOpen: (analystOpen) => set({ analystOpen }),
       setEnergyOpen: (energyOpen) => set({ energyOpen }),
       setSecurityOpen: (securityOpen) => set({ securityOpen }),
       setTrendsOpen: (trendsOpen) => set({ trendsOpen }),
