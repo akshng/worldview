@@ -39,6 +39,8 @@ const EnvSchema = z.object({
   AI_IDLE_UNLOAD_MINUTES: z.coerce.number().int().min(0).max(1440).default(5),
   AI_API_KEY: z.string().optional(),
   AI_MODEL: z.string().optional(),
+  /** AI analyst on the local model: routed (app picks tools, model writes; default) or agent (model plans tool calls) */
+  ANALYST_LOCAL_MODE: z.enum(["routed", "agent"]).default("routed"),
 
   /** Storage: unset = memory+JSON snapshot; "pglite[:path]" = embedded Postgres; "postgres://…" = server */
   DATABASE_URL: z.string().optional(),

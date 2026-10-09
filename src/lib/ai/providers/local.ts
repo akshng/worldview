@@ -13,6 +13,7 @@ import { EVENT_CATEGORIES } from "@/types/events";
 import { CommandIntentSchema, FilingSectionsSchema, type AIProvider, type CommandIntent, type FilingAnalysisInput, type FilingSections, type MarketBriefInput } from "../types";
 import { BRIEFING_SYSTEM, COMMAND_SYSTEM, INTERPRET_SYSTEM, MARKET_SYSTEM, briefingPayload, interpretPayload, marketPayload } from "../prompts";
 import { runFilingAnalysis } from "../filing";
+import type { LocalSession } from "@/lib/analyst/llm";
 
 export const DEFAULT_LOCAL_MODEL = "hf:unsloth/Qwen3-4B-Instruct-2507-GGUF:Q4_K_M";
 const CONTEXT_SIZE = 12_288;
@@ -208,6 +209,24 @@ export class LocalProvider implements AIProvider {
       },
       input,
     );
+  }
+
+  /**
+   * One serialised chat session for the AI analyst: successive prompts share the
+   * session (and its KV cache), so planning steps only evaluate new tokens.
+   */
+  chatSession<T>(systemPrompt: string, fn: (s: LocalSession) => Promise<T>): Promise<T> {
+    return this.run(async (rt, session) => {
+      const grammars = new Map<object, Awaited<ReturnType<Runtime["llama"]["createGrammarForJsonSchema"]>>>();
+      return fn({
+        json: async (prompt, schema, maxTokens) => {
+          let grammar = grammars.get(schema);
+          if (!grammar) grammars.set(schema, (grammar = await rt.llama.createGrammarForJsonSchema(schema as never)));
+          return session.prompt(prompt, { grammar, maxTokens, temperature: 0 });
+        },
+        text: async (prompt, maxTokens, onDelta) => (await session.prompt(prompt, { maxTokens, temperature: 0.3, onTextChunk: onDelta })).trim(),
+      });
+    }, systemPrompt);
   }
 
   async parseCommand(query: string): Promise<CommandIntent> {
