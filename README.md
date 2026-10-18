@@ -64,6 +64,7 @@ cp .env.example .env.local
 | `ANALYST_LOCAL_MODE` | `routed` | AI analyst on the local model: `routed` = the app picks the tools, the model writes; `agent` = the model plans its own tool calls (JSON protocol) |
 | `WORLDVIEW_URL` | `http://localhost:3000` | Where the morning-briefing job looks for a running server |
 | `MAC_NOTIFY` | `true` | macOS notification when the morning briefing is ready; `false` = off |
+| `DISCORD_WEBHOOK_URL` | — | Discord webhook; the morning briefing (AI summary, top developments, markets) posts there as **WorldView**. Test with `npm run discord:test` |
 | `DATABASE_URL` | — | Storage: unset = in-memory + JSON snapshot; `pglite` = embedded Postgres (no install); `postgres://…` = PostgreSQL server |
 
 Secrets are read only on the server (`src/lib/env.ts`, guarded by `server-only`) and never sent to the browser.
@@ -193,6 +194,8 @@ This installs a LaunchAgent (`~/Library/LaunchAgents/com.worldview.morning-brief
 If the app server is already running (`WORLDVIEW_URL`), the job uses its API instead of opening the store itself, so two processes never write the same data.
 
 **Mac notification.** When the briefing is ready a macOS notification shows the top headlines (set `MAC_NOTIFY=false` to turn it off). Click into the app's Daily briefing to read the AI summary.
+
+**Discord.** Set `DISCORD_WEBHOOK_URL` (Server Settings → Integrations → Webhooks → New Webhook → Copy URL) and the same briefing, plus key market levels, is posted to that channel under the name **WorldView** — so it's distinguishable from other apps posting there. `npm run discord:test` sends a test message.
 
 ## How ingestion works
 

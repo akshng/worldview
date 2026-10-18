@@ -29,7 +29,8 @@
     "service:restart": "node scripts/local-service.mjs restart",
     "service:uninstall": "node scripts/local-service.mjs uninstall",
     "geo:regions": "tsx scripts/build-regions.ts",
-    "geo:infra": "tsx scripts/build-infra.ts"
+    "geo:infra": "tsx scripts/build-infra.ts",
+    "discord:test": "tsx scripts/discord-test.mts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",

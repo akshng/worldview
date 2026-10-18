@@ -21,12 +21,37 @@ for (const f of [".env.local", ".env"]) {
 }
 
 const log = (msg: string) => console.log(`[${new Date().toISOString()}] ${msg}`);
+const MARKET_SYMBOLS: Record<string, string> = { "^GSPC": "S&P 500", "^IXIC": "Nasdaq", "^VIX": "VIX", "DGS10": "US 10-yr %", "CL=F": "WTI crude", "GC=F": "Gold", "BTC-USD": "Bitcoin" };
+
+/** Key market levels from the running server's snapshot (empty if unavailable). */
+async function marketLines(): Promise<import("@/lib/notify/discord").MarketLine[]> {
+  try {
+    const res = await fetch(`${serverUrl}/api/markets`, { signal: AbortSignal.timeout(60_000) });
+    if (!res.ok) return [];
+    const snap = (await res.json()) as { groups: Record<string, Array<{ symbol: string; price: number | null; changePct: number | null }>> };
+    const all = Object.values(snap.groups).flat();
+    return Object.entries(MARKET_SYMBOLS).flatMap(([sym, name]) => {
+      const q = all.find((x) => x.symbol === sym);
+      return q ? [{ name, price: q.price, changePct: q.changePct }] : [];
+    });
+  } catch {
+    return [];
+  }
+}
+
 async function notify(briefing: import("@/lib/briefing").DailyBriefing) {
   const { notifyBriefingOnMac } = await import("@/lib/notify/mac");
   try {
     if (await notifyBriefingOnMac(briefing)) log("Mac notification shown");
   } catch (err) {
     log(`Mac notification failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  const { sendDiscord, briefingEmbeds, discordWebhook } = await import("@/lib/notify/discord");
+  if (!discordWebhook()) return;
+  try {
+    if (await sendDiscord("**WorldView** · daily update", briefingEmbeds(briefing, await marketLines()))) log("Discord update sent");
+  } catch (err) {
+    log(`Discord update failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 

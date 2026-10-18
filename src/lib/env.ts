@@ -36,6 +36,8 @@ const EnvSchema = z.object({
   /** Unload the on-device model after this many idle minutes (0 = keep loaded) */
   /** macOS notification when the morning briefing is ready ("false" = off) */
   MAC_NOTIFY: z.string().optional(),
+  /** Discord incoming-webhook URL for WorldView updates (unset = off). Messages post as "WorldView". */
+  DISCORD_WEBHOOK_URL: z.string().optional(),
   AI_IDLE_UNLOAD_MINUTES: z.coerce.number().int().min(0).max(1440).default(5),
   AI_API_KEY: z.string().optional(),
   AI_MODEL: z.string().optional(),
