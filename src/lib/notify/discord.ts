@@ -67,7 +67,8 @@ export function briefingEmbeds(b: DailyBriefing, markets: MarketLine[] = [], dat
   const day = date.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
   const top = b.topDevelopments.slice(0, 8).map((d) => {
     const where = d.event.countryName ?? d.event.locationName ?? "";
-    return `• **${d.event.title}**${where ? ` — ${where}` : ""}`;
+    const show = where && !d.event.title.toLowerCase().includes(where.toLowerCase());
+    return `• **${d.event.title}**${show ? ` — ${where}` : ""}`;
   });
   const embeds: DiscordEmbed[] = [
     {

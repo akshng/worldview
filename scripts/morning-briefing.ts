@@ -49,7 +49,7 @@ async function notify(briefing: import("@/lib/briefing").DailyBriefing) {
   const { sendDiscord, briefingEmbeds, discordWebhook } = await import("@/lib/notify/discord");
   if (!discordWebhook()) return;
   try {
-    if (await sendDiscord("**WorldView** · daily update", briefingEmbeds(briefing, await marketLines()))) log("Discord update sent");
+    if (await sendDiscord("**[WorldView]** ☀️ Daily update", briefingEmbeds(briefing, await marketLines()))) log("Discord update sent");
   } catch (err) {
     log(`Discord update failed: ${err instanceof Error ? err.message : String(err)}`);
   }

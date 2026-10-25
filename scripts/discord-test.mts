@@ -6,7 +6,7 @@ if (!discordWebhook()) {
   console.error("DISCORD_WEBHOOK_URL is missing or not a Discord webhook URL (add it to .env.local).");
   process.exit(1);
 }
-await sendDiscord("**WorldView** · test message — updates from WorldView will arrive here.", [
+await sendDiscord("**[WorldView]** Connected — WorldView updates will arrive here.", [
   { title: "Connected", description: "Daily morning briefing (7:30) and other WorldView updates will be posted to this channel as **WorldView**." },
 ]);
 console.log("Sent.");
