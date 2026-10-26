@@ -12,8 +12,11 @@ import { env } from "@/lib/env";
 import type { EventRepository } from "@/lib/db/types";
 import { alertEmbed, discordWebhook, marketWrapEmbeds, sendDiscord, setupEmbeds, type MarketLine } from "./discord";
 
-interface State {
+export interface State {
+  /** event ids and source-record ids (`dataSourceId:externalId`) already alerted */
   alerted: string[];
+  /** kind → NY date of the last market-shock alert */
+  shocks?: Record<string, string>;
   lastWrap: string | null;
   lastSetups?: string | null;
   /** symbol → NY date it was last reported (no repeats within a week) */
@@ -21,14 +24,14 @@ interface State {
 }
 
 const file = () => path.join(env().DATA_DIR, "discord-state.json");
-async function load(): Promise<State | null> {
+export async function load(): Promise<State | null> {
   try {
     return JSON.parse(await readFile(file(), "utf8")) as State;
   } catch {
     return null;
   }
 }
-async function save(s: State) {
+export async function save(s: State) {
   await mkdir(env().DATA_DIR, { recursive: true });
   await writeFile(file(), JSON.stringify({ ...s, alerted: s.alerted.slice(-3000) }));
 }
@@ -43,18 +46,20 @@ export async function discordAlerts(repo: EventRepository, now = Date.now()) {
     .filter((x) => !x.isSynthetic && x.status !== "RESOLVED" && x.importanceScore >= e.DISCORD_ALERT_MIN_IMPORTANCE)
     .sort((a, b) => b.importanceScore - a.importanceScore);
   // First run: remember what's already there instead of flooding the channel.
-  if (!prev) return save({ alerted: events.map((x) => x.id), lastWrap: null });
+  const keys = (x: (typeof events)[number]) => [x.id, ...x.sources.map((s) => s.id)];
+  if (!prev) return save({ alerted: events.flatMap(keys), lastWrap: null });
+  // Also skips events the battery sentinel already alerted (matched by source record).
   const seen = new Set(prev.alerted);
-  const fresh = events.filter((x) => !seen.has(x.id)).slice(0, MAX_PER_TICK);
+  const fresh = events.filter((x) => !keys(x).some((k) => seen.has(k))).slice(0, MAX_PER_TICK);
   if (!fresh.length) return;
   const n = fresh.length;
-  await sendDiscord(`**[WorldView]** 🚨 ${n === 1 ? "Major event" : `${n} major events`}`, fresh.map(alertEmbed));
-  await save({ ...prev, alerted: [...prev.alerted, ...fresh.map((x) => x.id)] });
+  await sendDiscord(`**[WorldView]** 🚨 ${n === 1 ? "Major event" : `${n} major events`}`, fresh.map((e) => alertEmbed(e)));
+  await save({ ...prev, alerted: [...prev.alerted, ...fresh.flatMap(keys)] });
 }
 
 const LEVELS: Record<string, string> = { "^GSPC": "S&P 500", "^IXIC": "Nasdaq", "^DJI": "Dow", "^RUT": "Russell 2000", "^VIX": "VIX", DGS10: "US 10-yr %", "DX-Y.NYB": "Dollar index", "CL=F": "WTI crude", "GC=F": "Gold", "BTC-USD": "Bitcoin" };
 
-function nyClock(now: number) {
+export function nyClock(now: number) {
   const p = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", weekday: "short", hour12: false }).formatToParts(now).map((x) => [x.type, x.value]));
   return { date: `${p.year}-${p.month}-${p.day}`, minutes: (Number(p.hour) % 24) * 60 + Number(p.minute), weekday: p.weekday as string };
 }

@@ -107,13 +107,13 @@ export interface AlertEvent {
 }
 
 /** One embed per major event; links to the first source that has a URL. */
-export function alertEmbed(e: AlertEvent): DiscordEmbed {
+export function alertEmbed(e: AlertEvent, aiNote?: { text: string; model: string }): DiscordEmbed {
   const link = e.sources.find((s) => s.sourceUrl);
   const where = e.countryName ?? e.locationName;
   return {
     title: `${TYPE_ICON[e.type] ?? "⚠️"} ${e.title}`,
     url: link?.sourceUrl ?? undefined,
-    description: clip(e.summary, 500),
+    description: `${clip(e.summary, 500)}${aiNote ? `\n\n**Why it may matter** — ${clip(aiNote.text, 1200)}\n*AI interpretation (${aiNote.model}), not verified fact.*` : ""}`,
     color: 0xe5484d,
     fields: [
       { name: "Importance", value: `${Math.round(e.importanceScore)}/100`, inline: true },

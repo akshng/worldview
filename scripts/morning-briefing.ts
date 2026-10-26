@@ -72,8 +72,13 @@ async function viaServer() {
   const auth: Record<string, string> = process.env.ADMIN_TOKEN ? { Authorization: `Bearer ${process.env.ADMIN_TOKEN}` } : {};
   log(`server is running at ${serverUrl} — using it`);
   try {
-    const gen = await fetch(`${serverUrl}/api/briefing/narrative`, { method: "POST", signal: AbortSignal.timeout(15 * 60_000) });
-    if (!gen.ok) log(`AI summary not written: ${(await gen.json().catch(() => ({}))).error ?? gen.status}`);
+    // A slow or failed AI summary must never cost the whole briefing: carry on without it.
+    try {
+      const gen = await fetch(`${serverUrl}/api/briefing/narrative`, { method: "POST", signal: AbortSignal.timeout(15 * 60_000) });
+      if (!gen.ok) log(`AI summary not written: ${(await gen.json().catch(() => ({}))).error ?? gen.status}`);
+    } catch (err) {
+      log(`AI summary not written: ${err instanceof Error ? err.message : String(err)} — sending the briefing without it`);
+    }
     const res = await fetch(`${serverUrl}/api/briefing`);
     if (!res.ok) throw new Error(`GET /api/briefing failed: HTTP ${res.status}`);
     const briefing = await res.json();

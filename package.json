@@ -33,7 +33,11 @@
     "discord:test": "tsx scripts/discord-test.mts",
     "close:run": "NODE_OPTIONS=--conditions=react-server tsx scripts/market-close.ts",
     "close:schedule": "node scripts/schedule-briefing.mjs --close",
-    "close:unschedule": "node scripts/schedule-briefing.mjs --close --remove"
+    "close:unschedule": "node scripts/schedule-briefing.mjs --close --remove",
+    "sentinel": "NODE_OPTIONS=--conditions=react-server tsx scripts/sentinel.ts",
+    "power:install": "node scripts/power-mode.mjs install",
+    "power:uninstall": "node scripts/power-mode.mjs uninstall",
+    "app": "node scripts/power-mode.mjs app"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",

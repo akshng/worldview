@@ -33,7 +33,7 @@ type Runtime = {
 };
 
 const g = globalThis as unknown as {
-  __worldviewLocalAI?: { status: LocalModelState; runtime: Promise<Runtime> | null; queue: Promise<unknown>; idleTimer: NodeJS.Timeout | null; busy: number };
+  __worldviewLocalAI?: { status: LocalModelState; runtime: Promise<Runtime> | null; queue: Promise<unknown>; idleTimer: NodeJS.Timeout | null; busy: number; unloadWhenIdle?: boolean };
 };
 const shared = (g.__worldviewLocalAI ??= { status: { state: "not-downloaded" }, runtime: null, queue: Promise.resolve(), idleTimer: null, busy: 0 });
 
@@ -72,10 +72,19 @@ export class LocalProvider implements AIProvider {
     private readonly idleUnloadMinutes = 5,
   ) {}
 
-  /** Free the model's memory/GPU now. It reloads automatically on the next AI request. */
+  /**
+   * Free the model's memory/GPU. It reloads automatically on the next AI request.
+   * If a request is running or queued, the unload happens as soon as the last one
+   * finishes — disposing mid-request crashes it ("Object is disposed").
+   */
   async unload(): Promise<boolean> {
     if (shared.idleTimer) clearTimeout(shared.idleTimer);
     shared.idleTimer = null;
+    if (shared.busy > 0) {
+      shared.unloadWhenIdle = true;
+      return Boolean(shared.runtime);
+    }
+    shared.unloadWhenIdle = false;
     const pending = shared.runtime;
     if (!pending) return false;
     shared.runtime = null;
@@ -147,6 +156,7 @@ export class LocalProvider implements AIProvider {
   /** Run one chat completion. Calls are serialised: one local context, one request at a time. */
   private run<T>(fn: (rt: Runtime, session: InstanceType<typeof import("node-llama-cpp").LlamaChatSession>) => Promise<T>, systemPrompt: string): Promise<T> {
     shared.busy++;
+    shared.unloadWhenIdle = false; // new work cancels a pending "unload when idle"
     if (shared.idleTimer) clearTimeout(shared.idleTimer);
     const job = shared.queue.then(async () => {
       const rt = await this.ensureReady();
@@ -162,7 +172,8 @@ export class LocalProvider implements AIProvider {
     shared.queue = job.catch(() => undefined);
     void job.finally(() => {
       shared.busy--;
-      this.scheduleIdleUnload();
+      if (shared.busy === 0 && shared.unloadWhenIdle) void this.unload();
+      else this.scheduleIdleUnload();
     }).catch(() => undefined);
     return job;
   }

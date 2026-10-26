@@ -24,3 +24,8 @@ export function subscribe(fn: (msg: RealtimeMessage) => void): () => void {
   bus.emitter.on("message", fn);
   return () => bus.emitter.off("message", fn);
 }
+
+/** Open realtime subscribers (≈ app tabs open). */
+export function subscriberCount(): number {
+  return bus.emitter.listenerCount("message");
+}
