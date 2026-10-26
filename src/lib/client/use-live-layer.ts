@@ -1,4 +1,5 @@
 "use client";
+import { BATTERY_SLOWDOWN, idleOnBattery, onBattery } from "./power";
 import { useEffect, useState } from "react";
 
 export interface LiveLayerResponse<T> {
@@ -31,8 +32,13 @@ export function useLiveLayer<T>(id: string | null, pollMs = 60_000, opts: { paus
     if (!id) return;
     let cancelled = false;
     const ctrl = new AbortController();
-    const load = async () => {
-      if (pauseWhenHidden && document.hidden) return;
+    let lastAt = 0;
+    const load = async (force = false) => {
+      // Hidden tabs never poll on battery; when visible, battery stretches the interval.
+      if ((pauseWhenHidden || onBattery()) && document.hidden) return;
+      if (!force && idleOnBattery()) return;
+      if (!force && onBattery() && Date.now() - lastAt < pollMs * BATTERY_SLOWDOWN - 1000) return;
+      lastAt = Date.now();
       setState((s) => ({ ...s, id, loading: true, ...(s.id !== id ? { data: null, error: null } : {}) }));
       try {
         // "no-cache": revalidate with the ETag, so an unchanged layer comes back as a tiny 304.
@@ -45,17 +51,19 @@ export function useLiveLayer<T>(id: string | null, pollMs = 60_000, opts: { paus
         if (!cancelled && (err as Error).name !== "AbortError") setState((s) => ({ ...s, error: (err as Error).message, loading: false }));
       }
     };
-    void load();
-    const t = setInterval(load, pollMs);
+    void load(true);
+    const t = setInterval(() => void load(), pollMs);
     const onVisible = () => {
       if (!document.hidden) void load();
     };
-    if (pauseWhenHidden) document.addEventListener("visibilitychange", onVisible);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
     return () => {
       cancelled = true;
       ctrl.abort();
       clearInterval(t);
       document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
     };
   }, [id, pollMs, pauseWhenHidden]);
 

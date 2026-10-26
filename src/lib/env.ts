@@ -50,7 +50,8 @@ const EnvSchema = z.object({
   SETUP_WATCHLIST: z.string().optional(),
   /** Discord alert when a watchlist stock moves this many % on the day (again at 2×). */
   WATCH_MOVE_PCT: z.coerce.number().min(1).max(50).default(5),
-  AI_IDLE_UNLOAD_MINUTES: z.coerce.number().int().min(0).max(1440).default(5),
+  /** Free the on-device model this long after its last request (it reloads in a few seconds). */
+  AI_IDLE_UNLOAD_MINUTES: z.coerce.number().int().min(0).max(1440).default(2),
   AI_API_KEY: z.string().optional(),
   AI_MODEL: z.string().optional(),
   /** AI analyst on the local model: routed (app picks tools, model writes; default) or agent (model plans tool calls) */

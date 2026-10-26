@@ -8,10 +8,14 @@ import { api } from "./api";
 import { useData } from "./data-store";
 import { useUI } from "@/lib/store/ui";
 import { rangeMs } from "@/lib/time";
+import { BATTERY_SLOWDOWN, onBattery } from "./power";
 
 const POLL_FALLBACK_MS = 90_000;
-/** Minimum gap between background refreshes: with ~40 sources the server reports changes constantly. */
+/** Minimum gap between background refreshes: with ~40 sources the server reports changes constantly.
+ *  Each refresh re-downloads and re-processes up to 20k events, so on battery it's stretched to 2 minutes. */
 const MIN_REFRESH_GAP_MS = 15_000;
+const BATTERY_REFRESH_GAP_MS = 120_000;
+const refreshGap = () => (onBattery() ? BATTERY_REFRESH_GAP_MS : MIN_REFRESH_GAP_MS);
 
 export function useLiveData() {
   const range = useUI((s) => s.range);
@@ -83,12 +87,25 @@ export function useLiveData() {
     if (!autoRefresh) return;
     let debounce: ReturnType<typeof setTimeout> | null = null;
     let poll: ReturnType<typeof setInterval> | null = null;
+    let stale = false;
+    const onVisible = () => {
+      if (!document.hidden && stale) {
+        stale = false;
+        schedule();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
     const schedule = () => {
       if (debounce) return;
       // Coalesce bursts and keep at least MIN_REFRESH_GAP_MS between refreshes.
-      const wait = Math.max(2500, MIN_REFRESH_GAP_MS - (Date.now() - lastSilent.current));
+      const wait = Math.max(2500, refreshGap() - (Date.now() - lastSilent.current));
       debounce = setTimeout(() => {
         debounce = null;
+        // Nobody's looking: catch up when the page is visible again.
+        if (document.hidden) {
+          stale = true;
+          return;
+        }
         void load({ silent: true });
       }, wait);
     };
@@ -102,7 +119,7 @@ export function useLiveData() {
     });
     es.onerror = () => {
       // Browser auto-reconnects; keep a slow poll as a safety net meanwhile.
-      if (!poll) poll = setInterval(() => void load({ silent: true }), POLL_FALLBACK_MS);
+      if (!poll) poll = setInterval(() => void load({ silent: true }), POLL_FALLBACK_MS * (onBattery() ? BATTERY_SLOWDOWN : 1));
     };
     es.addEventListener("hello", () => {
       if (poll) {
@@ -111,6 +128,7 @@ export function useLiveData() {
       }
     });
     return () => {
+      document.removeEventListener("visibilitychange", onVisible);
       es.close();
       if (debounce) clearTimeout(debounce);
       if (poll) clearInterval(poll);

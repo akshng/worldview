@@ -92,6 +92,7 @@ import type { RadarData } from "@/layers/weather-radar";
 import { nightCollection } from "./terminator";
 import { useUI } from "@/lib/store/ui";
 import { useLiveLayer } from "@/lib/client/use-live-layer";
+import { BATTERY_SLOWDOWN, idleOnBattery, onBattery } from "@/lib/client/power";
 import type { CamerasData } from "@/layers/cameras";
 import { hasLive } from "@/lib/cameras";
 import { CameraViewer } from "@/components/cameras/CameraViewer";
@@ -158,8 +159,17 @@ function useViewportFeed<T extends { pending?: number }>(path: string, on: boole
     let ctrl: AbortController | null = null;
     let debounce: ReturnType<typeof setTimeout> | undefined;
     let again: ReturnType<typeof setTimeout> | undefined;
+    let lastAt = 0;
+    // Timer ticks are skipped on battery when unfocused, and stretched on battery otherwise;
+    // a pan or zoom (moveend) always loads.
+    const tick = () => {
+      if (idleOnBattery()) return;
+      if (onBattery() && Date.now() - lastAt < pollMs * BATTERY_SLOWDOWN - 1000) return;
+      void load();
+    };
     const load = async () => {
       if (document.hidden) return;
+      lastAt = Date.now();
       ctrl?.abort();
       clearTimeout(again);
       const c = (ctrl = new AbortController());
@@ -189,7 +199,7 @@ function useViewportFeed<T extends { pending?: number }>(path: string, on: boole
       debounce = setTimeout(load, 450);
     };
     void load();
-    const t = setInterval(load, pollMs);
+    const t = setInterval(tick, pollMs);
     map.on("moveend", onMove);
     document.addEventListener("visibilitychange", load);
     return () => {
@@ -1096,9 +1106,13 @@ export default function Globe({ window: win, live }: GlobeProps) {
     const sel = preparedSats.find((s) => s.el.id === selectedSat) ?? null;
     map.setFilter("sat-selected", ["==", ["get", "id"], sel ? sel.el.id : -1]);
     let tick = 0;
+    let lastAt = 0;
     const update = () => {
-      if (document.hidden) return;
+      if (document.hidden || idleOnBattery()) return;
       const now = Date.now();
+      // Every 2 s on power; every ~14 s on battery (positions still exact, just less often).
+      if (onBattery() && now - lastAt < 14_000) return;
+      lastAt = now;
       pts?.setData(satFeatures(preparedSats, now, selectedSat));
       if (tick++ % 15 === 0) track?.setData(sel ? satTrackFeatures(sel, now, SAT_COLORS[sel.el.group]) : EMPTY_FC);
     };

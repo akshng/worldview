@@ -92,8 +92,13 @@ body {
   70% { box-shadow: 0 0 0 6px rgba(63, 214, 143, 0); }
   100% { box-shadow: 0 0 0 0 rgba(63, 214, 143, 0); }
 }
+/* A few pulses, then still: an endlessly animating element keeps macOS recompositing
+   the whole window ~60×/s, which costs real battery for a tiny dot. */
 .live-dot {
-  animation: live-pulse 2.4s ease-out infinite;
+  animation: live-pulse 2.4s ease-out 3;
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-dot { animation: none; }
 }
 
 @keyframes panel-in {

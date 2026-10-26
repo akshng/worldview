@@ -6,6 +6,7 @@
  */
 import { useEffect } from "react";
 import { useUI } from "@/lib/store/ui";
+import { watchBrowserBattery } from "./power";
 
 const PANELS = {
   markets: "setMarketsOpen",
@@ -41,6 +42,7 @@ declare global {
 export function useAppBridge() {
   useEffect(() => {
     window.worldview = { openEvent, openTicker, openPanel };
+    watchBrowserBattery();
     const q = new URLSearchParams(location.search);
     const ev = q.get("event");
     const tk = q.get("ticker");

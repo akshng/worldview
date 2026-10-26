@@ -6,6 +6,7 @@
 // badge counts new major events since you last looked.
 // Built by scripts/build-mac-app.sh; the project folder is baked into Info.plist.
 import Cocoa
+import IOKit.ps
 import WebKit
 
 let serverURL = URL(string: "http://127.0.0.1:3000")!
@@ -18,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     var statusItem: NSStatusItem!
     var statusTimer: Timer?
     var pendingJS: String?
+    var lastPower: String?
     let projectDir = Bundle.main.object(forInfoDictionaryKey: "WVProjectDir") as? String ?? ""
 
     func applicationDidFinishLaunching(_ note: Notification) {
@@ -35,6 +37,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         """
         config.userContentController.addUserScript(WKUserScript(source: hook, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         config.userContentController.add(self, name: "wvlog")
+        if FileManager.default.fileExists(atPath: "\(projectDir)/.data/app-debug") {
+            // Debug: measure what keeps the page busy (map redraws, CSS animations, timers).
+            let perf = """
+            window.addEventListener('load',function(){setTimeout(function(){
+              var post=function(m){webkit.messageHandlers.wvlog.postMessage('perf: '+m)};
+              var anims={};document.getAnimations().forEach(function(a){var t=a.effect&&a.effect.target;var k=(a.animationName||'transition')+' | '+((t&&t.getAttribute&&t.getAttribute('class'))||'').slice(0,40);anims[k]=(anims[k]||0)+1});
+              var cv=[].slice.call(document.querySelectorAll('canvas')).sort(function(a,b){return b.width*b.height-a.width*a.height})[0];
+              var gl=cv&&(cv.getContext('webgl2')||cv.getContext('webgl'));var draws=0;
+              if(gl){var o=gl.drawElements.bind(gl),o2=gl.drawArrays.bind(gl);gl.drawElements=function(){draws++;return o.apply(null,arguments)};gl.drawArrays=function(){draws++;return o2.apply(null,arguments)}}
+              var frames=0,df=0,last=0,t0=performance.now();
+              (function f(){frames++;if(draws!==last){df++;last=draws}if(performance.now()-t0<5000)requestAnimationFrame(f);else post(JSON.stringify({redrawsPerSec:df/5,drawCallsPerSec:Math.round(draws/5),canvas:cv&&(cv.width+'x'+cv.height),anims:anims,ui:localStorage.getItem('worldview-ui')}))})();
+            },25000)});
+            """
+            config.userContentController.addUserScript(WKUserScript(source: perf, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
+        }
         config.mediaTypesRequiringUserActionForPlayback = []
         config.preferences.isElementFullscreenEnabled = true
         config.preferences.setValue(true, forKey: "developerExtrasEnabled")
@@ -105,6 +122,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         log("loaded \(webView.url?.absoluteString ?? "-")")
+        lastPower = nil
+        pushPower()
         if webView.url?.scheme == "http", let js = pendingJS {
             pendingJS = nil
             // Give the page a moment to mount its stores before driving it.
@@ -134,6 +153,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     func heartbeat() {
         guard window.isVisible else { return }
         markViewer()
+        pushPower()
         guard !recovering, web.url?.scheme == "http" else { return }
         DispatchQueue.global().async {
             let up = self.serverUp()
@@ -147,6 +167,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                 }
             }
         }
+    }
+
+    /// Tell the page whether the Mac is on battery, so it refreshes less often.
+    func onBattery() -> Bool {
+        guard let info = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
+              let type = IOPSGetProvidingPowerSourceType(info)?.takeUnretainedValue() as String? else { return false }
+        return type == kIOPMBatteryPowerKey
+    }
+
+    func pushPower() {
+        guard web.url?.scheme == "http" else { return }
+        let p = onBattery() ? "battery" : "ac"
+        if p == lastPower { return }
+        lastPower = p
+        web.evaluateJavaScript("window.__wvPower='\(p)';window.dispatchEvent(new Event('wv-power'))")
+        log("power: \(p)")
     }
 
     func markViewer() {
