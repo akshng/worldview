@@ -17,7 +17,7 @@ WorldView is a local-first global intelligence dashboard: an interactive 3D glob
 
 ## AI without accounts
 
-AI features (event interpretation, briefing summary, natural-language search) run **on your computer** by default: an open-weights model (Qwen3-4B-Instruct-2507, Apache-2.0) via llama.cpp (Metal on Apple Silicon). No account, no API key, nothing leaves the machine. The model (≈2.5 GB) downloads once from Hugging Face on first use, or ahead of time:
+AI features (event interpretation, briefing summary, natural-language search) run **on your computer** by default: an open-weights model (Google's Gemma 4 E2B, Apache-2.0, built for laptops and phones) via llama.cpp (Metal on Apple Silicon). No account, no API key, nothing leaves the machine. On an M4 it writes the morning briefing in ~25 s, about 2.5× faster than the Qwen3-4B it replaced, so the AI is busy (and drawing power) for less than half the time. The model (≈3.1 GB) downloads once from Hugging Face on first use, or ahead of time:
 
 ```bash
 npm run ai:setup
@@ -58,7 +58,7 @@ cp .env.example .env.local
 | `OPENSKY_CLIENT_ID` / `OPENSKY_CLIENT_SECRET` | — | Optional OpenSky API client (raises the anonymous aviation quota) |
 | `AISSTREAM_API_KEY` | — | Optional free key from aisstream.io — global terrestrial AIS for Maritime / SHIP, merged with the keyless feeds (Fintraffic, Kystverket, Open Waters AIS) |
 | `AI_PROVIDER` | `local` | `local` = keyless on-device model (no account), `anthropic` = hosted Claude, `none` = off |
-| `AI_LOCAL_MODEL` | Qwen3-4B-Instruct Q4_K_M | Override the on-device model (node-llama-cpp URI) |
+| `AI_LOCAL_MODEL` | Gemma 4 E2B Q4_K_M | Override the on-device model (node-llama-cpp URI) |
 | `AI_IDLE_UNLOAD_MINUTES` | `5` | Unload the local model after this many idle minutes (reloads on the next AI request); `0` = keep loaded |
 | `AI_API_KEY` / `AI_MODEL` | — / `claude-opus-5-5` | Only for `AI_PROVIDER=anthropic` |
 | `ANALYST_LOCAL_MODE` | `routed` | AI analyst on the local model: `routed` = the app picks the tools, the model writes; `agent` = the model plans its own tool calls (JSON protocol) |
@@ -175,7 +175,7 @@ WorldView then runs as a production server at http://localhost:3000 (bound to th
 
 ## Morning briefing
 
-A once-a-day job refreshes every active source, builds the daily briefing, has the AI (local Qwen by default) write the summary, saves it to `DATA_DIR/briefings/YYYY-MM-DD.json`, unloads the model and exits — nothing stays running. The app shows it as "Morning briefing · <time>".
+A once-a-day job refreshes every active source, builds the daily briefing, has the AI (local Gemma 4 by default) write the summary, saves it to `DATA_DIR/briefings/YYYY-MM-DD.json`, unloads the model and exits — nothing stays running. The app shows it as "Morning briefing · <time>".
 
 ```bash
 npm run briefing:schedule            # daily at 07:30 (macOS)
@@ -199,7 +199,7 @@ If the app server is already running (`WORLDVIEW_URL`), the job uses its API ins
 
 **Watchlist alerts.** The app syncs your watchlist to the server (`/api/watchlist`). During market hours a **👀 move** alert posts when a watchlist stock is up or down `WATCH_MOVE_PCT`% (default 5, again at 10%), from the server when it's running and from the battery sentinel otherwise; after the close a **📅 earnings** heads-up lists watchlist names reporting the next trading day (Nasdaq's public calendar). The wrap and the scan run from a run-once job (`npm run close:schedule`, weekdays at 16:45 New York time in your local clock; runs on wake if the Mac was asleep) that unloads the AI and exits when done — `npm run close:run` to run it by hand, `npm run close:unschedule` to stop.
 
-**Mac app.** `npm run mac:build` builds **WorldView.app** (a ~140 KB native window using Safari's engine, with its own icon) into `~/Applications`. Opening it starts the server if battery mode stopped it, keeps it awake while the window is open, and lets it stop again after you quit. Links to other sites open in your browser; ⌘R reloads, ⇧⌘O opens the same page in your browser. Needs the Xcode command line tools.
+**Mac app.** `npm run mac:build` builds **WorldView.app** (a ~140 KB native window using Safari's engine, with its own icon) into `~/Applications`. Opening it starts the server if battery mode stopped it, keeps it awake while the window is open, and lets it stop again after you quit. Links to other sites open in your browser; ⌘R reloads, ⇧⌘O opens the same page in your browser. A **menu bar ticker** shows the S&P 500 (click for indices, rates, oil, gold, Bitcoin, your watchlist and the last 6 hours' major events — each opens in the app), the **Dock badge** counts new major events since you last looked, and **⌘1–⌘7** jump to Markets, Analyst, Briefing, Planet, Energy, Security and Trends. Closing the window keeps just the menu bar ticker and unloads the page, so on battery the server can still stop. Links like `http://127.0.0.1:3000/?ticker=NVDA`, `?event=<id>` or `?panel=analyst` open straight to that view. Needs the Xcode command line tools.
 
 **Battery mode** (`npm run power:install`). Plugged in, the server runs as usual. On battery it stops once no tab has been open for 10 minutes, and a **sentinel** runs every 15 minutes instead: under a second of CPU to check USGS, GDACS and tsunami feeds plus S&P 500 / VIX during market hours, using the same importance rules. Only when something crosses the bar does it load the AI, write a note, post to Discord and unload it. `npm run app` opens WorldView on battery; `npm run power:uninstall` returns to always-on. Logs: `.data/power.log`, `.data/sentinel.log`.
 

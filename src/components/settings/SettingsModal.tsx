@@ -113,9 +113,9 @@ function LocalAIRow() {
     : status.state === "loading" ? "Loading model…"
     : status.state === "downloading" ? `Downloading ${formatGB(status.downloadedBytes)} / ${formatGB(status.totalBytes)}`
     : status.state === "error" ? `Error: ${status.message}`
-    : "Not downloaded (≈2.5 GB, one time)";
+    : "Not downloaded (≈3.1 GB, one time)";
   return (
-    <Row label="On-device AI model" hint="Qwen3-4B-Instruct (Apache-2.0) via llama.cpp — no account, no API key, nothing leaves this computer.">
+    <Row label="On-device AI model" hint="Gemma 4 E2B (Apache-2.0) via llama.cpp — no account, no API key, nothing leaves this computer.">
       <div className="flex items-center gap-2">
         <span className="text-[12px] text-muted">{label}</span>
         {status?.state === "not-downloaded" || status?.state === "error" ? (

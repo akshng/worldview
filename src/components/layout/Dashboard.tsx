@@ -5,6 +5,7 @@ import { useUI } from "@/lib/store/ui";
 import { useData } from "@/lib/client/data-store";
 import { useLiveData } from "@/lib/client/use-live-data";
 import { syncWatchlist } from "@/lib/client/api";
+import { useAppBridge } from "@/lib/client/app-bridge";
 import { useNow } from "@/lib/client/use-now";
 import { filterEvents } from "@/lib/events/client-filter";
 import { IMPORTANCE_FILTERS } from "@/lib/categories";
@@ -42,6 +43,7 @@ const Globe = dynamic(() => import("@/components/globe/Globe"), {
 export function Dashboard() {
   useLiveData();
   useAlertChecker();
+  useAppBridge();
   const watchlist = useUI((s) => s.settings.watchlist);
   useEffect(() => {
     void syncWatchlist(watchlist);

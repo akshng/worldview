@@ -15,7 +15,8 @@ import { BRIEFING_SYSTEM, COMMAND_SYSTEM, INTERPRET_SYSTEM, MARKET_SYSTEM, SETUP
 import { runFilingAnalysis } from "../filing";
 import type { LocalSession } from "@/lib/analyst/llm";
 
-export const DEFAULT_LOCAL_MODEL = "hf:unsloth/Qwen3-4B-Instruct-2507-GGUF:Q4_K_M";
+/** Gemma 4 E2B (Apache-2.0): ~2.5× faster than Qwen3-4B on this app's tasks at similar quality (benchmarked on an M4). */
+export const DEFAULT_LOCAL_MODEL = "hf:unsloth/gemma-4-E2B-it-GGUF:Q4_K_M";
 const CONTEXT_SIZE = 12_288;
 
 export type LocalModelState =
@@ -160,10 +161,20 @@ export class LocalProvider implements AIProvider {
     if (shared.idleTimer) clearTimeout(shared.idleTimer);
     const job = shared.queue.then(async () => {
       const rt = await this.ensureReady();
-      const { LlamaChatSession } = await import("node-llama-cpp");
-      const sequence = rt.context.getSequence();
+      const { LlamaChatSession, Gemma4ChatWrapper } = await import("node-llama-cpp");
+      let sequence;
       try {
-        const session = new LlamaChatSession({ contextSequence: sequence, systemPrompt });
+        sequence = rt.context.getSequence();
+      } catch {
+        // Some models (Gemma 4) don't hand a freed sequence back; start a fresh context.
+        await rt.context.dispose().catch(() => undefined);
+        rt.context = await rt.model.createContext({ contextSize: CONTEXT_SIZE });
+        sequence = rt.context.getSequence();
+      }
+      try {
+        // Gemma 4 thinks out loud by default; these tasks want the answer only (faster, less battery).
+        const chatWrapper = /gemma-4/i.test(this.modelUri) ? new Gemma4ChatWrapper({ reasoning: false }) : undefined;
+        const session = new LlamaChatSession({ contextSequence: sequence, systemPrompt, ...(chatWrapper ? { chatWrapper } : {}) });
         return await fn(rt, session);
       } finally {
         sequence.dispose();

@@ -1,6 +1,9 @@
 // WorldView for macOS — a native window around the local WorldView server.
 // Starts the server if it's off (battery mode stops it), shows a splash until
 // it answers, then loads the app in WebKit. External links open in the browser.
+// Closing the window keeps a menu-bar ticker (quotes, watchlist, major events)
+// and unloads the page, so the battery watcher can stop the server; the Dock
+// badge counts new major events since you last looked.
 // Built by scripts/build-mac-app.sh; the project folder is baked into Info.plist.
 import Cocoa
 import WebKit
@@ -8,10 +11,13 @@ import WebKit
 let serverURL = URL(string: "http://127.0.0.1:3000")!
 let healthURL = URL(string: "http://127.0.0.1:3000/api/meta")!
 
-final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
+final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler, NSWindowDelegate, NSMenuDelegate {
     var window: NSWindow!
     var web: WKWebView!
     var keepAlive: Timer?
+    var statusItem: NSStatusItem!
+    var statusTimer: Timer?
+    var pendingJS: String?
     let projectDir = Bundle.main.object(forInfoDictionaryKey: "WVProjectDir") as? String ?? ""
 
     func applicationDidFinishLaunching(_ note: Notification) {
@@ -49,6 +55,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         window.backgroundColor = NSColor(red: 0.04, green: 0.06, blue: 0.09, alpha: 1)
         window.minSize = NSSize(width: 900, height: 600)
         window.contentView = web
+        window.isReleasedWhenClosed = false
+        window.delegate = self
         window.setFrameAutosaveName("WorldViewMain")
         if !window.setFrameUsingName("WorldViewMain") { window.center() }
         window.makeKeyAndOrderFront(nil)
@@ -59,9 +67,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         // While the window is open, tell the battery watcher someone is looking.
         keepAlive = Timer.scheduledTimer(withTimeInterval: 20, repeats: true) { [weak self] _ in self?.heartbeat() }
         DispatchQueue.global().async { self.startServerAndLoad() }
+        setupStatusItem()
     }
 
-    func applicationShouldTerminateAfterLastWindowClosed(_ app: NSApplication) -> Bool { true }
+    func applicationShouldTerminateAfterLastWindowClosed(_ app: NSApplication) -> Bool { false }
+
+    func applicationShouldHandleReopen(_ app: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        showMain()
+        return true
+    }
 
     func applicationWillTerminate(_ note: Notification) {
         // Let the battery watcher stop the server soon (it waits 10 min after the last viewer).
@@ -91,6 +105,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         log("loaded \(webView.url?.absoluteString ?? "-")")
+        if webView.url?.scheme == "http", let js = pendingJS {
+            pendingJS = nil
+            // Give the page a moment to mount its stores before driving it.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { webView.evaluateJavaScript(js) }
+        }
         // Debug: with .data/app-debug present, save what the window shows 10 s and 40 s after load.
         guard isLocal(webView.url), webView.url?.scheme == "http", FileManager.default.fileExists(atPath: "\(projectDir)/.data/app-debug") else { return }
         for delay in [10.0, 40.0] {
@@ -113,6 +132,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
     /** Every 20 s: keep the battery watcher from stopping the server, and if it went away anyway, bring it back. */
     func heartbeat() {
+        guard window.isVisible else { return }
         markViewer()
         guard !recovering, web.url?.scheme == "http" else { return }
         DispatchQueue.global().async {
@@ -282,10 +302,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         view.addItem(item("Actual Size", #selector(zoomReset), "0", target: self))
         view.addItem(.separator())
         view.addItem(item("Enter Full Screen", #selector(NSWindow.toggleFullScreen(_:)), "f", [.command, .control]))
+        let go = NSMenu(title: "Go")
+        for (i, (title, panel)) in [("Markets", "markets"), ("Analyst", "analyst"), ("Briefing", "briefing"), ("Planet", "planet"), ("Energy", "energy"), ("Security", "security"), ("Trends", "trends")].enumerated() {
+            let it = item(title, #selector(goPanel(_:)), "\(i + 1)", target: self)
+            it.representedObject = panel
+            go.addItem(it)
+        }
+        go.addItem(.separator())
+        go.addItem(item("Search…", #selector(goSearch), "k", target: self))
         let win = NSMenu(title: "Window")
         win.addItem(item("Minimize", #selector(NSWindow.performMiniaturize(_:)), "m"))
         win.addItem(item("Close", #selector(NSWindow.performClose(_:)), "w"))
-        for (title, sub) in [("WorldView", app), ("Edit", edit), ("View", view), ("Window", win)] {
+        for (title, sub) in [("WorldView", app), ("Edit", edit), ("View", view), ("Go", go), ("Window", win)] {
             let top = NSMenuItem(title: title, action: nil, keyEquivalent: "")
             top.submenu = sub
             main.addItem(top)
@@ -294,6 +322,166 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         NSApp.windowsMenu = win
     }
 }
+
+// MARK: - main window, menu bar ticker, Dock badge
+
+extension AppDelegate {
+    func showMain() {
+        NSApp.setActivationPolicy(.regular)
+        if web.url?.scheme != "http" && !recovering {
+            web.loadHTMLString(splash("Starting WorldView…"), baseURL: nil)
+            DispatchQueue.global().async { self.startServerAndLoad() }
+        }
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        markViewer()
+    }
+
+    /// Closing the window parks the app in the menu bar: the page is unloaded
+    /// (no GPU, no live connection) so on battery the server can stop.
+    func windowWillClose(_ notification: Notification) {
+        web.loadHTMLString(splash("WorldView is in the menu bar."), baseURL: nil)
+        let f = "\(projectDir)/.data/last-viewer"
+        try? FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSinceNow: -3600)], ofItemAtPath: f)
+        NSApp.setActivationPolicy(.accessory)
+        log("window closed — menu bar only")
+    }
+
+    func windowDidBecomeKey(_ notification: Notification) {
+        UserDefaults.standard.set(Date(), forKey: "majorSeenAt")
+        NSApp.dockTile.badgeLabel = nil
+    }
+
+    /// Run JS in the page, loading the app first if it's parked.
+    func drive(_ js: String) {
+        if web.url?.scheme == "http" && !web.isLoading {
+            web.evaluateJavaScript(js)
+        } else {
+            pendingJS = js
+        }
+        showMain()
+    }
+
+    func jsString(_ s: String) -> String {
+        (try? String(data: JSONSerialization.data(withJSONObject: [s]), encoding: .utf8)).flatMap { String($0.dropFirst().dropLast()) } ?? "\"\""
+    }
+
+    @objc func goPanel(_ sender: NSMenuItem) {
+        guard let p = sender.representedObject as? String else { return }
+        drive("window.worldview && window.worldview.openPanel(\(jsString(p)))")
+    }
+    @objc func goSearch() { drive("window.worldview && window.worldview.openPanel('search')") }
+    @objc func openTickerItem(_ sender: NSMenuItem) {
+        guard let s = sender.representedObject as? String else { return }
+        drive("window.worldview && window.worldview.openTicker(\(jsString(s)))")
+    }
+    @objc func openEventItem(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? String else { return }
+        drive("window.worldview && window.worldview.openEvent(\(jsString(id)))")
+    }
+    @objc func openMain() { showMain() }
+    @objc func quitApp() { NSApp.terminate(nil) }
+
+    func setupStatusItem() {
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        if let b = statusItem.button {
+            b.image = NSImage(systemSymbolName: "globe.americas.fill", accessibilityDescription: "WorldView")
+            b.image?.isTemplate = true
+            b.imagePosition = .imageLeading
+            b.font = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium)
+        }
+        let menu = NSMenu()
+        menu.delegate = self
+        statusItem.menu = menu
+        renderStatus(nil, loading: true)
+        refreshStatus()
+        // Cheap: one small request a minute, only while the server is already running.
+        statusTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in self?.refreshStatus() }
+    }
+
+    func menuWillOpen(_ menu: NSMenu) { refreshStatus() }
+
+    func refreshStatus() {
+        let since = (UserDefaults.standard.object(forKey: "majorSeenAt") as? Date) ?? Date()
+        var comps = URLComponents(string: "http://127.0.0.1:3000/api/app/status")!
+        comps.queryItems = [URLQueryItem(name: "since", value: ISO8601DateFormatter().string(from: since))]
+        var req = URLRequest(url: comps.url!)
+        req.timeoutInterval = 8
+        URLSession.shared.dataTask(with: req) { [weak self] data, res, _ in
+            let ok = (res as? HTTPURLResponse)?.statusCode == 200
+            let status = ok ? data.flatMap { try? JSONDecoder().decode(AppStatus.self, from: $0) } : nil
+            DispatchQueue.main.async { self?.renderStatus(status) }
+        }.resume()
+    }
+
+    func fmt(_ q: AppQuote) -> String {
+        guard let p = q.price else { return "\(q.name) —" }
+        let price = q.unit == "percent" ? String(format: "%.2f%%", p) : (p >= 1000 ? NumberFormatter.localizedString(from: NSNumber(value: Int(p.rounded())), number: .decimal) : String(format: "%.2f", p))
+        guard let c = q.changePct else { return "\(q.name) \(price)" }
+        return "\(q.name) \(price) \(c > 0 ? "▲" : c < 0 ? "▼" : "■")\(String(format: "%.2f", abs(c)))%"
+    }
+
+    func renderStatus(_ st: AppStatus?, loading: Bool = false) {
+        guard let menu = statusItem?.menu, let button = statusItem.button else { return }
+        menu.removeAllItems()
+        func add(_ title: String, _ action: Selector? = nil, _ obj: Any? = nil, key: String = "") {
+            let it = NSMenuItem(title: title, action: action, keyEquivalent: key)
+            it.target = self
+            it.representedObject = obj
+            if action == nil { it.isEnabled = false }
+            menu.addItem(it)
+        }
+        if let st {
+            let lead = st.quotes.first { $0.symbol == "^GSPC" }
+            let n = st.newMajor
+            button.title = (lead.map { " " + fmt($0).replacingOccurrences(of: "S&P 500", with: "S&P") } ?? "") + (n > 0 ? "  ⚠︎\(n)" : "")
+            NSApp.dockTile.badgeLabel = n > 0 && !(window?.isKeyWindow ?? false) ? "\(n)" : nil
+            add("Markets (delayed)")
+            for q in st.quotes { add("   " + fmt(q), #selector(openTickerItem(_:)), q.symbol) }
+            if !st.watchlist.isEmpty {
+                menu.addItem(.separator())
+                add("Watchlist")
+                for q in st.watchlist { add("   " + fmt(q).replacingOccurrences(of: q.name, with: q.symbol), #selector(openTickerItem(_:)), q.symbol) }
+            }
+            menu.addItem(.separator())
+            add(st.major.isEmpty ? "No major events in the last 6 hours" : "Major events (6h)")
+            for e in st.major.prefix(6) {
+                let t = e.title.count > 64 ? String(e.title.prefix(63)) + "…" : e.title
+                add("   [\(e.importance)] \(t)", #selector(openEventItem(_:)), e.id)
+            }
+        } else {
+            button.title = ""
+            NSApp.dockTile.badgeLabel = nil
+            if loading {
+                add("Loading…")
+            } else {
+                add("WorldView is paused (battery saver)")
+                add("Open it to resume live data")
+            }
+        }
+        menu.addItem(.separator())
+        add("Open WorldView", #selector(openMain), nil, key: "o")
+        let panels = NSMenuItem(title: "Go to", action: nil, keyEquivalent: "")
+        let sub = NSMenu()
+        for (title, panel) in [("Markets", "markets"), ("Analyst", "analyst"), ("Briefing", "briefing"), ("Planet", "planet"), ("Trends", "trends")] {
+            let it = NSMenuItem(title: title, action: #selector(goPanel(_:)), keyEquivalent: "")
+            it.target = self
+            it.representedObject = panel
+            sub.addItem(it)
+        }
+        panels.submenu = sub
+        menu.addItem(panels)
+        menu.addItem(.separator())
+        add("Quit WorldView", #selector(quitApp), nil, key: "q")
+        if FileManager.default.fileExists(atPath: "\(projectDir)/.data/app-debug") {
+            log("menu bar: '\(button.title)' · badge \(NSApp.dockTile.badgeLabel ?? "-") · \(menu.items.map { $0.title.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }.joined(separator: " | "))")
+        }
+    }
+}
+
+struct AppQuote: Decodable { let symbol: String; let name: String; let price: Double?; let changePct: Double?; let unit: String? }
+struct AppEvent: Decodable { let id: String; let title: String; let importance: Int }
+struct AppStatus: Decodable { let quotes: [AppQuote]; let watchlist: [AppQuote]; let major: [AppEvent]; let newMajor: Int }
 
 let app = NSApplication.shared
 let delegate = AppDelegate()
