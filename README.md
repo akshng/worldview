@@ -195,7 +195,7 @@ If the app server is already running (`WORLDVIEW_URL`), the job uses its API ins
 
 **Mac notification.** When the briefing is ready a macOS notification shows the top headlines (set `MAC_NOTIFY=false` to turn it off). Click into the app's Daily briefing to read the AI summary.
 
-**Discord.** Set `DISCORD_WEBHOOK_URL` (Server Settings → Integrations → Webhooks → New Webhook → Copy URL) and the same briefing, plus key market levels, is posted to that channel under the name **WorldView** — so it's distinguishable from other apps posting there. `npm run discord:test` sends a test message.
+**Discord.** Set `DISCORD_WEBHOOK_URL` (Server Settings → Integrations → Webhooks → New Webhook → Copy URL) and the same briefing, plus key market levels, is posted to that channel under the name **WorldView** — so it's distinguishable from other apps posting there. `npm run discord:test` sends a test message. While the server runs it also posts **🚨 major-event alerts** (new events with importance ≥ `DISCORD_ALERT_MIN_IMPORTANCE`, default 72, linked to their source; at most 4 at a time, never repeated) and a **🔔 market-close wrap** each US trading day after 16:20 New York time (indices, rates, dollar, oil, gold, Bitcoin, top gainers/losers; `DISCORD_MARKET_WRAP=false` to turn off).
 
 ## How ingestion works
 

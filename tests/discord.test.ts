@@ -21,3 +21,20 @@ describe("discord updates", () => {
     expect(e[2].description).toContain("▲ +0.86%");
   });
 });
+
+describe("discord alerts and market wrap", () => {
+  it("links an alert to its source and skips a location already in the title", async () => {
+    const { alertEmbed } = await import("@/lib/notify/discord");
+    const e = alertEmbed({ id: "a", type: "EARTHQUAKE", title: "M 7.2 earthquake — Vanuatu", summary: "s", timestamp: new Date().toISOString(), importanceScore: 81.4, status: "PARTIALLY_CONFIRMED", sourceCount: 2, countryName: "Vanuatu", locationName: null, sources: [{ sourceName: "USGS", sourceUrl: null }, { sourceName: "EMSC", sourceUrl: "https://www.emsc-csem.org/x" }] });
+    expect(e.url).toBe("https://www.emsc-csem.org/x");
+    expect(e.fields!.map((f) => f.name)).toEqual(["Importance", "Status", "Sources"]);
+    expect(e.fields![0].value).toBe("81/100");
+  });
+  it("lists gainers and losers", async () => {
+    const { marketWrapEmbeds } = await import("@/lib/notify/discord");
+    const w = marketWrapEmbeds([{ name: "S&P 500", price: 7600, changePct: -0.5 }], [{ symbol: "ABC", name: "Abc Inc", price: 10, changePct: 12.3 }], []);
+    expect(w[0].description).toContain("▼ -0.50%");
+    expect(w[1].fields![0].value).toContain("▲ +12.30%");
+    expect(w[1].fields![1].value).toBe("—");
+  });
+});

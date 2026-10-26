@@ -249,6 +249,8 @@ export function ensureStarted() {
   })();
   c.maintenanceTimer = setInterval(() => void maintenance().catch((e) => console.warn("[maintenance]", e)), 5 * 60_000);
   c.maintenanceTimer.unref?.();
+  const discord = setInterval(() => void openRepo().then((r) => import("@/lib/notify/discord-server").then((m) => m.discordTick(r))), 2 * 60_000);
+  discord.unref?.();
 }
 
 export async function getSourceHealth(): Promise<SourceHealth[]> {

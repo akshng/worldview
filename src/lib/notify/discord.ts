@@ -88,3 +88,56 @@ export function briefingEmbeds(b: DailyBriefing, markets: MarketLine[] = [], dat
   if (lines.length) embeds.push({ title: "Markets (delayed)", description: lines.join("\n") });
   return embeds;
 }
+
+const pct = (v: number | null) => (v === null ? "" : `${v > 0 ? "▲ +" : v < 0 ? "▼ " : "■ "}${v.toFixed(2)}%`);
+const TYPE_ICON: Record<string, string> = { EARTHQUAKE: "🌋", WEATHER: "🌀", FLOOD: "🌊", WILDFIRE: "🔥", CONFLICT: "⚔️", VOLCANO: "🌋", TSUNAMI: "🌊", HEALTH: "🦠" };
+
+export interface AlertEvent {
+  id: string;
+  type: string;
+  title: string;
+  summary: string;
+  timestamp: string;
+  importanceScore: number;
+  status: string;
+  sourceCount: number;
+  countryName: string | null;
+  locationName: string | null;
+  sources: Array<{ sourceName: string; sourceUrl: string | null }>;
+}
+
+/** One embed per major event; links to the first source that has a URL. */
+export function alertEmbed(e: AlertEvent): DiscordEmbed {
+  const link = e.sources.find((s) => s.sourceUrl);
+  const where = e.countryName ?? e.locationName;
+  return {
+    title: `${TYPE_ICON[e.type] ?? "⚠️"} ${e.title}`,
+    url: link?.sourceUrl ?? undefined,
+    description: clip(e.summary, 500),
+    color: 0xe5484d,
+    fields: [
+      { name: "Importance", value: `${Math.round(e.importanceScore)}/100`, inline: true },
+      { name: "Status", value: e.status.replace(/_/g, " ").toLowerCase(), inline: true },
+      { name: "Sources", value: `${e.sourceCount}${link ? ` · [${link.sourceName}](${link.sourceUrl})` : ""}`, inline: true },
+      ...(where && !e.title.toLowerCase().includes(where.toLowerCase()) ? [{ name: "Where", value: where, inline: true }] : []),
+    ],
+    timestamp: e.timestamp,
+  };
+}
+
+export interface Mover {
+  symbol: string;
+  name: string;
+  price: number | null;
+  changePct: number | null;
+}
+
+/** End-of-day US market wrap: levels plus top gainers / losers. */
+export function marketWrapEmbeds(levels: MarketLine[], gainers: Mover[], losers: Mover[], date = new Date()): DiscordEmbed[] {
+  const lv = levels.filter((m) => m.price !== null).map((m) => `${m.name}: ${m.price!.toLocaleString("en-US", { maximumFractionDigits: 2 })} ${pct(m.changePct)}`);
+  const mv = (rows: Mover[]) => rows.slice(0, 5).map((r) => `**${r.symbol}** ${clip(r.name, 28)} ${pct(r.changePct)}`).join("\n") || "—";
+  return [
+    { title: `Market close · ${date.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "America/New_York" })}`, description: lv.join("\n") || "Quotes unavailable.", timestamp: date.toISOString() },
+    { title: "Movers (US, delayed)", fields: [{ name: "Top gainers", value: mv(gainers), inline: true }, { name: "Top losers", value: mv(losers), inline: true }] },
+  ];
+}

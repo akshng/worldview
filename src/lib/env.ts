@@ -38,6 +38,10 @@ const EnvSchema = z.object({
   MAC_NOTIFY: z.string().optional(),
   /** Discord incoming-webhook URL for WorldView updates (unset = off). Messages post as "WorldView". */
   DISCORD_WEBHOOK_URL: z.string().optional(),
+  /** Post an alert for new events at or above this importance (0-100). */
+  DISCORD_ALERT_MIN_IMPORTANCE: z.coerce.number().min(0).max(101).default(72),
+  /** Post a US market-close wrap each weekday after 16:20 New York time. */
+  DISCORD_MARKET_WRAP: bool(true),
   AI_IDLE_UNLOAD_MINUTES: z.coerce.number().int().min(0).max(1440).default(5),
   AI_API_KEY: z.string().optional(),
   AI_MODEL: z.string().optional(),
