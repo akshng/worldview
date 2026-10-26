@@ -141,3 +141,25 @@ export function marketWrapEmbeds(levels: MarketLine[], gainers: Mover[], losers:
     { title: "Movers (US, delayed)", fields: [{ name: "Top gainers", value: mv(gainers), inline: true }, { name: "Top losers", value: mv(losers), inline: true }] },
   ];
 }
+
+/** "Setups worth a look": one embed per rule-flagged stock, with the AI note when available. */
+export function setupEmbeds(setups: import("@/lib/finance/setups").Setup[], aiModel: string | null): DiscordEmbed[] {
+  return setups.map((s) => {
+    const m = s.metrics;
+    const body = s.note ?? [...s.signals.map((x) => `✅ ${x}`), ...s.risks.map((x) => `⚠️ ${x}`)].join("\n");
+    return {
+      title: `${s.symbol} · ${clip(s.name, 60)}`,
+      url: `https://finance.yahoo.com/quote/${encodeURIComponent(s.symbol)}`,
+      description: `${s.signals.map((x) => `✅ ${x}`).join("\n")}${s.risks.length ? `\n${s.risks.map((x) => `⚠️ ${x}`).join("\n")}` : ""}${s.note ? `\n\n${body}\n\n*AI note${aiModel ? ` (${aiModel})` : ""} — interpretation from the numbers above, not verified research.*` : ""}`,
+      color: 0xf5a524,
+      fields: [
+        { name: "Price", value: `$${m.price.toFixed(2)} ${pct(m.change1d)}`, inline: true },
+        { name: "From 52w high", value: `${m.fromHigh.toFixed(1)}%`, inline: true },
+        { name: "RSI(14)", value: m.rsi14 === null ? "—" : m.rsi14.toFixed(0), inline: true },
+        { name: "Trend", value: m.sma200 === null ? "—" : m.price > m.sma200 ? "Above 200-day avg" : "Below 200-day avg", inline: true },
+        ...(s.funds ? [{ name: "Tracked funds holding", value: String(s.funds), inline: true }] : []),
+      ],
+      footer: { text: "WorldView · rule-based screen, not a recommendation. Do your own research; you can lose money." },
+    };
+  });
+}

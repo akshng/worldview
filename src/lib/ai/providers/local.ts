@@ -11,7 +11,7 @@ import type { WorldEvent } from "@/types/events";
 import type { DailyBriefing } from "@/lib/briefing";
 import { EVENT_CATEGORIES } from "@/types/events";
 import { CommandIntentSchema, FilingSectionsSchema, type AIProvider, type CommandIntent, type FilingAnalysisInput, type FilingSections, type MarketBriefInput } from "../types";
-import { BRIEFING_SYSTEM, COMMAND_SYSTEM, INTERPRET_SYSTEM, MARKET_SYSTEM, briefingPayload, interpretPayload, marketPayload } from "../prompts";
+import { BRIEFING_SYSTEM, COMMAND_SYSTEM, INTERPRET_SYSTEM, MARKET_SYSTEM, SETUP_SYSTEM, briefingPayload, interpretPayload, marketPayload, setupPayload } from "../prompts";
 import { runFilingAnalysis } from "../filing";
 import type { LocalSession } from "@/lib/analyst/llm";
 
@@ -177,6 +177,12 @@ export class LocalProvider implements AIProvider {
     const text = await this.run((_, s) => s.prompt(briefingPayload(briefing, 220), { maxTokens: 900, temperature: 0.3 }), BRIEFING_SYSTEM);
     if (!text.trim()) throw new Error("The local model returned no text.");
     return text.trim().slice(0, 8000);
+  }
+
+  async writeSetupNote(setup: import("@/lib/finance/setups").Setup): Promise<string> {
+    const text = await this.run((_, s) => s.prompt(setupPayload(setup), { maxTokens: 500, temperature: 0.2 }), SETUP_SYSTEM);
+    if (!text.trim()) throw new Error("The local model returned no text.");
+    return text.trim().slice(0, 1500);
   }
 
   async writeMarketBrief(input: MarketBriefInput): Promise<string> {

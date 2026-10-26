@@ -4,7 +4,7 @@ import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import type { WorldEvent } from "@/types/events";
 import type { DailyBriefing } from "@/lib/briefing";
 import { CommandIntentSchema, FilingSectionsSchema, type AIProvider, type CommandIntent, type FilingAnalysisInput, type FilingSections, type MarketBriefInput } from "../types";
-import { BRIEFING_SYSTEM, COMMAND_SYSTEM, INTERPRET_SYSTEM, MARKET_SYSTEM, briefingPayload, interpretPayload, marketPayload } from "../prompts";
+import { BRIEFING_SYSTEM, COMMAND_SYSTEM, INTERPRET_SYSTEM, MARKET_SYSTEM, SETUP_SYSTEM, briefingPayload, interpretPayload, marketPayload, setupPayload } from "../prompts";
 import { runFilingAnalysis } from "../filing";
 import type { NativeHistoryItem, NativeTurn } from "@/lib/analyst/llm";
 import { inputSchema, type ToolDef } from "@/lib/analyst/tools";
@@ -60,6 +60,26 @@ export class AnthropicProvider implements AIProvider {
       .trim();
     if (!text) throw new Error("The AI model returned no text.");
     return text.slice(0, 8000);
+  }
+
+  async writeSetupNote(setup: import("@/lib/finance/setups").Setup): Promise<string> {
+    const response = await this.client.beta.messages.create({
+      model: this.model,
+      max_tokens: 4000,
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
+      output_config: { effort: "low" },
+      system: SETUP_SYSTEM,
+      messages: [{ role: "user", content: setupPayload(setup) }],
+    });
+    if (response.stop_reason === "refusal") throw new Error("The AI model declined to write this note.");
+    const text = response.content
+      .filter((c): c is Anthropic.Beta.BetaTextBlock => c.type === "text")
+      .map((c) => c.text)
+      .join("")
+      .trim();
+    if (!text) throw new Error("The AI model returned no text.");
+    return text.slice(0, 1500);
   }
 
   async writeMarketBrief(input: MarketBriefInput): Promise<string> {

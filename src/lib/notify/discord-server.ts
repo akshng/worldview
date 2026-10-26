@@ -2,6 +2,7 @@
  * Server-side Discord jobs (run inside the WorldView server when DISCORD_WEBHOOK_URL is set):
  *   - major-event alerts: new events at or above DISCORD_ALERT_MIN_IMPORTANCE
  *   - US market wrap once each weekday after 16:20 New York time
+ *   - stock setups scan once each weekday after 16:40 New York time (rule-based, AI note, not advice)
  * Sent ids / last wrap date persist in DATA_DIR/discord-state.json so restarts never repeat.
  */
 import "server-only";
@@ -9,11 +10,14 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { env } from "@/lib/env";
 import type { EventRepository } from "@/lib/db/types";
-import { alertEmbed, discordWebhook, marketWrapEmbeds, sendDiscord, type MarketLine } from "./discord";
+import { alertEmbed, discordWebhook, marketWrapEmbeds, sendDiscord, setupEmbeds, type MarketLine } from "./discord";
 
 interface State {
   alerted: string[];
   lastWrap: string | null;
+  lastSetups?: string | null;
+  /** symbol → NY date it was last reported (no repeats within a week) */
+  setupSeen?: Record<string, string>;
 }
 
 const file = () => path.join(env().DATA_DIR, "discord-state.json");
@@ -26,7 +30,7 @@ async function load(): Promise<State | null> {
 }
 async function save(s: State) {
   await mkdir(env().DATA_DIR, { recursive: true });
-  await writeFile(file(), JSON.stringify({ alerted: s.alerted.slice(-3000), lastWrap: s.lastWrap }));
+  await writeFile(file(), JSON.stringify({ ...s, alerted: s.alerted.slice(-3000) }));
 }
 
 const WINDOW_MS = 6 * 3_600_000;
@@ -76,6 +80,28 @@ export async function discordMarketWrap(now = Date.now()) {
   await save({ ...prev, lastWrap: ny.date });
 }
 
+const daysBetween = (a: string, b: string) => (Date.parse(b) - Date.parse(a)) / 86_400_000;
+
+export async function discordSetups(now = Date.now()) {
+  if (!env().DISCORD_SETUPS) return;
+  const ny = nyClock(now);
+  if (ny.weekday === "Sat" || ny.weekday === "Sun" || ny.minutes < 16 * 60 + 40 || ny.minutes > 21 * 60) return;
+  const prev = (await load()) ?? { alerted: [], lastWrap: null };
+  if (prev.lastSetups === ny.date) return;
+  // Mark first so a slow AI run can't trigger a second scan.
+  const seen = Object.fromEntries(Object.entries(prev.setupSeen ?? {}).filter(([, d]) => daysBetween(d, ny.date) < 30));
+  await save({ ...prev, lastSetups: ny.date, setupSeen: seen });
+  const { scanSetups, annotateSetups } = await import("@/lib/finance/setups-service");
+  const scan = await scanSetups({ max: 6 });
+  const fresh = scan.setups.filter((s) => !seen[s.symbol] || daysBetween(seen[s.symbol], ny.date) >= 7).slice(0, 3);
+  console.info(`[discord] setups: scanned ${scan.scanned} (${scan.failed} failed), ${scan.setups.length} hits, ${fresh.length} new`);
+  if (!fresh.length) return;
+  const model = await annotateSetups(fresh);
+  await sendDiscord(`**[WorldView]** 🔎 ${fresh.length === 1 ? "A stock setup" : `${fresh.length} stock setups`} worth a look — rule-based screen, not advice`, setupEmbeds(fresh, model));
+  const after = (await load()) ?? prev;
+  await save({ ...after, setupSeen: { ...seen, ...Object.fromEntries(fresh.map((s) => [s.symbol, ny.date])) } });
+}
+
 let running = false;
 /** Called periodically by the server; never throws. */
 export async function discordTick(repo: EventRepository) {
@@ -84,6 +110,7 @@ export async function discordTick(repo: EventRepository) {
   try {
     await discordAlerts(repo).catch((e) => console.warn("[discord] alerts:", e instanceof Error ? e.message : e));
     await discordMarketWrap().catch((e) => console.warn("[discord] market wrap:", e instanceof Error ? e.message : e));
+    await discordSetups().catch((e) => console.warn("[discord] setups:", e instanceof Error ? e.message : e));
   } finally {
     running = false;
   }

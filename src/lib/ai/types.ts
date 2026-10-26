@@ -77,6 +77,8 @@ export interface AIProvider {
   writeMarketBrief(input: MarketBriefInput): Promise<string>;
   /** Structured 10-K analysis from computed facts + extracted filing text (map-reduce for long text). Never advice. */
   analyzeFiling(input: FilingAnalysisInput): Promise<FilingSections>;
+  /** Balanced note (what stands out / risks / what to check) on a rule-flagged stock. Never advice. */
+  writeSetupNote(setup: import("@/lib/finance/setups").Setup): Promise<string>;
 }
 
 /**

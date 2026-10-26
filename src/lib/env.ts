@@ -42,6 +42,12 @@ const EnvSchema = z.object({
   DISCORD_ALERT_MIN_IMPORTANCE: z.coerce.number().min(0).max(101).default(72),
   /** Post a US market-close wrap each weekday after 16:20 New York time. */
   DISCORD_MARKET_WRAP: bool(true),
+  /** After the US close, scan for rule-based stock setups and post the strongest (with an AI note). */
+  DISCORD_SETUPS: bool(true),
+  /** Minimum rule score for a setup to be reported (higher = fewer, stronger). */
+  SETUP_MIN_SCORE: z.coerce.number().default(3),
+  /** Extra tickers to include in the setups scan, comma-separated. */
+  SETUP_WATCHLIST: z.string().optional(),
   AI_IDLE_UNLOAD_MINUTES: z.coerce.number().int().min(0).max(1440).default(5),
   AI_API_KEY: z.string().optional(),
   AI_MODEL: z.string().optional(),
