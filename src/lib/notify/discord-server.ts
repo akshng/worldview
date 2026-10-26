@@ -1,8 +1,8 @@
 /**
  * Server-side Discord jobs (run inside the WorldView server when DISCORD_WEBHOOK_URL is set):
  *   - major-event alerts: new events at or above DISCORD_ALERT_MIN_IMPORTANCE
- *   - US market wrap once each weekday after 16:20 New York time
- *   - stock setups scan once each weekday after 16:40 New York time (rule-based, AI note, not advice)
+ *   - US market wrap and the stock setups scan, once each weekday after the close —
+ *     run by the market-close LaunchAgent via runCloseJobs(), not by the server loop
  * Sent ids / last wrap date persist in DATA_DIR/discord-state.json so restarts never repeat.
  */
 import "server-only";
@@ -59,10 +59,16 @@ function nyClock(now: number) {
   return { date: `${p.year}-${p.month}-${p.day}`, minutes: (Number(p.hour) % 24) * 60 + Number(p.minute), weekday: p.weekday as string };
 }
 
+/** Weekday after `after` (NY minutes) on the same New York date; `late` jobs (run on wake) may run until midnight. */
+function inWindow(now: number, after: number) {
+  const ny = nyClock(now);
+  return { ny, ok: ny.weekday !== "Sat" && ny.weekday !== "Sun" && ny.minutes >= after };
+}
+
 export async function discordMarketWrap(now = Date.now()) {
   if (!env().DISCORD_MARKET_WRAP) return;
-  const ny = nyClock(now);
-  if (ny.weekday === "Sat" || ny.weekday === "Sun" || ny.minutes < 16 * 60 + 20 || ny.minutes > 20 * 60) return;
+  const { ny, ok } = inWindow(now, 16 * 60 + 20);
+  if (!ok) return;
   const prev = (await load()) ?? { alerted: [], lastWrap: null };
   if (prev.lastWrap === ny.date) return;
   const { getMarketSnapshot } = await import("@/lib/finance/service");
@@ -84,8 +90,8 @@ const daysBetween = (a: string, b: string) => (Date.parse(b) - Date.parse(a)) / 
 
 export async function discordSetups(now = Date.now()) {
   if (!env().DISCORD_SETUPS) return;
-  const ny = nyClock(now);
-  if (ny.weekday === "Sat" || ny.weekday === "Sun" || ny.minutes < 16 * 60 + 40 || ny.minutes > 21 * 60) return;
+  const { ny, ok } = inWindow(now, 16 * 60 + 20);
+  if (!ok) return;
   const prev = (await load()) ?? { alerted: [], lastWrap: null };
   if (prev.lastSetups === ny.date) return;
   // Mark first so a slow AI run can't trigger a second scan.
@@ -103,15 +109,33 @@ export async function discordSetups(now = Date.now()) {
 }
 
 let running = false;
-/** Called periodically by the server; never throws. */
+/** Called every 2 minutes by the server: major-event alerts only. Never throws. */
 export async function discordTick(repo: EventRepository) {
   if (running || !discordWebhook()) return;
   running = true;
   try {
     await discordAlerts(repo).catch((e) => console.warn("[discord] alerts:", e instanceof Error ? e.message : e));
-    await discordMarketWrap().catch((e) => console.warn("[discord] market wrap:", e instanceof Error ? e.message : e));
-    await discordSetups().catch((e) => console.warn("[discord] setups:", e instanceof Error ? e.message : e));
   } finally {
     running = false;
   }
+}
+
+/**
+ * After-close jobs (market wrap, then setups scan). Run once a weekday by the
+ * market-close LaunchAgent (scripts/market-close.ts); safe to call repeatedly.
+ */
+export async function runCloseJobs(): Promise<string[]> {
+  const log: string[] = [];
+  if (!discordWebhook()) return ["DISCORD_WEBHOOK_URL not set — nothing to do"];
+  const step = async (name: string, fn: () => Promise<unknown>) => {
+    try {
+      await fn();
+      log.push(`${name}: ok`);
+    } catch (e) {
+      log.push(`${name}: failed — ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+  await step("market wrap", () => discordMarketWrap());
+  await step("setups", () => discordSetups());
+  return log;
 }
