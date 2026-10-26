@@ -8,7 +8,7 @@ import WebKit
 let serverURL = URL(string: "http://127.0.0.1:3000")!
 let healthURL = URL(string: "http://127.0.0.1:3000/api/meta")!
 
-final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
     var window: NSWindow!
     var web: WKWebView!
     var keepAlive: Timer?
@@ -16,7 +16,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
     func applicationDidFinishLaunching(_ note: Notification) {
         buildMenu()
+        log("launch")
         let config = WKWebViewConfiguration()
+        // Page errors and console.error → .data/app.log (diagnostics).
+        let hook = """
+        (function(){var post=function(k,m){try{webkit.messageHandlers.wvlog.postMessage(k+': '+String(m).slice(0,2000))}catch(e){}};
+        window.addEventListener('error',function(e){post('error',(e.message||'')+' @'+(e.filename||'')+':'+(e.lineno||''))});
+        window.addEventListener('unhandledrejection',function(e){post('rejection',e.reason&&(e.reason.stack||e.reason.message)||e.reason)});
+        var ce=console.error;console.error=function(){post('console.error',Array.prototype.join.call(arguments,' '));ce.apply(console,arguments)};
+        document.addEventListener('DOMContentLoaded',function(){post('info','DOMContentLoaded '+location.href)});
+        window.addEventListener('load',function(){var c=document.createElement('canvas');var gl=c.getContext('webgl2')||c.getContext('webgl');post('info','load; webgl='+(gl?'yes':'NO')+'; '+innerWidth+'x'+innerHeight)});})();
+        """
+        config.userContentController.addUserScript(WKUserScript(source: hook, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        config.userContentController.add(self, name: "wvlog")
         config.mediaTypesRequiringUserActionForPlayback = []
         config.preferences.isElementFullscreenEnabled = true
         config.preferences.setValue(true, forKey: "developerExtrasEnabled")
@@ -24,6 +36,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         web.navigationDelegate = self
         web.uiDelegate = self
         web.allowsMagnification = true
+        if #available(macOS 13.3, *) { web.isInspectable = true }
         web.setValue(false, forKey: "drawsBackground")
 
         window = NSWindow(
@@ -44,7 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         web.loadHTMLString(splash("Starting WorldView…"), baseURL: nil)
         markViewer()
         // While the window is open, tell the battery watcher someone is looking.
-        keepAlive = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in self?.markViewer() }
+        keepAlive = Timer.scheduledTimer(withTimeInterval: 20, repeats: true) { [weak self] _ in self?.heartbeat() }
         DispatchQueue.global().async { self.startServerAndLoad() }
     }
 
@@ -56,7 +69,65 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         try? FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSinceNow: -3600)], ofItemAtPath: f)
     }
 
+    // MARK: diagnostics
+
+    func log(_ msg: String) {
+        guard !projectDir.isEmpty else { return }
+        let line = "\(ISO8601DateFormatter().string(from: Date())) \(msg)\n"
+        let f = "\(projectDir)/.data/app.log"
+        if let size = (try? FileManager.default.attributesOfItem(atPath: f))?[.size] as? Int, size > 512_000 { try? FileManager.default.removeItem(atPath: f) }
+        if let h = FileHandle(forWritingAtPath: f) {
+            h.seekToEndOfFile()
+            h.write(line.data(using: .utf8)!)
+            try? h.close()
+        } else {
+            try? line.write(toFile: f, atomically: true, encoding: .utf8)
+        }
+    }
+
+    func userContentController(_ c: WKUserContentController, didReceive message: WKScriptMessage) {
+        log("page \(message.body)")
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        log("loaded \(webView.url?.absoluteString ?? "-")")
+        // Debug: with .data/app-debug present, save what the window shows 10 s and 40 s after load.
+        guard isLocal(webView.url), webView.url?.scheme == "http", FileManager.default.fileExists(atPath: "\(projectDir)/.data/app-debug") else { return }
+        for delay in [10.0, 40.0] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in self?.snapshot("app-snapshot-\(Int(delay))s.png") }
+        }
+    }
+
+    func snapshot(_ name: String) {
+        web.takeSnapshot(with: nil) { [weak self] img, _ in
+            guard let self, let img, let tiff = img.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff), let png = rep.representation(using: .png, properties: [:]) else { return }
+            try? png.write(to: URL(fileURLWithPath: "\(self.projectDir)/.data/\(name)"))
+            self.log("snapshot \(name)")
+        }
+    }
+
     // MARK: server
+
+    var recovering = false
+    var misses = 0
+
+    /** Every 20 s: keep the battery watcher from stopping the server, and if it went away anyway, bring it back. */
+    func heartbeat() {
+        markViewer()
+        guard !recovering, web.url?.scheme == "http" else { return }
+        DispatchQueue.global().async {
+            let up = self.serverUp()
+            DispatchQueue.main.async {
+                self.misses = up ? 0 : self.misses + 1
+                // Two misses in a row (a busy server can be slow once): restart and reload.
+                if self.misses >= 2 {
+                    self.misses = 0
+                    self.log("server stopped answering — restarting it")
+                    self.retryLater()
+                }
+            }
+        }
+    }
 
     func markViewer() {
         guard !projectDir.isEmpty else { return }
@@ -67,18 +138,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
     func serverUp() -> Bool {
         var req = URLRequest(url: healthURL)
-        req.timeoutInterval = 1.5
+        req.timeoutInterval = 5
         let sem = DispatchSemaphore(value: 0)
         var ok = false
         URLSession.shared.dataTask(with: req) { _, res, _ in
             ok = (res as? HTTPURLResponse)?.statusCode == 200
             sem.signal()
         }.resume()
-        _ = sem.wait(timeout: .now() + 2)
+        _ = sem.wait(timeout: .now() + 6)
         return ok
     }
 
     func startServerAndLoad() {
+        log("server up? \(serverUp())")
         if !serverUp() {
             let plist = NSHomeDirectory() + "/Library/LaunchAgents/com.worldview.server.plist"
             if FileManager.default.fileExists(atPath: plist) {
@@ -156,13 +228,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         completionHandler(a.runModal() == .alertFirstButtonReturn)
     }
 
-    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { retryLater() }
-    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { retryLater() }
-    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) { webView.reload() }
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { log("navigation failed: \(error.localizedDescription)"); retryLater() }
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { log("load failed: \(error.localizedDescription)"); retryLater() }
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) { log("web content process crashed — reloading"); webView.reload() }
 
     func retryLater() {
+        guard !recovering else { return }
+        recovering = true
         web.loadHTMLString(splash("Reconnecting to WorldView…"), baseURL: nil)
-        DispatchQueue.global().async { self.startServerAndLoad() }
+        DispatchQueue.global().async {
+            self.startServerAndLoad()
+            DispatchQueue.main.async { self.recovering = false }
+        }
     }
 
     // MARK: menu
