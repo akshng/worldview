@@ -38,3 +38,13 @@ describe("discord alerts and market wrap", () => {
     expect(w[1].fields![1].value).toBe("—");
   });
 });
+
+describe("watchlist earnings", () => {
+  it("parses Nasdaq's calendar", async () => {
+    const { parseNasdaqEarnings } = await import("@/lib/finance/earnings-calendar");
+    const rows = parseNasdaqEarnings({ data: { rows: [{ symbol: "v", name: "Visa Inc.", time: "time-after-hours", epsForecast: "$3.43", lastYearEPS: "$2.98" }, { symbol: "KO", name: "Coca-Cola", time: "time-pre-market", epsForecast: "" }] } }, "2026-10-27");
+    expect(rows[0]).toMatchObject({ symbol: "V", when: "after close", epsForecast: "$3.43" });
+    expect(rows[1]).toMatchObject({ when: "before open", epsForecast: null });
+    expect(parseNasdaqEarnings({ data: { rows: null } }, "x")).toEqual([]);
+  });
+});

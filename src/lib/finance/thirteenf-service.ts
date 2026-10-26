@@ -69,7 +69,8 @@ export class ContactMissingError extends Error {
   }
 }
 
-async function secFetch(url: string): Promise<Response> {
+/** Rate-limited SEC fetch shared by 13F and insider (Form 4) lookups. */
+export async function secFetch(url: string): Promise<Response> {
   if (!env().WORLDVIEW_CONTACT) throw new ContactMissingError();
   for (let attempt = 0; ; attempt++) {
     const now = Date.now();

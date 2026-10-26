@@ -168,6 +168,11 @@ export interface InstrumentResponse {
   note: string;
 }
 
+/** Sync the watchlist to the server so background alerts can watch it (local server only; failures are harmless). */
+export function syncWatchlist(symbols: string[]) {
+  return fetch("/api/watchlist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ symbols }) }).catch(() => undefined);
+}
+
 async function getJSON<T>(url: string, signal?: AbortSignal): Promise<T> {
   const res = await fetch(url, { signal, cache: "no-store" });
   if (!res.ok) {
@@ -219,6 +224,7 @@ export const api = {
     getJSON<{ managers: import("@/lib/finance/thirteenf").ManagerSummary[]; pending: number; caveats: string[]; source: string }>("/api/markets/13f", signal),
   thirteenFHoldings: (cik: string, signal?: AbortSignal) =>
     getJSON<import("@/lib/finance/thirteenf").ManagerHoldings>(`/api/markets/13f/${encodeURIComponent(cik)}`, signal),
+  insiders: (ticker: string, signal?: AbortSignal) => getJSON<import("@/lib/finance/insiders").InsiderSummary>(`/api/markets/insiders/${encodeURIComponent(ticker)}`, signal),
   thirteenFByTicker: (ticker: string, signal?: AbortSignal) =>
     getJSON<{ ticker: string; holders: import("@/lib/finance/thirteenf").FundHolder[]; checked: number; total: number; pending: number; caveats: string[] }>(
       `/api/markets/13f/by-ticker/${encodeURIComponent(ticker)}`,

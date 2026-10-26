@@ -72,6 +72,8 @@ export async function runSentinel(now = Date.now()): Promise<string[]> {
   const ny = nyClock(now);
   const shocks = (await marketShocks(now)).filter((s) => state.shocks?.[s.kind] !== ny.date);
   log.push(`checked ${FEEDS.join(", ")} + markets: ${events.length} event(s), ${shocks.length} market shock(s) over the bar`);
+  const { watchMoves } = await import("./watch");
+  log.push(await watchMoves(now).catch((e) => `watchlist failed: ${e instanceof Error ? e.message : e}`));
   if (!events.length && !shocks.length) return log;
 
   // Something tripped — only now wake the AI, then put it straight back to sleep.

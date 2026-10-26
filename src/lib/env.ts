@@ -48,6 +48,8 @@ const EnvSchema = z.object({
   SETUP_MIN_SCORE: z.coerce.number().default(3),
   /** Extra tickers to include in the setups scan, comma-separated. */
   SETUP_WATCHLIST: z.string().optional(),
+  /** Discord alert when a watchlist stock moves this many % on the day (again at 2×). */
+  WATCH_MOVE_PCT: z.coerce.number().min(1).max(50).default(5),
   AI_IDLE_UNLOAD_MINUTES: z.coerce.number().int().min(0).max(1440).default(5),
   AI_API_KEY: z.string().optional(),
   AI_MODEL: z.string().optional(),

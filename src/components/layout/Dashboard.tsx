@@ -4,6 +4,7 @@ import { useEffect, useMemo } from "react";
 import { useUI } from "@/lib/store/ui";
 import { useData } from "@/lib/client/data-store";
 import { useLiveData } from "@/lib/client/use-live-data";
+import { syncWatchlist } from "@/lib/client/api";
 import { useNow } from "@/lib/client/use-now";
 import { filterEvents } from "@/lib/events/client-filter";
 import { IMPORTANCE_FILTERS } from "@/lib/categories";
@@ -41,6 +42,10 @@ const Globe = dynamic(() => import("@/components/globe/Globe"), {
 export function Dashboard() {
   useLiveData();
   useAlertChecker();
+  const watchlist = useUI((s) => s.settings.watchlist);
+  useEffect(() => {
+    void syncWatchlist(watchlist);
+  }, [watchlist]);
   const events = useData((s) => s.events);
   const mode = useData((s) => s.mode);
   const loading = useData((s) => s.loading);

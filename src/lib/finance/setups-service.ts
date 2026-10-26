@@ -3,7 +3,7 @@ import "server-only";
 import { env } from "@/lib/env";
 import { getHistory } from "./service";
 import { getScreener } from "./screeners";
-import { SETUP_UNIVERSE, evaluate, metrics, pickSetups, type Setup } from "./setups";
+import { SETUP_UNIVERSE, applyInsiders, evaluate, metrics, pickSetups, type Setup } from "./setups";
 
 async function mapLimit<T, R>(xs: T[], n: number, fn: (x: T) => Promise<R>): Promise<R[]> {
   const out: R[] = new Array(xs.length);
@@ -38,7 +38,20 @@ export async function scanSetups(opts: { max?: number; minScore?: number } = {})
       return null;
     }
   });
-  const setups = pickSetups(hits.filter((s): s is Setup => s !== null), opts.minScore ?? env().SETUP_MIN_SCORE, opts.max ?? 3);
+  const minScore = opts.minScore ?? env().SETUP_MIN_SCORE;
+  // Insider buying can lift a near-miss over the bar, so check everything within reach (SEC Form 4, cached).
+  const near = hits.filter((s): s is Setup => s !== null);
+  const withInsiders = await mapLimit(near, 2, async (s) => {
+    if (s.score < minScore - 1.5 || !/^[A-Z]{1,5}(-[A-Z])?$/.test(s.symbol)) return s;
+    try {
+      const { insiderActivity } = await import("./insiders-service");
+      const ins = await insiderActivity(s.symbol);
+      return ins ? applyInsiders(s, { buyers: ins.buyers, buyValue: ins.buyValue, sellers: ins.sellers, sellValue: ins.sellValue }) : s;
+    } catch {
+      return s;
+    }
+  });
+  const setups = pickSetups(withInsiders, minScore, opts.max ?? 3);
   for (const s of setups) {
     try {
       const { holdersOf } = await import("./thirteenf-service");

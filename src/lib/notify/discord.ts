@@ -158,8 +158,34 @@ export function setupEmbeds(setups: import("@/lib/finance/setups").Setup[], aiMo
         { name: "RSI(14)", value: m.rsi14 === null ? "—" : m.rsi14.toFixed(0), inline: true },
         { name: "Trend", value: m.sma200 === null ? "—" : m.price > m.sma200 ? "Above 200-day avg" : "Below 200-day avg", inline: true },
         ...(s.funds ? [{ name: "Tracked funds holding", value: String(s.funds), inline: true }] : []),
+        ...(s.insiders ? [{ name: "Insiders (90d)", value: `${s.insiders.buyers} buying · ${s.insiders.sellers} selling`, inline: true }] : []),
       ],
       footer: { text: "WorldView · rule-based screen, not a recommendation. Do your own research; you can lose money." },
     };
   });
+}
+
+type Summary = import("@/lib/finance/setups-score").ScoreSummary;
+const sx = (v: number | null) => (v === null ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(2)} pts`);
+const rate = (v: number | null) => (v === null ? "—" : `${Math.round(v * 100)}%`);
+function horizonLines(s: Summary) {
+  return s.horizons.map((h) => `${h.days === 1 ? "1 day" : h.days === 5 ? "1 week" : "1 month"}: ${sx(h.avgExcess)} vs S&P · beat it ${rate(h.beatRate)} (n=${h.n})`).join("\n");
+}
+
+/** Weekly honesty check: how the scan's picks did, and how its rules did in the backtest. */
+export function scorecardEmbeds(live: { summary: Summary; picks: Array<{ date: string; symbol: string; r5: number | null; x5: number | null }> }, bt: { from: string | null; to: string | null; signals: Summary; baseline: Summary; caveats: string[] }): DiscordEmbed[] {
+  const recent = live.picks.slice(0, 10).map((p) => `${p.date} **${p.symbol}** · 1 week: ${p.r5 === null ? "pending" : `${p.r5 > 0 ? "+" : ""}${p.r5.toFixed(1)}% (${sx(p.x5)} vs S&P)`}`);
+  return [
+    {
+      title: "Setups scorecard · live picks",
+      description: live.summary.n ? `${live.summary.n} picks so far\n${horizonLines(live.summary)}\n\n${recent.join("\n")}` : "No picks posted yet.",
+      color: 0x5b8def,
+    },
+    {
+      title: `Backtest of the same rules · ${bt.from ?? "?"} to ${bt.to ?? "?"}`,
+      description: `**Signals** (n=${bt.signals.n})\n${horizonLines(bt.signals)}\n\n**Any stock, any day** (for comparison)\n${horizonLines(bt.baseline)}\n\n*${bt.caveats[0]} ${bt.caveats[3]}*`,
+      color: 0x5b8def,
+      footer: { text: "WorldView · a screen's track record, not a forecast. Not investment advice." },
+    },
+  ];
 }

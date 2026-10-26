@@ -10,7 +10,7 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { env } from "@/lib/env";
 import type { EventRepository } from "@/lib/db/types";
-import { alertEmbed, discordWebhook, marketWrapEmbeds, sendDiscord, setupEmbeds, type MarketLine } from "./discord";
+import { alertEmbed, discordWebhook, marketWrapEmbeds, scorecardEmbeds, sendDiscord, setupEmbeds, type MarketLine } from "./discord";
 
 export interface State {
   /** event ids and source-record ids (`dataSourceId:externalId`) already alerted */
@@ -19,6 +19,10 @@ export interface State {
   shocks?: Record<string, string>;
   lastWrap: string | null;
   lastSetups?: string | null;
+  lastScorecard?: string | null;
+  lastEarnings?: string | null;
+  /** symbol → today's highest move level alerted */
+  watchMoves?: Record<string, { date: string; level: number }>;
   /** symbol → NY date it was last reported (no repeats within a week) */
   setupSeen?: Record<string, string>;
 }
@@ -109,8 +113,22 @@ export async function discordSetups(now = Date.now()) {
   if (!fresh.length) return;
   const model = await annotateSetups(fresh);
   await sendDiscord(`**[WorldView]** 🔎 ${fresh.length === 1 ? "A stock setup" : `${fresh.length} stock setups`} worth a look — rule-based screen, not advice`, setupEmbeds(fresh, model));
+  const { recordPicks } = await import("@/lib/finance/setups-score-service");
+  await recordPicks(fresh, ny.date).catch((e) => console.warn("[setups] could not log picks:", e));
   const after = (await load()) ?? prev;
   await save({ ...after, setupSeen: { ...seen, ...Object.fromEntries(fresh.map((s) => [s.symbol, ny.date])) } });
+}
+
+/** Fridays after the close: the scan's live track record plus the backtest. */
+export async function discordScorecard(now = Date.now()) {
+  const { ny, ok } = inWindow(now, 16 * 60 + 20);
+  if (!ok || ny.weekday !== "Fri") return;
+  const prev = (await load()) ?? { alerted: [], lastWrap: null };
+  if (prev.lastScorecard === ny.date) return;
+  const { liveScorecard, backtestSetups } = await import("@/lib/finance/setups-score-service");
+  const [live, bt] = await Promise.all([liveScorecard(), backtestSetups()]);
+  await sendDiscord("**[WorldView]** 📊 Weekly scorecard: did the stock scan work?", scorecardEmbeds(live, bt));
+  await save({ ...((await load()) ?? prev), lastScorecard: ny.date });
 }
 
 let running = false;
@@ -120,6 +138,8 @@ export async function discordTick(repo: EventRepository) {
   running = true;
   try {
     await discordAlerts(repo).catch((e) => console.warn("[discord] alerts:", e instanceof Error ? e.message : e));
+    const { watchMoves } = await import("./watch");
+    await watchMoves().catch((e) => console.warn("[discord] watchlist:", e instanceof Error ? e.message : e));
   } finally {
     running = false;
   }
@@ -142,5 +162,7 @@ export async function runCloseJobs(): Promise<string[]> {
   };
   await step("market wrap", () => discordMarketWrap());
   await step("setups", () => discordSetups());
+  await step("watchlist earnings", async () => (await import("./watch")).watchEarnings());
+  await step("weekly scorecard", () => discordScorecard());
   return log;
 }

@@ -14,5 +14,10 @@ export const POST = handler(async (req: Request) => {
   const { setups } = await scanSetups({ max: 3 });
   const model = await annotateSetups(setups);
   const sent = setups.length && discordWebhook() ? await sendDiscord(`**[WorldView]** 🔎 ${setups.length === 1 ? "A stock setup" : `${setups.length} stock setups`} worth a look — rule-based screen, not advice`, setupEmbeds(setups, model)) : false;
+  if (sent) {
+    const { recordPicks } = await import("@/lib/finance/setups-score-service");
+    const { nyClock } = await import("@/lib/notify/discord-server");
+    await recordPicks(setups, nyClock(Date.now()).date);
+  }
   return json({ setups, model, sent });
 });

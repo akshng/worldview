@@ -134,6 +134,7 @@ export const HISTORY_RANGES = {
   "1mo": { range: "1mo", interval: "1d" },
   "6mo": { range: "6mo", interval: "1d" },
   "1y": { range: "1y", interval: "1d" },
+  "2y": { range: "2y", interval: "1d" },
   "5y": { range: "5y", interval: "1wk" },
 } as const;
 export type HistoryRange = keyof typeof HISTORY_RANGES;

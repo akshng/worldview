@@ -36,7 +36,26 @@ export interface Setup {
   risks: string[];
   score: number;
   funds?: number | null;
+  /** open-market insider buying in the last 90 days (SEC Form 4) */
+  insiders?: { buyers: number; buyValue: number; sellers: number; sellValue: number } | null;
   note?: string;
+}
+
+/**
+ * Insider buying adds to a price setup (never creates one): two or more insiders
+ * buying is the stronger signal; one large buy counts for less.
+ */
+export function applyInsiders(s: Setup, ins: NonNullable<Setup["insiders"]>): Setup {
+  const usd = (v: number) => (v >= 1e6 ? `$${(v / 1e6).toFixed(1)}M` : `$${Math.round(v / 1e3)}K`);
+  const out = { ...s, insiders: ins, signals: [...s.signals] };
+  if (ins.buyers >= 2) {
+    out.signals.push(`Insider buying: ${ins.buyers} insiders bought ${usd(ins.buyValue)} on the open market in 90 days`);
+    out.score = Math.round((s.score + 1.5) * 100) / 100;
+  } else if (ins.buyers === 1 && ins.buyValue >= 100_000) {
+    out.signals.push(`Insider buying: one insider bought ${usd(ins.buyValue)} on the open market in 90 days`);
+    out.score = Math.round((s.score + 0.75) * 100) / 100;
+  }
+  return out;
 }
 
 const avg = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
@@ -133,6 +152,9 @@ export function setupFacts(s: Setup) {
     pct_above_52w_low: r(s.metrics.fromLow),
     above_200d_average: s.metrics.sma200 === null ? null : s.metrics.price > s.metrics.sma200,
     tracked_funds_holding: s.funds ?? null,
+    insider_buyers_90d: s.insiders?.buyers ?? null,
+    insider_buy_usd_90d: s.insiders?.buyValue ?? null,
+    insider_sell_usd_90d: s.insiders?.sellValue ?? null,
     rule_signals: s.signals,
     rule_risks: s.risks,
   };
