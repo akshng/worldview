@@ -37,7 +37,8 @@
     "sentinel": "NODE_OPTIONS=--conditions=react-server tsx scripts/sentinel.ts",
     "power:install": "node scripts/power-mode.mjs install",
     "power:uninstall": "node scripts/power-mode.mjs uninstall",
-    "app": "node scripts/power-mode.mjs app"
+    "app": "node scripts/power-mode.mjs app",
+    "mac:build": "sh scripts/build-mac-app.sh"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
