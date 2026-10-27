@@ -48,11 +48,14 @@ export function toolResultsPrompt(blocks: string[]): string {
 export function writePrompt(question: string): string {
   if (BUY_WORDS.test(question))
     return `Now answer: ${question}
-The stock_ideas result is the answer. Lead with the picks, not a disclaimer. Format (plain text, under 280 words):
-"Today's top ideas from the screen:" then a numbered list, one per idea in rank order: "SYMBOL (Name, industry): why it was flagged [S#]. Risk: <the idea's risks>. Check first: <the idea's check_first>."
-Then the concentration_note if present, word for word.
+The stock_ideas result is the answer, and you have done the research. Lead with the picks, not a disclaimer. Format (plain text, under 380 words):
+"Top ideas:" then, for EVERY idea that has a write_up, in rank order: "N. SYMBOL (Name, industry) [S#]" and on the next lines its write_up copied exactly.
+Then "Also flagged (not researched):" with the remaining idea symbols on one line (only stock_ideas symbols, never the watchlist).
+Then "Best of the bunch:" the idea with suggested_take "Worth a closer look" and the strongest case in its write_up, with one or two sentences comparing it to the others; or "None yet" plus which one to revisit and when (e.g. after its earnings) if no idea has that take.
+Then the concentration_note if present, word for word, without a label.
 Then "Track record:" and the track_record_sentence word for word.
 Then one line on how the user's watchlist is trading, if quotes are present.
+Never change a suggested_take; explain it.
 No price targets, position sizes or predictions. End with "${ANALYST_DISCLAIMER}"`;
   return `Now write the answer to: ${question}
 Use only the tool results above and cite markers like [S1]. Structure: a 1–2 sentence answer, then "Facts:" (bullets, each with a marker), "Interpretation:" (hedged), "What to watch:". Under 250 words. No price targets or position sizes. End with "${ANALYST_DISCLAIMER}"`;

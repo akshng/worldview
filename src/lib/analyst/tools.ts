@@ -71,6 +71,35 @@ export function ideaRisks(signals: string[]): string[] {
   return out;
 }
 
+/** A researched idea as finished text: small local models copy this reliably. */
+export function ideaWriteUp(r: import("@/lib/finance/stock-research").StockResearch): string {
+  const biz = r.fundamentals.length ? r.fundamentals.slice(0, 2).map((f) => `${f.metric} ${f.latest}${f.vsYearAgo ? ` (${f.vsYearAgo})` : ""}`).join("; ") : "No recent reported figures.";
+  const ins = r.insiders ? `${r.insiders.buyers} insider${r.insiders.buyers === 1 ? "" : "s"} buying, ${r.insiders.sellers} selling in 90 days${r.insiders.notable[0] ? ` (latest: ${r.insiders.notable[0]})` : ""}` : "Insider data unavailable";
+  return [
+    `Why it moved: ${r.take.likelyCause}`,
+    `Business: ${biz}`,
+    `Insiders/funds: ${ins}${r.trackedFundsHolding ? `; held by ${r.trackedFundsHolding} of the big funds WorldView tracks` : ""}.`,
+    ...(r.upcomingEarnings ? [`Coming up: ${r.upcomingEarnings}`] : []),
+    `Take: ${r.take.take}. ${r.take.reason}`,
+  ].join("\n");
+}
+
+/** The research packet, minus what the idea already says. */
+export function researchForModel(r: import("@/lib/finance/stock-research").StockResearch) {
+  return {
+    headlines: r.headlines.map((h) => `${h.published ?? ""} ${h.source}: ${h.title}`.trim()),
+    recent_filings: r.recentFilings.map((f) => `${f.filed} ${f.form}: ${f.what}`),
+    earnings: r.earnings,
+    fundamentals: r.fundamentals.map((f) => `${f.metric} ${f.latest}${f.vsYearAgo ? ` (${f.vsYearAgo})` : ""}, ${f.period}`),
+    insiders: r.insiders ? `${r.insiders.buyers} buying, ${r.insiders.sellers} selling in 90 days. ${r.insiders.notable.join("; ")}` : null,
+    tracked_funds_holding: r.trackedFundsHolding,
+    upcoming_earnings: r.upcomingEarnings,
+    likely_cause: r.take.likelyCause,
+    suggested_take: r.take.take,
+    take_reason: r.take.reason,
+  };
+}
+
 export function ideaCheck(signals: string[]): string {
   if (signals.some((x) => x.startsWith("Sharp"))) return "Find out why it dropped (news, earnings, analyst calls) before anything else.";
   if (signals.some((x) => x.startsWith("Insider"))) return "Read the insider filings: who bought, how much, and at what price.";
@@ -104,6 +133,8 @@ export interface ToolDeps {
   holdersOf: (ticker: string) => Promise<{ ticker: string; holders: FundHolder[]; checked: number; total: number; pending: number; caveats: string[] }>;
   /** Rule-based stock setups (price + insider buying), strongest first. */
   scanSetups: (opts: { max: number; minScore: number }) => Promise<{ setups: import("@/lib/finance/setups").Setup[]; scanned: number }>;
+  /** Why a stock moved and how the business is doing (headlines, filings, earnings, fundamentals, insiders, funds). */
+  researchStock: (ticker: string, nameHint?: string) => Promise<import("@/lib/finance/stock-research").StockResearch>;
   /** Backtest of the same rules: excess return vs the S&P 500 by horizon. */
   setupsTrackRecord: () => Promise<{ from: string | null; to: string | null; signals: import("@/lib/finance/setups-score").ScoreSummary; baseline: import("@/lib/finance/setups-score").ScoreSummary }>;
   getEarningsReleases: () => Promise<EarningsFeed>;
@@ -476,8 +507,12 @@ export const TOOLS: ToolDef[] = [
     params: {},
     async run(_a, d) {
       const [scan, tr] = await Promise.all([d.scanSetups({ max: 5, minScore: 2 }), d.setupsTrackRecord().catch(() => null)]);
-      // Industry from SEC (cached) so related picks can be grouped honestly.
-      const industries = await Promise.all(scan.setups.map((s) => d.companyProfile(s.symbol).then((p) => p?.industry ?? null).catch(() => null)));
+      // Industry from SEC (cached) so related picks can be grouped honestly, and the
+      // homework done for the top 3: why it moved, earnings, fundamentals, insiders.
+      const [industries, research] = await Promise.all([
+        Promise.all(scan.setups.map((s) => d.companyProfile(s.symbol).then((p) => p?.industry ?? null).catch(() => null))),
+        Promise.all(scan.setups.slice(0, 3).map((s) => d.researchStock(s.symbol, s.name).catch(() => null))),
+      ]);
       const r1 = (v: number | null) => (v === null ? null : Math.round(v * 10) / 10);
       const horizon = (s: import("@/lib/finance/setups-score").ScoreSummary, days: number) => {
         const h = s.horizons.find((x) => x.days === days);
@@ -495,7 +530,7 @@ export const TOOLS: ToolDef[] = [
             pct_from_52w_high: r1(s.metrics.fromHigh),
             why_flagged: s.signals,
             risks: [...s.risks, ...ideaRisks(s.signals)],
-            check_first: ideaCheck(s.signals),
+            ...(research[i] ? { suggested_take: research[i]!.take.take, write_up: ideaWriteUp(research[i]!) } : {}),
           })),
           // Plain sentences the writer can quote as-is (small models misread the numbers otherwise).
           track_record_sentence: tr ? trackRecordSentence(tr.from, horizon(tr.signals, 5), horizon(tr.signals, 21)) : "No track record available yet.",
@@ -505,6 +540,23 @@ export const TOOLS: ToolDef[] = [
         source: "WorldView setups screen (Yahoo Finance prices, SEC Form 4)",
         asOf: new Date(d.now()).toISOString(),
         actions: scan.setups.slice(0, 5).map((s) => instrumentAction(s.symbol, s.name)),
+      };
+    },
+  },
+  {
+    name: "research_stock",
+    description: "Do the research on one stock: recent headlines explaining moves, SEC filings in the last 2 weeks, whether it just reported earnings, revenue/profit vs a year earlier, insider trades and fund ownership.",
+    params: { ticker: { type: "string", description: "US ticker, e.g. VLO", required: true } },
+    async run(a, d) {
+      const t = (str(a.ticker) ?? "").toUpperCase();
+      if (!/^[A-Z]{1,5}(-[A-Z])?$/.test(t)) throw new Error("A US stock ticker is required");
+      const r = await d.researchStock(t);
+      return {
+        data: { ticker: t, company: r.company, industry: r.industry, ...researchForModel(r) },
+        summary: `${r.headlines.length} headlines, ${r.recentFilings.length} filings`,
+        source: "Google News, SEC EDGAR (filings, XBRL, Form 4, 13F), Nasdaq earnings calendar",
+        asOf: new Date(d.now()).toISOString(),
+        actions: [instrumentAction(t, r.company ?? t)],
       };
     },
   },

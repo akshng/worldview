@@ -87,6 +87,7 @@ function mockDeps(over: Partial<ToolDeps> = {}): ToolDeps {
     managerHoldings: fail,
     holdersOf: fail,
     scanSetups: async () => ({ scanned: 2, setups: [{ symbol: "META", name: "Meta", score: 3, signals: ["Pullback in an uptrend"], risks: [], metrics: { price: 640, change1d: -1, change5d: -3, rsi14: 36, sma50: 690, sma200: 610, high52: 775, low52: 480, fromHigh: -17.4, fromLow: 33 } }] }),
+    researchStock: async (t: string) => ({ ticker: t, company: "Meta Platforms, Inc.", industry: "Services-Computer Programming", headlines: [{ title: "Meta slides after capex guidance", source: "Reuters", published: "2026-10-27" }], recentFilings: [{ form: "8-K", filed: "2026-10-27", what: "Results of operations" }], earnings: "Reported earnings on 2026-10-27 (after close).", fundamentals: [{ metric: "Revenue", latest: "$51.2B", vsYearAgo: "+22% vs a year earlier", period: "Q3 2026" }], insiders: { buyers: 0, buyValue: 0, sellers: 3, sellValue: 5e7, notable: [] }, trackedFundsHolding: 26, upcomingEarnings: null, take: { likelyCause: 'Reported cause: "Meta slides after capex guidance"', take: "Wait" as const, reason: "r" } }),
     setupsTrackRecord: async () => ({ from: "2025-08-14", to: "2026-10-22", signals: { n: 178, horizons: [{ days: 5, n: 176, avgExcess: 0.43, beatRate: 0.53, avgReturn: 1 }, { days: 21, n: 160, avgExcess: -0.27, beatRate: 0.44, avgReturn: 1.8 }] }, baseline: { n: 4800, horizons: [{ days: 21, n: 4480, avgExcess: 0.19, beatRate: 0.47, avgReturn: 1.7 }] } }),
     getEarningsReleases: fail,
     getRegistrations: fail,
@@ -428,6 +429,7 @@ describe("analyst: buy questions", () => {
     const d = r.data as { ideas: Array<{ rank: number; symbol: string; risks: string[] }>; track_record_sentence: string };
     expect(d.ideas[0]).toMatchObject({ rank: 1, symbol: "META" });
     expect(d.ideas[0].risks[0]).toMatch(/uptrend may be ending/);
+    expect(JSON.stringify(d.ideas[0])).toContain("Take: Wait");
     expect(d.track_record_sentence).toContain("trailed the S&P 500 by 0.3 points");
   });
 });

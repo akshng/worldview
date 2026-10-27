@@ -23,7 +23,21 @@ export function parseNasdaqEarnings(json: unknown, date: string): UpcomingEarnin
     }));
 }
 
-export async function earningsOn(date: string): Promise<UpcomingEarnings[]> {
+const cache = new Map<string, { at: number; v: Promise<UpcomingEarnings[]> }>();
+
+/** Cached for an hour per date (research checks several days for several stocks). */
+export function earningsOn(date: string): Promise<UpcomingEarnings[]> {
+  const hit = cache.get(date);
+  if (hit && Date.now() - hit.at < 3_600_000) return hit.v;
+  const v = fetchEarningsOn(date).catch((e) => {
+    cache.delete(date);
+    throw e;
+  });
+  cache.set(date, { at: Date.now(), v });
+  return v;
+}
+
+async function fetchEarningsOn(date: string): Promise<UpcomingEarnings[]> {
   const res = await fetch(`https://api.nasdaq.com/api/calendar/earnings?date=${date}`, {
     headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36", Accept: "application/json" },
     signal: AbortSignal.timeout(20_000),

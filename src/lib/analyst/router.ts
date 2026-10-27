@@ -77,6 +77,7 @@ const TOPICS: Topic[] = [
 const MACRO_WORDS = /\b(market|markets|stocks|equities|s&p|nasdaq|dow|risk|sentiment|today|overview|rundown|wrap)\b/i;
 /** "What should I buy?", picks, opportunities → the stock-ideas screen. */
 export const BUY_WORDS = /\b(buy|buying|invest(ing)? in|picks?|stock ideas?|opportunit\w*|undervalued|best stocks?|what (stocks? )?should i (get|own|purchase)|bargains?)\b/i;
+const RESEARCH_WORDS = /\b(research|why (did|is)|dig into|deep dive|look into|analy[sz]e|worth it|should i)\b/i;
 const WATCHLIST_WORDS = /\b(my (watch ?list|portfolio|positions|holdings|stocks|tickers)|watch ?list)\b/i;
 
 /** Tickers named in the question: $NVDA, NVDA, BRK.B, or a well-known company name. */
@@ -121,9 +122,13 @@ export function routeQuestion(question: string, ctx: RouteContext): PlannedCall[
   const wantsWatchlist = WATCHLIST_WORDS.test(question) && ctx.watchlist.length > 0;
   const topics = TOPICS.filter((t) => t.re.test(question));
 
-  // 0. Buy questions: ranked ideas first, then the market backdrop and watchlist quotes.
-  const wantsIdeas = BUY_WORDS.test(question);
+  // 0. Buy questions: ranked (and researched) ideas, unless it's about one named stock,
+  //    which gets researched directly.
+  const wantsIdeas = BUY_WORDS.test(question) && !tickers.length;
   if (wantsIdeas) push(plan, { tool: "stock_ideas", args: {} });
+  const equityTickers = tickers.filter((t) => /^[A-Z][A-Z-]{0,6}$/.test(t));
+  if ((BUY_WORDS.test(question) || RESEARCH_WORDS.test(question)) && equityTickers.length)
+    for (const t of equityTickers.slice(0, 2)) push(plan, { tool: "research_stock", args: { ticker: t } });
 
   // 1. Quotes first: tickers, topic instruments, watchlist.
   symbols.push(...tickers.slice(0, 5));

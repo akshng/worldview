@@ -8,6 +8,7 @@
  * Every run is capped at MAX_TOOL_CALLS tool executions; tool output is
  * size-capped before the model sees it; the answer gets the app's source list.
  */
+import { bestIdea, bestPrompt, ideasHead, ideasTail, noBestLine, type IdeasData, type QuoteRow } from "./ideas-answer";
 import { capJson } from "./cap";
 import { finalizeAnswer, makeCitation } from "./citations";
 import type { AnalystLLM, JsonLLM, NativeHistoryItem, NativeLLM } from "./llm";
@@ -91,7 +92,7 @@ export async function runAnalyst(req: AnalystRequest, env: AnalystEnv): Promise<
   };
 
   /** Run one tool call (validated), record its citation, return the model-facing block. */
-  async function execute(call: { tool: string; args: unknown }, charCap: number): Promise<{ id: string; block: string; ok: boolean }> {
+  async function execute(call: { tool: string; args: unknown }, charCap: number): Promise<{ id: string; block: string; ok: boolean; data?: unknown }> {
     checkAbort();
     const n = ++executed;
     const def = tools.find((t) => t.name === call.tool);
@@ -114,7 +115,7 @@ export async function runAnalyst(req: AnalystRequest, env: AnalystEnv): Promise<
       const c = makeCitation(n, call.tool, label, result, fetchedAt);
       citations.push(c);
       env.emit({ type: "tool_result", n, tool: call.tool, call: label, ok: true, summary: result.summary, ms: now() - t0, citation: c });
-      return { id: c.id, block: resultBlock(c.id, label, result.asOf ?? null, `${capJson({ source: result.source, ...((result.data ?? {}) as object) }, charCap)}`), ok: true };
+      return { id: c.id, block: resultBlock(c.id, label, result.asOf ?? null, `${capJson({ source: result.source, ...((result.data ?? {}) as object) }, charCap)}`), ok: true, data: result.data };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       const c = makeCitation(n, call.tool, label, null, fetchedAt, msg.slice(0, 160));
@@ -200,14 +201,43 @@ export async function runAnalyst(req: AnalystRequest, env: AnalystEnv): Promise<
     return s.text(prompt, 900, (chunk) => env.emit({ type: "answer_delta", text: chunk }));
   }
 
+  async function writeIdeas(d: IdeasData, marker: string, quotes: QuoteRow[]): Promise<string> {
+    const head = ideasHead(d, marker);
+    env.emit({ type: "answer_delta", text: `${head}\n\nBest of the bunch: ` });
+    const best = bestIdea(d);
+    let bestLine: string;
+    if (!best) {
+      bestLine = noBestLine(d);
+      env.emit({ type: "answer_delta", text: bestLine });
+    } else {
+      env.emit({ type: "status", text: "Comparing the ideas…" });
+      const why = await (env.llm as JsonLLM)
+        .session(WRITER_SYSTEM, (s) => s.text(bestPrompt(d, best), 200, (chunk) => env.emit({ type: "answer_delta", text: chunk })))
+        .catch(() => "");
+      const clean = why.replace(/\s*_?\*?information only[^]*$/i, "").trim();
+      bestLine = `${best.symbol}. ${clean || "It is the only researched idea whose evidence holds up: see its take above."}`;
+    }
+    const tail = ideasTail(d, quotes);
+    env.emit({ type: "answer_delta", text: `\n\n${tail}` });
+    return `${head}\n\nBest of the bunch: ${bestLine}\n\n${tail}`;
+  }
+
   async function runRouted(plan: PlannedCall[]): Promise<string> {
     const calls = plan.slice(0, max);
     const cap = env.llm.kind === "native" ? NATIVE_RESULT_CHARS : Math.min(2_600, Math.floor(LOCAL_ROUTED_BUDGET / Math.max(1, calls.length)));
     // Stock ideas ARE the answer to a buy question: give them room so nothing is cut mid-sentence.
-    const capFor = (tool: string) => (tool === "stock_ideas" && env.llm.kind !== "native" ? Math.max(cap, 5_000) : cap);
+    const capFor = (tool: string) => (env.llm.kind === "native" ? cap : tool === "stock_ideas" ? 9_000 : tool === "research_stock" ? 3_500 : cap);
     const blocks: string[] = [];
-    for (const c of calls) blocks.push((await execute(c, capFor(c.tool))).block);
+    const results: Array<{ tool: string; id: string; ok: boolean; data?: unknown }> = [];
+    for (const c of calls) {
+      const r = await execute(c, capFor(c.tool));
+      blocks.push(r.block);
+      results.push({ tool: c.tool, id: r.id, ok: r.ok, data: r.data });
+    }
     checkAbort();
+    // Buy questions on the local model: assemble the researched answer, ask the model only for the comparison.
+    const ideas = results.find((r) => r.tool === "stock_ideas" && r.ok);
+    if (ideas && env.llm.kind !== "native") return writeIdeas(ideas.data as IdeasData, ideas.id, (results.find((r) => r.tool === "get_quote" && r.ok)?.data as { quotes?: QuoteRow[] } | undefined)?.quotes ?? []);
     const prompt = routedPrompt(req.watchlist.length ? `${question} (My watchlist: ${req.watchlist.join(", ")})` : question, historyContext(req.messages), blocks);
     if (env.llm.kind === "native") {
       const turn = await env.llm.turn({ system: WRITER_SYSTEM, history: [{ role: "user", text: prompt }], tools, allowTools: false });
