@@ -10,6 +10,9 @@ import { useNow } from "@/lib/client/use-now";
 import { filterEvents } from "@/lib/events/client-filter";
 import { IMPORTANCE_FILTERS } from "@/lib/categories";
 import { visibleWindow } from "@/lib/time";
+import { NavRail } from "./NavRail";
+import { NewsPage } from "./NewsPage";
+import { PageModeContext } from "./page-mode";
 import { TopBar } from "./TopBar";
 import { Sidebar } from "@/components/sidebar/Sidebar";
 import { EventFeed } from "@/components/event-feed/EventFeed";
@@ -61,9 +64,11 @@ export function Dashboard() {
   const selectedRegion = useUI((s) => s.selectedRegion);
   const selectedTrack = useUI((s) => s.selectedTrack);
   const mapMode = useUI((s) => s.mapMode);
+  const view = useUI((s) => s.view);
   const now = useNow(30_000);
   const modeInfo = modeMeta(mapMode);
-  const live = useLiveLayer<unknown>(modeInfo.liveLayer);
+  // The globe's live layer only runs on the World page.
+  const live = useLiveLayer<unknown>(view === "world" ? modeInfo.liveLayer : null);
 
   const win = useMemo(() => visibleWindow(range, now, cursor, customRange), [range, now, cursor, customRange]);
   const globeWindow = useMemo(() => ({ from: win.from, to: win.to ?? now }), [win, now]);
@@ -98,6 +103,9 @@ export function Dashboard() {
         </div>
       )}
       <div className="flex min-h-0 flex-1">
+        <NavRail />
+        {view === "world" ? (
+          <>
         <Sidebar />
         <main className="relative min-w-0 flex-1 overflow-hidden bg-bg">
           <Globe window={globeWindow} live={live.data} />
@@ -126,16 +134,25 @@ export function Dashboard() {
           )}
         </main>
         <EventFeed />
+          </>
+        ) : (
+          // Other pages: the globe isn't mounted at all (no WebGL, no map updates).
+          <main className="min-w-0 flex-1 overflow-y-auto bg-bg">
+            <PageModeContext.Provider value={true}>
+              {view === "news" && <NewsPage />}
+              {view === "markets" && <MarketsPanel />}
+              {view === "analyst" && <AnalystPanel />}
+              {view === "briefing" && <BriefingModal />}
+              {view === "planet" && <PlanetPanel />}
+              {view === "energy" && <EnergyPanel />}
+              {view === "security" && <SecurityPanel />}
+              {view === "trends" && <TrendsPanel />}
+            </PageModeContext.Provider>
+          </main>
+        )}
       </div>
       <SearchPalette />
       <SettingsModal />
-      <BriefingModal />
-      <MarketsPanel />
-      <PlanetPanel />
-      <EnergyPanel />
-      <SecurityPanel />
-      <TrendsPanel />
-      <AnalystPanel />
       <InstrumentDetail />
       <Toasts />
     </div>

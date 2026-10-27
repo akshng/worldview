@@ -1,5 +1,6 @@
 "use client";
 /** Planet: climate and space-weather indicators from NOAA and NSIDC. */
+import { usePageMode } from "@/components/layout/page-mode";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/client/api";
 import type { PlanetDashboard } from "@/lib/planet";
@@ -9,7 +10,8 @@ import { CloseIcon } from "@/components/ui/icons";
 import { IndicatorGrid } from "@/components/markets/MacroDashboard";
 
 export function PlanetPanel() {
-  const open = useUI((s) => s.planetOpen);
+  const page = usePageMode();
+  const open = useUI((s) => s.planetOpen) || page;
   const setOpen = useUI((s) => s.setPlanetOpen);
   const [data, setData] = useState<PlanetDashboard | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -28,8 +30,8 @@ export function PlanetPanel() {
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex justify-center overflow-y-auto bg-black/60 px-4 py-8" onMouseDown={() => setOpen(false)}>
-      <div className="glass h-fit w-[760px] max-w-full rounded-lg shadow-2xl shadow-black/60" onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Planet">
+    <div className={page ? "px-6 py-6" : "fixed inset-0 z-50 flex justify-center overflow-y-auto bg-black/60 px-4 py-8"} onMouseDown={page ? undefined : () => setOpen(false)}>
+      <div className={page ? "glass mx-auto w-full max-w-[1320px] rounded-lg" : "glass h-fit w-[760px] max-w-full rounded-lg shadow-2xl shadow-black/60"} onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Planet">
         <div className="flex items-start justify-between gap-4 border-b border-line px-6 pt-5 pb-4">
           <div>
             <div className="meta text-accent">Planet</div>
@@ -38,9 +40,11 @@ export function PlanetPanel() {
               Measured indicators from NOAA and NSIDC.{data && ` Updated ${relativeTime(data.generatedAt)}.`} Hover a tile for what it measures; click for the source.
             </p>
           </div>
-          <button onClick={() => setOpen(false)} className="shrink-0 rounded-md p-1.5 text-muted hover:bg-panel-hover hover:text-fg" title="Close (Esc)" aria-label="Close planet panel">
+          {!page && (
+            <button onClick={() => setOpen(false)} className="shrink-0 rounded-md p-1.5 text-muted hover:bg-panel-hover hover:text-fg" title="Close (Esc)" aria-label="Close planet panel">
             <CloseIcon />
           </button>
+          )}
         </div>
         <div className="space-y-3 px-6 py-5">
           {err && <p className="text-[12px] text-danger">{err}</p>}

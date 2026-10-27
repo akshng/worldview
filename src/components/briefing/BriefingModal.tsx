@@ -3,6 +3,7 @@
  * Daily briefing view. Every line is an event from the store (clickable);
  * the optional AI summary is shown separately and labelled as interpretation.
  */
+import { usePageMode } from "@/components/layout/page-mode";
 import clsx from "clsx";
 import { useEffect, useState } from "react";
 import { api, type BriefingItem, type DailyBriefing } from "@/lib/client/api";
@@ -27,7 +28,8 @@ function greeting() {
 }
 
 export function BriefingModal() {
-  const open = useUI((s) => s.briefingOpen);
+  const page = usePageMode();
+  const open = useUI((s) => s.briefingOpen) || page;
   const setOpen = useUI((s) => s.setBriefingOpen);
   const meta = useData((s) => s.meta);
   const [data, setData] = useState<DailyBriefing | null>(null);
@@ -79,8 +81,8 @@ export function BriefingModal() {
   const maxCmp = Math.max(1, ...(data?.comparison ?? []).flatMap((c) => [c.today, c.yesterday]));
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-center overflow-y-auto bg-black/60 px-4 py-8" onMouseDown={() => setOpen(false)}>
-      <div className="glass h-fit w-[880px] max-w-full rounded-lg shadow-2xl shadow-black/60" onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Daily briefing">
+    <div className={page ? "px-6 py-6" : "fixed inset-0 z-50 flex justify-center overflow-y-auto bg-black/60 px-4 py-8"} onMouseDown={page ? undefined : () => setOpen(false)}>
+      <div className={page ? "glass mx-auto w-full max-w-[1320px] rounded-lg" : "glass h-fit w-[880px] max-w-full rounded-lg shadow-2xl shadow-black/60"} onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Daily briefing">
         <div className="flex items-start justify-between gap-4 border-b border-line px-6 pt-5 pb-4">
           <div>
             <div className="meta text-accent">{greeting()}</div>
@@ -96,9 +98,11 @@ export function BriefingModal() {
               </div>
             )}
           </div>
-          <button onClick={() => setOpen(false)} className="shrink-0 rounded-md p-1.5 text-muted hover:bg-panel-hover hover:text-fg" title="Close (Esc)" aria-label="Close briefing">
+          {!page && (
+            <button onClick={() => setOpen(false)} className="shrink-0 rounded-md p-1.5 text-muted hover:bg-panel-hover hover:text-fg" title="Close (Esc)" aria-label="Close briefing">
             <CloseIcon />
           </button>
+          )}
         </div>
 
         {error && <p className="px-6 py-6 text-[13px] text-danger">{error}</p>}

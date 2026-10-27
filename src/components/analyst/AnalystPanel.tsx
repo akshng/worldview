@@ -4,6 +4,7 @@
  * (tools over events, markets, macro, filings…), showing each tool call live
  * and the sources every answer was built from. Information only, not advice.
  */
+import { usePageMode } from "@/components/layout/page-mode";
 import { useCallback, useEffect, useRef, useState } from "react";
 import clsx from "clsx";
 import { useUI } from "@/lib/store/ui";
@@ -46,7 +47,8 @@ const bodyOf = (text: string) => text.split(/\n\nSources:/)[0].replace(new RegEx
 let nextId = 1;
 
 export function AnalystPanel() {
-  const open = useUI((s) => s.analystOpen);
+  const page = usePageMode();
+  const open = useUI((s) => s.analystOpen) || page;
   const setOpen = useUI((s) => s.setAnalystOpen);
   const watchlist = useUI((s) => s.settings.watchlist);
   const ai = useData((s) => s.meta?.ai);
@@ -148,7 +150,7 @@ export function AnalystPanel() {
 
   if (!open) return null;
   return (
-    <aside className="fixed top-12 right-0 bottom-0 z-40 flex w-[460px] max-w-full flex-col border-l border-line bg-panel-solid shadow-2xl shadow-black/60" role="dialog" aria-label="AI analyst">
+    <aside className={page ? "mx-auto flex h-full w-full max-w-[920px] flex-col border-x border-line bg-panel-solid" : "fixed top-12 right-0 bottom-0 z-40 flex w-[460px] max-w-full flex-col border-l border-line bg-panel-solid shadow-2xl shadow-black/60"} role="dialog" aria-label="AI analyst">
       <div className="flex items-start justify-between gap-3 border-b border-line px-4 pt-3.5 pb-3">
         <div className="min-w-0">
           <div className="meta flex items-center gap-1.5 text-ai">
@@ -159,9 +161,11 @@ export function AnalystPanel() {
             {ai?.enabled ? `Model: ${ai.provider} · ${ai.model}` : (ai?.reason ?? "AI status unknown")}
           </p>
         </div>
-        <button onClick={() => setOpen(false)} className="shrink-0 rounded-md p-1.5 text-muted hover:bg-panel-hover hover:text-fg" title="Close (Esc)" aria-label="Close analyst">
+        {!page && (
+          <button onClick={() => setOpen(false)} className="shrink-0 rounded-md p-1.5 text-muted hover:bg-panel-hover hover:text-fg" title="Close (Esc)" aria-label="Close analyst">
           <CloseIcon />
         </button>
+        )}
       </div>
 
       <div ref={listRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">

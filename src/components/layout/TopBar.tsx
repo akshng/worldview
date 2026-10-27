@@ -15,8 +15,6 @@ export function TopBar() {
   const autoRefresh = useUI((s) => s.settings.autoRefresh);
   const setSearchOpen = useUI((s) => s.setSearchOpen);
   const openSettings = useUI((s) => s.openSettings);
-  const setBriefingOpen = useUI((s) => s.setBriefingOpen);
-  const setMarketsOpen = useUI((s) => s.setMarketsOpen);
   const visibleCount = useData((s) => s.visible.length);
   const mode = useData((s) => s.mode);
   const now = useNow(15_000);
@@ -82,32 +80,6 @@ export function TopBar() {
           <span className="flex-1">Search</span>
           <kbd className="meta rounded border border-line px-1 text-faint">⌘K</kbd>
         </button>
-        <IconButton
-          onClick={() => useUI.getState().setAnalystOpen(!useUI.getState().analystOpen)}
-          title="AI analyst: ask questions about markets and world events (answers cite the app's data)"
-          aria-label="Analyst"
-          className="meta px-2 text-ai min-[1400px]:px-2.5"
-        >
-          Analyst
-        </IconButton>
-        <IconButton onClick={() => setMarketsOpen(true)} title="Markets" aria-label="Markets" className="meta px-2 min-[1400px]:px-2.5">
-          Markets
-        </IconButton>
-        <IconButton onClick={() => useUI.getState().setPlanetOpen(true)} title="Planet: climate & space weather" aria-label="Planet" className="meta px-2 min-[1400px]:px-2.5">
-          Planet
-        </IconButton>
-        <IconButton onClick={() => useUI.getState().setEnergyOpen(true)} title="Energy: live electricity grids" aria-label="Energy" className="meta px-2 min-[1400px]:px-2.5">
-          Energy
-        </IconButton>
-        <IconButton onClick={() => useUI.getState().setSecurityOpen(true)} title="Security: exploited vulnerabilities, critical CVEs, travel advisories" aria-label="Security" className="meta px-2 min-[1400px]:px-2.5">
-          Security
-        </IconButton>
-        <IconButton onClick={() => useUI.getState().setTrendsOpen(true)} title="Trends: what people are searching and sharing" aria-label="Trends" className="meta px-2 min-[1400px]:px-2.5">
-          Trends
-        </IconButton>
-        <IconButton onClick={() => setBriefingOpen(true)} title="Daily briefing" aria-label="Daily briefing" className="meta px-2 min-[1400px]:px-2.5">
-          Briefing
-        </IconButton>
         <IconButton onClick={() => openSettings()} title="Settings" aria-label="Settings">
           <SettingsIcon />
         </IconButton>

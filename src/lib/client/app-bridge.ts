@@ -21,6 +21,7 @@ const PANELS = {
 export type PanelName = keyof typeof PANELS;
 
 function openPanel(name: string) {
+  if (name === "world" || name === "news") return useUI.getState().setView(name);
   const setter = PANELS[name as PanelName];
   if (setter) (useUI.getState()[setter] as (v: boolean) => void)(true);
 }

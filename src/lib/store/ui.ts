@@ -12,6 +12,10 @@ import { MAP_MODE_IDS } from "@/lib/map-modes";
 import type { HiresProviderId, SatSourceId } from "@/lib/imagery";
 import { INFRA_LAYER_IDS, type InfraLayerId } from "@/lib/infra/catalog";
 
+
+export const APP_VIEWS = ["world", "news", "markets", "analyst", "briefing", "planet", "energy", "security", "trends"] as const;
+export type AppView = (typeof APP_VIEWS)[number];
+
 export type MapStyleId = "dark" | "satellite" | "night";
 export type MapMode = import("@/lib/map-modes").MapModeId;
 export type FeedSort = "recent" | "importance";
@@ -128,6 +132,9 @@ interface UIState {
 
   // chrome
   sidebarCollapsed: boolean;
+  /** Which page of the app is showing ("world" = the globe dashboard). */
+  view: AppView;
+  setView: (v: AppView) => void;
   searchOpen: boolean;
   briefingOpen: boolean;
   marketsOpen: boolean;
@@ -247,6 +254,8 @@ export const useUI = create<UIState>()(
       flyTo: null,
       searchPin: null,
       sidebarCollapsed: false,
+      view: "world",
+      setView: (view) => set({ view }),
       searchOpen: false,
       briefingOpen: false,
       marketsOpen: false,
@@ -297,13 +306,20 @@ export const useUI = create<UIState>()(
       setSearchPin: (searchPin) => set({ searchPin }),
       setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
       setSearchOpen: (searchOpen) => set({ searchOpen }),
-      setBriefingOpen: (briefingOpen) => set({ briefingOpen }),
-      setMarketsOpen: (marketsOpen) => set({ marketsOpen }),
-      setPlanetOpen: (planetOpen) => set({ planetOpen }),
-      setAnalystOpen: (analystOpen) => set({ analystOpen }),
-      setEnergyOpen: (energyOpen) => set({ energyOpen }),
-      setSecurityOpen: (securityOpen) => set({ securityOpen }),
-      setTrendsOpen: (trendsOpen) => set({ trendsOpen }),
+      // Panels are pages now: "open" means go to that page.
+      setBriefingOpen: (v) => set(v ? { view: "briefing" } : {}),
+      // Panels are pages now: "open" means go to that page.
+      setMarketsOpen: (v) => set(v ? { view: "markets" } : {}),
+      // Panels are pages now: "open" means go to that page.
+      setPlanetOpen: (v) => set(v ? { view: "planet" } : {}),
+      // Panels are pages now: "open" means go to that page.
+      setAnalystOpen: (v) => set(v ? { view: "analyst" } : {}),
+      // Panels are pages now: "open" means go to that page.
+      setEnergyOpen: (v) => set(v ? { view: "energy" } : {}),
+      // Panels are pages now: "open" means go to that page.
+      setSecurityOpen: (v) => set(v ? { view: "security" } : {}),
+      // Panels are pages now: "open" means go to that page.
+      setTrendsOpen: (v) => set(v ? { view: "trends" } : {}),
       setInfraOpen: (infraOpen) => set({ infraOpen }),
       toggleInfraLayer: (id) =>
         set((s) => {
@@ -328,7 +344,7 @@ export const useUI = create<UIState>()(
         }
       }),
       // Only persist preferences, not transient selection state.
-      partialize: (s) => ({ settings: s.settings, sidebarCollapsed: s.sidebarCollapsed, feedSort: s.feedSort, mapMode: s.mapMode }),
+      partialize: (s) => ({ settings: s.settings, sidebarCollapsed: s.sidebarCollapsed, feedSort: s.feedSort, mapMode: s.mapMode, view: s.view }),
       // Apply default layers/range from saved settings on load.
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<UIState>;
@@ -340,9 +356,11 @@ export const useUI = create<UIState>()(
           : [];
         const valid = settings.defaultCategories.filter((c) => (EVENT_CATEGORIES as readonly string[]).includes(c));
         const mapMode = (MAP_MODE_IDS as readonly string[]).includes(String(p.mapMode)) ? p.mapMode! : "events";
+        const view = (APP_VIEWS as readonly string[]).includes(String(p.view)) ? p.view! : "world";
         return {
           ...current,
           ...p,
+          view,
           mapMode,
           settings,
           categories: valid.length ? valid : [...EVENT_CATEGORIES],

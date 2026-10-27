@@ -339,7 +339,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         view.addItem(.separator())
         view.addItem(item("Enter Full Screen", #selector(NSWindow.toggleFullScreen(_:)), "f", [.command, .control]))
         let go = NSMenu(title: "Go")
-        for (i, (title, panel)) in [("Markets", "markets"), ("Analyst", "analyst"), ("Briefing", "briefing"), ("Planet", "planet"), ("Energy", "energy"), ("Security", "security"), ("Trends", "trends")].enumerated() {
+        for (i, (title, panel)) in [("World", "world"), ("News", "news"), ("Markets", "markets"), ("Analyst", "analyst"), ("Briefing", "briefing"), ("Planet", "planet"), ("Energy", "energy"), ("Security", "security"), ("Trends", "trends")].enumerated() {
             let it = item(title, #selector(goPanel(_:)), "\(i + 1)", target: self)
             it.representedObject = panel
             go.addItem(it)
@@ -499,7 +499,7 @@ extension AppDelegate {
         add("Open WorldView", #selector(openMain), nil, key: "o")
         let panels = NSMenuItem(title: "Go to", action: nil, keyEquivalent: "")
         let sub = NSMenu()
-        for (title, panel) in [("Markets", "markets"), ("Analyst", "analyst"), ("Briefing", "briefing"), ("Planet", "planet"), ("Trends", "trends")] {
+        for (title, panel) in [("World", "world"), ("News", "news"), ("Markets", "markets"), ("Analyst", "analyst"), ("Briefing", "briefing"), ("Planet", "planet"), ("Trends", "trends")] {
             let it = NSMenuItem(title: title, action: #selector(goPanel(_:)), keyEquivalent: "")
             it.target = self
             it.representedObject = panel

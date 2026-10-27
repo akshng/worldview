@@ -1,5 +1,6 @@
 "use client";
 /** Security: CISA known-exploited vulnerabilities, new critical CVEs (NVD) and travel-advisory changes. */
+import { usePageMode } from "@/components/layout/page-mode";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/client/api";
 import type { SecurityDashboard } from "@/lib/cyber";
@@ -36,7 +37,8 @@ const Link = ({ href, children }: { href: string | null; children: React.ReactNo
   );
 
 export function SecurityPanel() {
-  const open = useUI((s) => s.securityOpen);
+  const page = usePageMode();
+  const open = useUI((s) => s.securityOpen) || page;
   const setOpen = useUI((s) => s.setSecurityOpen);
   const [data, setData] = useState<SecurityDashboard | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -59,9 +61,9 @@ export function SecurityPanel() {
   if (!open) return null;
   const kev = data?.kev;
   return (
-    <div className="fixed inset-0 z-50 flex justify-center overflow-y-auto bg-black/60 px-4 py-8" onMouseDown={() => setOpen(false)}>
+    <div className={page ? "px-6 py-6" : "fixed inset-0 z-50 flex justify-center overflow-y-auto bg-black/60 px-4 py-8"} onMouseDown={page ? undefined : () => setOpen(false)}>
       <div
-        className="glass h-fit w-[860px] max-w-full rounded-lg shadow-2xl shadow-black/60"
+        className={page ? "glass mx-auto w-full max-w-[1320px] rounded-lg" : "glass h-fit w-[860px] max-w-full rounded-lg shadow-2xl shadow-black/60"}
         onMouseDown={(e) => e.stopPropagation()}
         role="dialog"
         aria-label="Security"
@@ -75,9 +77,11 @@ export function SecurityPanel() {
               {data && ` Updated ${relativeTime(data.generatedAt)}.`}
             </p>
           </div>
-          <button onClick={() => setOpen(false)} className="shrink-0 rounded-md p-1.5 text-muted hover:bg-panel-hover hover:text-fg" title="Close (Esc)" aria-label="Close security panel">
+          {!page && (
+            <button onClick={() => setOpen(false)} className="shrink-0 rounded-md p-1.5 text-muted hover:bg-panel-hover hover:text-fg" title="Close (Esc)" aria-label="Close security panel">
             <CloseIcon />
           </button>
+          )}
         </div>
         <div className="space-y-5 px-6 py-5">
           {err && <p className="text-[12px] text-danger">{err}</p>}

@@ -18,7 +18,7 @@ export function focusEvent(e: Pick<EventSummary, "id" | "latitude" | "longitude"
   ui.requestFlyTo({ lon: e.longitude, lat: e.latitude, zoom: 4.2 });
 }
 
-export function EventFeed() {
+export function EventFeed({ wide = false }: { wide?: boolean } = {}) {
   const visible = useData((s) => s.visible);
   const loading = useData((s) => s.loading);
   const error = useData((s) => s.error);
@@ -42,7 +42,7 @@ export function EventFeed() {
   const virt = useVirtualizer({ count: items.length, getScrollElement: () => parent.current, estimateSize: () => ROW_H, overscan: 8 });
 
   return (
-    <aside className="flex w-[360px] shrink-0 flex-col border-l border-line bg-bg">
+    <aside className={wide ? "flex w-[min(640px,50%)] shrink-0 flex-col border-r border-line bg-bg" : "flex w-[360px] shrink-0 flex-col border-l border-line bg-bg"}>
       <div className="flex h-11 shrink-0 items-center justify-between border-b border-line px-4">
         <div className="flex items-center gap-2">
           <span className="meta text-fg">Live feed</span>

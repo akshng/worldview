@@ -3,6 +3,7 @@
  * Markets view: cross-asset snapshot, watchlist, world events with rule-based
  * market exposure, and an optional AI market wrap. Information only — never advice.
  */
+import { usePageMode } from "@/components/layout/page-mode";
 import clsx from "clsx";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, type ExposureLink, type MarketSnapshot, type Quote } from "@/lib/client/api";
@@ -39,7 +40,8 @@ const GROUPS: Array<{ id: keyof MarketSnapshot["groups"]; title: string }> = [
 ];
 
 export function MarketsPanel() {
-  const open = useUI((s) => s.marketsOpen);
+  const page = usePageMode();
+  const open = useUI((s) => s.marketsOpen) || page;
   const setOpen = useUI((s) => s.setMarketsOpen);
   const watchlist = useUI((s) => s.settings.watchlist);
   const updateSettings = useUI((s) => s.updateSettings);
@@ -117,8 +119,8 @@ export function MarketsPanel() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-center overflow-y-auto bg-black/60 px-4 py-8" onMouseDown={() => setOpen(false)}>
-      <div className="glass h-fit w-[1040px] max-w-full rounded-lg shadow-2xl shadow-black/60" onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Markets">
+    <div className={page ? "px-6 py-6" : "fixed inset-0 z-50 flex justify-center overflow-y-auto bg-black/60 px-4 py-8"} onMouseDown={page ? undefined : () => setOpen(false)}>
+      <div className={page ? "glass mx-auto w-full max-w-[1320px] rounded-lg" : "glass h-fit w-[1040px] max-w-full rounded-lg shadow-2xl shadow-black/60"} onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Markets">
         <div className="flex items-start justify-between gap-4 border-b border-line px-6 pt-5 pb-4">
           <div>
             <div className="meta text-accent">Markets</div>
@@ -128,9 +130,11 @@ export function MarketsPanel() {
               {snap && ` Updated ${relativeTime(snap.generatedAt)}.`}
             </p>
           </div>
-          <button onClick={() => setOpen(false)} className="shrink-0 rounded-md p-1.5 text-muted hover:bg-panel-hover hover:text-fg" title="Close (Esc)" aria-label="Close markets">
+          {!page && (
+            <button onClick={() => setOpen(false)} className="shrink-0 rounded-md p-1.5 text-muted hover:bg-panel-hover hover:text-fg" title="Close (Esc)" aria-label="Close markets">
             <CloseIcon />
           </button>
+          )}
         </div>
 
         <div className="grid grid-cols-[1fr_340px] gap-6 px-6 py-5">

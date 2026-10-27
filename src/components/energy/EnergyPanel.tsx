@@ -1,5 +1,6 @@
 "use client";
 /** Energy: live electricity-grid data (GB, Spain, France, Germany, Australia NEM) from official open sources. */
+import { usePageMode } from "@/components/layout/page-mode";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/client/api";
 import type { EnergyDashboard, FuelKey, GenerationMix, Grid, Metric } from "@/lib/energy";
@@ -144,7 +145,8 @@ function GridCard({ grid }: { grid: Grid }) {
 }
 
 export function EnergyPanel() {
-  const open = useUI((s) => s.energyOpen);
+  const page = usePageMode();
+  const open = useUI((s) => s.energyOpen) || page;
   const setOpen = useUI((s) => s.setEnergyOpen);
   const [data, setData] = useState<EnergyDashboard | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -163,8 +165,8 @@ export function EnergyPanel() {
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex justify-center overflow-y-auto bg-black/60 px-4 py-8" onMouseDown={() => setOpen(false)}>
-      <div className="glass h-fit w-[820px] max-w-full rounded-lg shadow-2xl shadow-black/60" onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Energy">
+    <div className={page ? "px-6 py-6" : "fixed inset-0 z-50 flex justify-center overflow-y-auto bg-black/60 px-4 py-8"} onMouseDown={page ? undefined : () => setOpen(false)}>
+      <div className={page ? "glass mx-auto w-full max-w-[1320px] rounded-lg" : "glass h-fit w-[820px] max-w-full rounded-lg shadow-2xl shadow-black/60"} onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Energy">
         <div className="flex items-start justify-between gap-4 border-b border-line px-6 pt-5 pb-4">
           <div>
             <div className="meta text-accent">Energy</div>
@@ -174,9 +176,11 @@ export function EnergyPanel() {
               times UTC; hover a value for its exact timestamp.
             </p>
           </div>
-          <button onClick={() => setOpen(false)} className="shrink-0 rounded-md p-1.5 text-muted hover:bg-panel-hover hover:text-fg" title="Close (Esc)" aria-label="Close energy panel">
+          {!page && (
+            <button onClick={() => setOpen(false)} className="shrink-0 rounded-md p-1.5 text-muted hover:bg-panel-hover hover:text-fg" title="Close (Esc)" aria-label="Close energy panel">
             <CloseIcon />
           </button>
+          )}
         </div>
         <div className="space-y-3 px-6 py-5">
           {err && <p className="text-[12px] text-danger">{err}</p>}
