@@ -33,6 +33,50 @@ import type { CountryProfile } from "@/lib/country-profile";
 import type { CitationAction } from "./types";
 import { downsample } from "./cap";
 
+// ─── Stock-ideas helpers ─────────────────────────────────────────────────────
+
+type HorizonStat = { avg_excess_vs_sp500_pts: number | null; beat_sp500_pct: number | null; n: number } | null;
+
+export function trackRecordSentence(from: string | null, week: HorizonStat, month: HorizonStat): string {
+  const part = (h: HorizonStat, label: string) => {
+    if (!h || h.avg_excess_vs_sp500_pts === null) return null;
+    const x = h.avg_excess_vs_sp500_pts;
+    return `${x >= 0 ? "beat" : "trailed"} the S&P 500 by ${Math.abs(x).toFixed(1)} points on average over ${label} (ahead of it ${h.beat_sp500_pct}% of the time)`;
+  };
+  const parts = [part(week, "1 week"), part(month, "1 month")].filter(Boolean);
+  if (!parts.length) return "No track record available yet.";
+  return `In a backtest since ${from ?? "?"}, stocks this screen flagged ${parts.join(", and ")}. That is not a reliable edge.`;
+}
+
+/** Ideas in the same industry that all fell hard today are really one bet. */
+export function sameDayDrops(setups: Array<{ symbol: string; industry?: string | null; metrics: { change1d: number | null } }>): string | null {
+  const groups = new Map<string, string[]>();
+  for (const s of setups) {
+    if ((s.metrics.change1d ?? 0) > -5) continue;
+    const k = s.industry ?? "unknown industry";
+    groups.set(k, [...(groups.get(k) ?? []), s.symbol]);
+  }
+  const notes = [...groups.entries()]
+    .filter(([k, syms]) => syms.length >= 2 && k !== "unknown industry")
+    .map(([k, syms]) => `${syms.join(", ")} are all in ${k.toLowerCase()} and fell 5%+ together, which points to one shared cause (industry news or a commodity move). Treat them as one bet, not ${syms.length}.`);
+  return notes.length ? notes.join(" ") : null;
+}
+
+/** The standard way each kind of signal goes wrong. */
+export function ideaRisks(signals: string[]): string[] {
+  const out: string[] = [];
+  if (signals.some((x) => x.startsWith("Sharp"))) out.push("Sudden drops usually follow bad news (earnings miss, guidance cut, downgrade) and can keep going.");
+  if (signals.some((x) => x.startsWith("Pullback"))) out.push("The uptrend may be ending rather than pausing.");
+  if (signals.some((x) => x.startsWith("Oversold"))) out.push("Oversold stocks can stay oversold for weeks.");
+  return out;
+}
+
+export function ideaCheck(signals: string[]): string {
+  if (signals.some((x) => x.startsWith("Sharp"))) return "Find out why it dropped (news, earnings, analyst calls) before anything else.";
+  if (signals.some((x) => x.startsWith("Insider"))) return "Read the insider filings: who bought, how much, and at what price.";
+  return "Check the latest earnings and guidance, and how it is valued against peers.";
+}
+
 // ─── Dependencies (real implementations in deps.ts) ─────────────────────────
 
 export interface ToolDeps {
@@ -58,6 +102,10 @@ export interface ToolDeps {
   trackedManagers: TrackedManager[];
   managerHoldings: (cik: string, limit: number) => Promise<ManagerHoldings | null>;
   holdersOf: (ticker: string) => Promise<{ ticker: string; holders: FundHolder[]; checked: number; total: number; pending: number; caveats: string[] }>;
+  /** Rule-based stock setups (price + insider buying), strongest first. */
+  scanSetups: (opts: { max: number; minScore: number }) => Promise<{ setups: import("@/lib/finance/setups").Setup[]; scanned: number }>;
+  /** Backtest of the same rules: excess return vs the S&P 500 by horizon. */
+  setupsTrackRecord: () => Promise<{ from: string | null; to: string | null; signals: import("@/lib/finance/setups-score").ScoreSummary; baseline: import("@/lib/finance/setups-score").ScoreSummary }>;
   getEarningsReleases: () => Promise<EarningsFeed>;
   getRegistrations: () => Promise<Registration[]>;
   getTrends: () => Promise<Trends>;
@@ -418,6 +466,45 @@ export const TOOLS: ToolDef[] = [
         summary: group ? `${group}` : "all asset classes",
         source: "Yahoo Finance (delayed), U.S. Treasury, Coinbase",
         asOf: latest(all.map((q) => q.asOf)) ?? snap.generatedAt,
+      };
+    },
+  },
+  {
+    name: "stock_ideas",
+    description:
+      "Ranked US stock ideas from the app's screen: pullbacks in uptrends, oversold large caps, sharp drops, plus insider buying (SEC Form 4). Each comes with the reasons it was flagged, its risks and key numbers, and the screen's backtested track record vs the S&P 500. Use for 'what should I buy', stock picks, opportunities.",
+    params: {},
+    async run(_a, d) {
+      const [scan, tr] = await Promise.all([d.scanSetups({ max: 5, minScore: 2 }), d.setupsTrackRecord().catch(() => null)]);
+      // Industry from SEC (cached) so related picks can be grouped honestly.
+      const industries = await Promise.all(scan.setups.map((s) => d.companyProfile(s.symbol).then((p) => p?.industry ?? null).catch(() => null)));
+      const r1 = (v: number | null) => (v === null ? null : Math.round(v * 10) / 10);
+      const horizon = (s: import("@/lib/finance/setups-score").ScoreSummary, days: number) => {
+        const h = s.horizons.find((x) => x.days === days);
+        return h ? { avg_excess_vs_sp500_pts: r1(h.avgExcess), beat_sp500_pct: h.beatRate === null ? null : Math.round(h.beatRate * 100), n: h.n } : null;
+      };
+      return {
+        data: {
+          scanned: scan.scanned,
+          ideas: scan.setups.map((s, i) => ({
+            rank: i + 1,
+            symbol: s.symbol,
+            name: s.name,
+            industry: industries[i],
+            price: r1(s.metrics.price),
+            pct_from_52w_high: r1(s.metrics.fromHigh),
+            why_flagged: s.signals,
+            risks: [...s.risks, ...ideaRisks(s.signals)],
+            check_first: ideaCheck(s.signals),
+          })),
+          // Plain sentences the writer can quote as-is (small models misread the numbers otherwise).
+          track_record_sentence: tr ? trackRecordSentence(tr.from, horizon(tr.signals, 5), horizon(tr.signals, 21)) : "No track record available yet.",
+          concentration_note: sameDayDrops(scan.setups.map((s, i) => ({ ...s, industry: industries[i] }))),
+        },
+        summary: `${scan.setups.length} ideas from ${scan.scanned} stocks`,
+        source: "WorldView setups screen (Yahoo Finance prices, SEC Form 4)",
+        asOf: new Date(d.now()).toISOString(),
+        actions: scan.setups.slice(0, 5).map((s) => instrumentAction(s.symbol, s.name)),
       };
     },
   },

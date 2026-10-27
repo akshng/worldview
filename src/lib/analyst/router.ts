@@ -75,6 +75,8 @@ const TOPICS: Topic[] = [
 ];
 
 const MACRO_WORDS = /\b(market|markets|stocks|equities|s&p|nasdaq|dow|risk|sentiment|today|overview|rundown|wrap)\b/i;
+/** "What should I buy?", picks, opportunities → the stock-ideas screen. */
+export const BUY_WORDS = /\b(buy|buying|invest(ing)? in|picks?|stock ideas?|opportunit\w*|undervalued|best stocks?|what (stocks? )?should i (get|own|purchase)|bargains?)\b/i;
 const WATCHLIST_WORDS = /\b(my (watch ?list|portfolio|positions|holdings|stocks|tickers)|watch ?list)\b/i;
 
 /** Tickers named in the question: $NVDA, NVDA, BRK.B, or a well-known company name. */
@@ -119,10 +121,14 @@ export function routeQuestion(question: string, ctx: RouteContext): PlannedCall[
   const wantsWatchlist = WATCHLIST_WORDS.test(question) && ctx.watchlist.length > 0;
   const topics = TOPICS.filter((t) => t.re.test(question));
 
+  // 0. Buy questions: ranked ideas first, then the market backdrop and watchlist quotes.
+  const wantsIdeas = BUY_WORDS.test(question);
+  if (wantsIdeas) push(plan, { tool: "stock_ideas", args: {} });
+
   // 1. Quotes first: tickers, topic instruments, watchlist.
   symbols.push(...tickers.slice(0, 5));
   for (const t of topics) symbols.push(...(t.symbols ?? []));
-  if (wantsWatchlist) symbols.push(...ctx.watchlist);
+  if (wantsWatchlist || (wantsIdeas && !tickers.length)) symbols.push(...ctx.watchlist);
   const uniq = [...new Set(symbols)].slice(0, 10);
   if (uniq.length) push(plan, { tool: "get_quote", args: { symbols: uniq } });
 
@@ -154,7 +160,8 @@ export function routeQuestion(question: string, ctx: RouteContext): PlannedCall[
   }
 
   // 6. General market questions or nothing matched: the snapshot and event exposure.
-  if (MACRO_WORDS.test(question) || plan.length === 0) {
+  //    (A buy question already has its answer from stock_ideas; skip the big snapshot.)
+  if ((MACRO_WORDS.test(question) && !wantsIdeas) || plan.length === 0) {
     push(plan, { tool: "market_snapshot", args: {} });
     push(plan, { tool: "exposure", args: {} });
   }

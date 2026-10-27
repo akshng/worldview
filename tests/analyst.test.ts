@@ -86,6 +86,8 @@ function mockDeps(over: Partial<ToolDeps> = {}): ToolDeps {
     trackedManagers: [{ cik: "1067983", label: "Berkshire Hathaway", note: "Warren Buffett" } as never],
     managerHoldings: fail,
     holdersOf: fail,
+    scanSetups: async () => ({ scanned: 2, setups: [{ symbol: "META", name: "Meta", score: 3, signals: ["Pullback in an uptrend"], risks: [], metrics: { price: 640, change1d: -1, change5d: -3, rsi14: 36, sma50: 690, sma200: 610, high52: 775, low52: 480, fromHigh: -17.4, fromLow: 33 } }] }),
+    setupsTrackRecord: async () => ({ from: "2025-08-14", to: "2026-10-22", signals: { n: 178, horizons: [{ days: 5, n: 176, avgExcess: 0.43, beatRate: 0.53, avgReturn: 1 }, { days: 21, n: 160, avgExcess: -0.27, beatRate: 0.44, avgReturn: 1.8 }] }, baseline: { n: 4800, horizons: [{ days: 21, n: 4480, avgExcess: 0.19, beatRate: 0.47, avgReturn: 1.7 }] } }),
     getEarningsReleases: fail,
     getRegistrations: fail,
     getTrends: fail,
@@ -412,5 +414,38 @@ describe("analyst: agent loop", () => {
     expect(r.citations.map((c) => c.tool)).toEqual(["get_quote", "economic_calendar"]);
     expect(llm.prompts).toHaveLength(1);
     expect(llm.prompts[0]).toContain("[S2] economic_calendar(days=5)");
+  });
+});
+
+describe("analyst: buy questions", () => {
+  it("routes 'what should I buy' to the stock-ideas screen plus watchlist quotes", () => {
+    const plan = routeQuestion("what stocks are a buy today", { watchlist: ["AAPL", "NVDA"] });
+    expect(plan[0].tool).toBe("stock_ideas");
+    expect(plan.find((c) => c.tool === "get_quote")?.args).toEqual({ symbols: ["AAPL", "NVDA"] });
+  });
+  it("returns ranked ideas with reasons and the screen's track record", async () => {
+    const r = await run("stock_ideas", {});
+    const d = r.data as { ideas: Array<{ rank: number; symbol: string; risks: string[] }>; track_record_sentence: string };
+    expect(d.ideas[0]).toMatchObject({ rank: 1, symbol: "META" });
+    expect(d.ideas[0].risks[0]).toMatch(/uptrend may be ending/);
+    expect(d.track_record_sentence).toContain("trailed the S&P 500 by 0.3 points");
+  });
+});
+
+describe("analyst: stock-idea helpers", () => {
+  it("states the track record plainly, including when the screen lagged", async () => {
+    const { trackRecordSentence } = await import("@/lib/analyst/tools");
+    const s = trackRecordSentence("2025-08-14", { avg_excess_vs_sp500_pts: 0.4, beat_sp500_pct: 53, n: 176 }, { avg_excess_vs_sp500_pts: -0.3, beat_sp500_pct: 44, n: 160 });
+    expect(s).toContain("beat the S&P 500 by 0.4 points on average over 1 week");
+    expect(s).toContain("trailed the S&P 500 by 0.3 points on average over 1 month");
+  });
+  it("flags several same-day drops as one bet", async () => {
+    const { sameDayDrops } = await import("@/lib/analyst/tools");
+    const mk = (symbol: string, change1d: number) => ({ symbol, metrics: { change1d } });
+    const r = (symbol: string, change1d: number, industry: string) => ({ ...mk(symbol, change1d), industry });
+    const note = sameDayDrops([r("VLO", -9, "Petroleum Refining"), r("MPC", -7, "Petroleum Refining"), r("GWRE", -8, "Prepackaged Software")]);
+    expect(note).toMatch(/VLO, MPC are all in petroleum refining.*one bet, not 2/);
+    expect(note).not.toContain("GWRE");
+    expect(sameDayDrops([mk("VLO", -9), mk("META", -1)])).toBeNull();
   });
 });

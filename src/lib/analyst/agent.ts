@@ -203,8 +203,10 @@ export async function runAnalyst(req: AnalystRequest, env: AnalystEnv): Promise<
   async function runRouted(plan: PlannedCall[]): Promise<string> {
     const calls = plan.slice(0, max);
     const cap = env.llm.kind === "native" ? NATIVE_RESULT_CHARS : Math.min(2_600, Math.floor(LOCAL_ROUTED_BUDGET / Math.max(1, calls.length)));
+    // Stock ideas ARE the answer to a buy question: give them room so nothing is cut mid-sentence.
+    const capFor = (tool: string) => (tool === "stock_ideas" && env.llm.kind !== "native" ? Math.max(cap, 5_000) : cap);
     const blocks: string[] = [];
-    for (const c of calls) blocks.push((await execute(c, cap)).block);
+    for (const c of calls) blocks.push((await execute(c, capFor(c.tool))).block);
     checkAbort();
     const prompt = routedPrompt(req.watchlist.length ? `${question} (My watchlist: ${req.watchlist.join(", ")})` : question, historyContext(req.messages), blocks);
     if (env.llm.kind === "native") {

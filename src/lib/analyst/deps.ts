@@ -57,6 +57,8 @@ export const realDeps: ToolDeps = {
   trackedManagers: TRACKED_MANAGERS,
   managerHoldings,
   holdersOf,
+  scanSetups: async (opts) => (await import("@/lib/finance/setups-service")).scanSetups(opts),
+  setupsTrackRecord: async () => (await import("@/lib/finance/setups-score-service")).backtestSetups(),
   getEarningsReleases: () => getEarningsReleases(),
   getRegistrations,
   getTrends,

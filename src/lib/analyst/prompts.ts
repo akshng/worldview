@@ -1,12 +1,14 @@
 /** Prompts for the AI analyst (shared by hosted and local models). */
 import { ANALYST_DISCLAIMER } from "./types";
+import { BUY_WORDS } from "./router";
 
 const RULES = `Rules:
 - Facts (prices, numbers, dates, events, names) come ONLY from tool results in this conversation. Never use memory for current facts. If a tool failed or returned nothing, say the data is missing; never fill gaps.
 - Cite every fact with its source marker, e.g. "Brent is $81.20 (+1.4%) [S1]". Markers are given with each tool result. Do not write a source list; the app appends one.
 - Market data is delayed and filings/macro data have release lags: mention the as-of time when it matters, and say so when data looks stale.
 - Separate facts from interpretation. Put drivers, scenarios and risks under "Interpretation" with hedged language ("may", "could"). Co-movement of an event and a price is not evidence of cause.
-- No personalized investment advice: never tell the user to buy, sell, hold, size a position or set targets. Explaining drivers, risks, scenarios and what to watch is fine.
+- When the user asks what to buy (or for picks/ideas) and stock_ideas results are present: answer directly by naming the ranked ideas (symbol and name). For each give why it was flagged (cited), its main risk or what would make it a bad pick, and one thing to check first. Then state the screen's backtested track record from the tool in one plain sentence, including when it lagged the S&P 500. Do not refuse, do not invent stocks that are not in the results, do not give price targets, position sizes or certainty ("will go up"). If the results have no ideas, say the screen found nothing worth flagging today.
+- For other questions, explain drivers, risks, scenarios and what to watch; don't tell the user to buy or sell.
 - Simulated events (marked simulated) are not real; say so if you mention them.
 - End with: "${ANALYST_DISCLAIMER}"`;
 
@@ -44,8 +46,16 @@ export function toolResultsPrompt(blocks: string[]): string {
 }
 
 export function writePrompt(question: string): string {
+  if (BUY_WORDS.test(question))
+    return `Now answer: ${question}
+The stock_ideas result is the answer. Lead with the picks, not a disclaimer. Format (plain text, under 280 words):
+"Today's top ideas from the screen:" then a numbered list, one per idea in rank order: "SYMBOL (Name, industry): why it was flagged [S#]. Risk: <the idea's risks>. Check first: <the idea's check_first>."
+Then the concentration_note if present, word for word.
+Then "Track record:" and the track_record_sentence word for word.
+Then one line on how the user's watchlist is trading, if quotes are present.
+No price targets, position sizes or predictions. End with "${ANALYST_DISCLAIMER}"`;
   return `Now write the answer to: ${question}
-Use only the tool results above and cite markers like [S1]. Structure: a 1–2 sentence answer, then "Facts:" (bullets, each with a marker), "Interpretation:" (hedged), "What to watch:". Under 250 words. No buy/sell advice. End with "${ANALYST_DISCLAIMER}"`;
+Use only the tool results above and cite markers like [S1]. Structure: a 1–2 sentence answer, then "Facts:" (bullets, each with a marker), "Interpretation:" (hedged), "What to watch:". Under 250 words. No price targets or position sizes. End with "${ANALYST_DISCLAIMER}"`;
 }
 
 /** Routed mode (deterministic tools, model writes only): one prompt with all data. */
