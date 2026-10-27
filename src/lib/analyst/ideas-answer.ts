@@ -65,3 +65,13 @@ export function bestPrompt(d: IdeasData, best: IdeaRow): string {
     .map((i) => `${label(i)}\n${i.write_up}`)
     .join("\n\n")}\n\nThe strongest candidate is ${best.symbol}. In two sentences, explain why ${best.symbol} looks stronger than ${others.map((o) => o.symbol).join(" and ") || "the rest"}, using only the facts above. No price targets, no predictions, no advice on how much to buy. Reply with the two sentences only.`;
 }
+
+/** One researched stock ("should I buy GWRE?"): the write-up plus the latest quote. */
+export function researchHead(r: { ticker: string; company?: string | null; industry?: string | null; write_up?: string }, marker: string, quote?: QuoteRow): string {
+  const px = quote && quote.price !== null ? ` · $${quote.price.toLocaleString("en-US", { maximumFractionDigits: 2 })}${quote.changePct !== null ? ` (${quote.changePct > 0 ? "+" : ""}${quote.changePct.toFixed(2)}% today)` : ""}` : "";
+  return `${r.ticker} (${r.company ?? r.ticker}${r.industry ? `, ${title(r.industry)}` : ""})${px} [${marker}]\n${r.write_up ?? "No research available."}`;
+}
+
+export function bottomLinePrompt(head: string, question: string): string {
+  return `Research on the stock:\n\n${head}\n\nQuestion: ${question}\nIn two sentences, give the bottom line: restate the Take and the single most important reason from the research above. No price targets, no predictions, no advice on how much to buy. Reply with the two sentences only.`;
+}

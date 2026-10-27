@@ -45,8 +45,8 @@ export function toolResultsPrompt(blocks: string[]): string {
   return `Tool results:\n${blocks.join("\n\n")}`;
 }
 
-export function writePrompt(question: string): string {
-  if (BUY_WORDS.test(question))
+export function writePrompt(question: string, hasIdeas = BUY_WORDS.test(question)): string {
+  if (hasIdeas)
     return `Now answer: ${question}
 The stock_ideas result is the answer, and you have done the research. Lead with the picks, not a disclaimer. Format (plain text, under 380 words):
 "Top ideas:" then, for EVERY idea that has a write_up, in rank order: "N. SYMBOL (Name, industry) [S#]" and on the next lines its write_up copied exactly.
@@ -63,7 +63,7 @@ Use only the tool results above and cite markers like [S1]. Structure: a 1–2 s
 
 /** Routed mode (deterministic tools, model writes only): one prompt with all data. */
 export function routedPrompt(question: string, context: string, blocks: string[]): string {
-  return `${context ? `${context}\n\n` : ""}Question: ${question}\n\nThe app gathered this data for you:\n\n${blocks.join("\n\n")}\n\n${writePrompt(question)}`;
+  return `${context ? `${context}\n\n` : ""}Question: ${question}\n\nThe app gathered this data for you:\n\n${blocks.join("\n\n")}\n\n${writePrompt(question, blocks.some((b) => b.includes("stock_ideas(")))}`;
 }
 
 export const DESK_NOTE_QUESTION = (watchlist: string[]) =>

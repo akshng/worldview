@@ -8,7 +8,7 @@
  * Every run is capped at MAX_TOOL_CALLS tool executions; tool output is
  * size-capped before the model sees it; the answer gets the app's source list.
  */
-import { bestIdea, bestPrompt, ideasHead, ideasTail, noBestLine, type IdeasData, type QuoteRow } from "./ideas-answer";
+import { bestIdea, bestPrompt, bottomLinePrompt, ideasHead, ideasTail, noBestLine, researchHead, type IdeasData, type QuoteRow } from "./ideas-answer";
 import { capJson } from "./cap";
 import { finalizeAnswer, makeCitation } from "./citations";
 import type { AnalystLLM, JsonLLM, NativeHistoryItem, NativeLLM } from "./llm";
@@ -237,6 +237,16 @@ export async function runAnalyst(req: AnalystRequest, env: AnalystEnv): Promise<
     checkAbort();
     // Buy questions on the local model: assemble the researched answer, ask the model only for the comparison.
     const ideas = results.find((r) => r.tool === "stock_ideas" && r.ok);
+    const researched = results.find((r) => r.tool === "research_stock" && r.ok);
+    if (!ideas && researched && env.llm.kind !== "native") {
+      const rd = researched.data as { ticker: string; company?: string | null; industry?: string | null; write_up?: string };
+      const quote = ((results.find((r) => r.tool === "get_quote" && r.ok)?.data as { quotes?: QuoteRow[] } | undefined)?.quotes ?? []).find((q) => q.symbol === rd.ticker);
+      const head = researchHead(rd, researched.id, quote);
+      env.emit({ type: "answer_delta", text: `${head}\n\nBottom line: ` });
+      const why = await (env.llm as JsonLLM).session(WRITER_SYSTEM, (s) => s.text(bottomLinePrompt(head, question), 200, (chunk) => env.emit({ type: "answer_delta", text: chunk }))).catch(() => "");
+      const clean = why.replace(/\s*_?\*?information only[^]*$/i, "").trim();
+      return `${head}\n\nBottom line: ${clean || "See the take above."}`;
+    }
     if (ideas && env.llm.kind !== "native") return writeIdeas(ideas.data as IdeasData, ideas.id, (results.find((r) => r.tool === "get_quote" && r.ok)?.data as { quotes?: QuoteRow[] } | undefined)?.quotes ?? []);
     const prompt = routedPrompt(req.watchlist.length ? `${question} (My watchlist: ${req.watchlist.join(", ")})` : question, historyContext(req.messages), blocks);
     if (env.llm.kind === "native") {

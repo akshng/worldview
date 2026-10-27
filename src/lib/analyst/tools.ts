@@ -552,7 +552,7 @@ export const TOOLS: ToolDef[] = [
       if (!/^[A-Z]{1,5}(-[A-Z])?$/.test(t)) throw new Error("A US stock ticker is required");
       const r = await d.researchStock(t);
       return {
-        data: { ticker: t, company: r.company, industry: r.industry, ...researchForModel(r) },
+        data: { ticker: t, company: r.company, industry: r.industry, write_up: ideaWriteUp(r), ...researchForModel(r) },
         summary: `${r.headlines.length} headlines, ${r.recentFilings.length} filings`,
         source: "Google News, SEC EDGAR (filings, XBRL, Form 4, 13F), Nasdaq earnings calendar",
         asOf: new Date(d.now()).toISOString(),
