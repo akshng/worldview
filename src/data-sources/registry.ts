@@ -51,7 +51,6 @@ import { sanctionsNewsConnector } from "./sanctions-news";
 import { cloudStatusConnector, appStatusConnector } from "./status-pages";
 import { fdaRecallsConnector } from "./fda-recalls";
 import { cpscRecallsConnector } from "./cpsc-recalls";
-import { ransomwareLiveConnector } from "./ransomware-live";
 import { hibpBreachesConnector } from "./hibp-breaches";
 import { unPressConnector } from "./un-press";
 import { demoConnector } from "./demo";
@@ -91,7 +90,8 @@ export const CONNECTORS = [
   iodaConnector,
   cloudStatusConnector,
   appStatusConnector,
-  ransomwareLiveConnector,
+  // ransomwareLiveConnector — off: the API answers browsers but returns 404 to WorldView's
+  // honest User-Agent, and we don't disguise the client. Re-enable if that changes.
   hibpBreachesConnector,
   whoConnector,
   fdaRecallsConnector,

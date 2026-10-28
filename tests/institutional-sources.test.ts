@@ -18,7 +18,7 @@ const valid = (xs: unknown[]) => xs.every((x) => EventCandidateSchema.safeParse(
 
 describe("registry", () => {
   it("registers the new connectors as live", () => {
-    for (const id of ["central-banks", "ofac-sanctions", "sanctions-news", "cloud-status", "app-status", "fda-recalls", "cpsc-recalls", "ransomware-live", "hibp-breaches", "un-press"]) {
+    for (const id of ["central-banks", "ofac-sanctions", "sanctions-news", "cloud-status", "app-status", "fda-recalls", "cpsc-recalls", "hibp-breaches", "un-press"]) {
       const c = getConnector(id);
       expect(c?.mode).toBe("live");
       expect(c!.refreshIntervalMs).toBeGreaterThanOrEqual(5 * 60_000);
