@@ -295,7 +295,7 @@ export const TOOLS: ToolDef[] = [
       country: { type: "string", description: "Country name or ISO-2 code" },
       hours: { type: "integer", description: "Look back this many hours (default 24, max 168)" },
       limit: { type: "integer", description: "Max events (default 8, max 15)" },
-      source: { type: "string", description: "Only one data source by id, e.g. central-banks, ofac-sanctions, sanctions-news, cloud-status, app-status, fda-recalls, cpsc-recalls, hibp-breaches, un-press, nasdaq-halts, sec-insider-buys, sec-enforcement, treasury-auctions, ecdc, iaea, volcanic-ash, usgs, gdacs, news-rss (see data_sources)" },
+      source: { type: "string", description: "Only one data source by id, e.g. central-banks, ofac-sanctions, sanctions-news, cloud-status, app-status, fda-recalls, cpsc-recalls, hibp-breaches, un-press, nasdaq-halts, sec-insider-buys, sec-enforcement, treasury-auctions, ecdc, iaea, volcanic-ash, defense-releases, doj-press, market-regulators, eu-commission, trade-policy, us-economic-releases, eia-energy, fda-medwatch, nasa-news, ifrc-appeals, usgs, gdacs, news-rss (see data_sources)" },
     },
     async run(a, d) {
       const hours = clamp(num(a.hours), 1, 168, 24);

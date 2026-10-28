@@ -60,6 +60,16 @@ import { treasuryAuctionsConnector } from "./treasury-auctions";
 import { ecdcConnector } from "./ecdc";
 import { iaeaConnector } from "./iaea";
 import { volcanicAshConnector } from "./volcanic-ash";
+import { defenseReleasesConnector } from "./defense-releases";
+import { eiaEnergyConnector } from "./eia-energy";
+import { tradePolicyConnector } from "./trade-policy";
+import { fdaMedwatchConnector } from "./fda-medwatch";
+import { nasaNewsConnector } from "./nasa-news";
+import { marketRegulatorsConnector } from "./market-regulators";
+import { dojPressConnector } from "./doj-press";
+import { euCommissionConnector } from "./eu-commission";
+import { usEconomicReleasesConnector } from "./us-economic-releases";
+import { ifrcAppealsConnector } from "./ifrc-appeals";
 import { demoConnector } from "./demo";
 
 export const CONNECTORS = [
@@ -92,6 +102,7 @@ export const CONNECTORS = [
   wikipediaEventsConnector,
   spaceConnector,
   fireballsConnector,
+  nasaNewsConnector,
   tsunamiConnector,
   faaConnector,
   adsbEmergencyConnector,
@@ -105,6 +116,8 @@ export const CONNECTORS = [
   ecdcConnector,
   fdaRecallsConnector,
   cpscRecallsConnector,
+  fdaMedwatchConnector,
+  ifrcAppealsConnector,
   cdcTravelConnector,
   airQualityConnector,
   travelAdvisoriesConnector,
@@ -114,9 +127,16 @@ export const CONNECTORS = [
   federalRegisterConnector,
   unPressConnector,
   iaeaConnector,
+  euCommissionConnector,
+  defenseReleasesConnector,
+  dojPressConnector,
+  tradePolicyConnector,
   ofacSanctionsConnector,
   sanctionsNewsConnector,
   centralBanksConnector,
+  usEconomicReleasesConnector,
+  eiaEnergyConnector,
+  marketRegulatorsConnector,
   secConnector,
   secInsiderBuysConnector,
   secEnforcementConnector,
