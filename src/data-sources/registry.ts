@@ -45,6 +45,15 @@ import { geonetConnector } from "./geonet";
 import { afadConnector } from "./afad";
 import { ssnMexicoConnector } from "./ssn-mexico";
 import { hkoWarningsConnector } from "./hko-warnings";
+import { centralBanksConnector } from "./central-banks";
+import { ofacSanctionsConnector } from "./ofac-sanctions";
+import { sanctionsNewsConnector } from "./sanctions-news";
+import { cloudStatusConnector, appStatusConnector } from "./status-pages";
+import { fdaRecallsConnector } from "./fda-recalls";
+import { cpscRecallsConnector } from "./cpsc-recalls";
+import { ransomwareLiveConnector } from "./ransomware-live";
+import { hibpBreachesConnector } from "./hibp-breaches";
+import { unPressConnector } from "./un-press";
 import { demoConnector } from "./demo";
 
 export const CONNECTORS = [
@@ -80,7 +89,13 @@ export const CONNECTORS = [
   faaConnector,
   adsbEmergencyConnector,
   iodaConnector,
+  cloudStatusConnector,
+  appStatusConnector,
+  ransomwareLiveConnector,
+  hibpBreachesConnector,
   whoConnector,
+  fdaRecallsConnector,
+  cpscRecallsConnector,
   cdcTravelConnector,
   airQualityConnector,
   travelAdvisoriesConnector,
@@ -88,6 +103,10 @@ export const CONNECTORS = [
   canadaTravelConnector,
   smartravellerConnector,
   federalRegisterConnector,
+  unPressConnector,
+  ofacSanctionsConnector,
+  sanctionsNewsConnector,
+  centralBanksConnector,
   secConnector,
   fdicFailuresConnector,
   demoConnector,
