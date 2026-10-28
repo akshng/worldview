@@ -7,6 +7,8 @@ export interface UpcomingEarnings {
   when: "before open" | "after close" | "time not set";
   epsForecast: string | null;
   lastYearEps: string | null;
+  /** USD, parsed from Nasdaq's "$740,324,150,000" */
+  marketCap: number | null;
 }
 
 export function parseNasdaqEarnings(json: unknown, date: string): UpcomingEarnings[] {
@@ -20,6 +22,7 @@ export function parseNasdaqEarnings(json: unknown, date: string): UpcomingEarnin
       when: r.time === "time-pre-market" ? "before open" : r.time === "time-after-hours" ? "after close" : "time not set",
       epsForecast: r.epsForecast && r.epsForecast !== "" ? r.epsForecast : null,
       lastYearEps: r.lastYearEPS && r.lastYearEPS !== "" ? r.lastYearEPS : null,
+      marketCap: Number((r.marketCap ?? "").replace(/[$,]/g, "")) || null,
     }));
 }
 

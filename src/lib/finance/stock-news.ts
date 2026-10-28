@@ -37,7 +37,12 @@ export function parseGoogleNews(xml: string, max = 8): Headline[] {
 const cache = new Map<string, { at: number; v: Promise<Headline[]> }>();
 
 export function stockHeadlines(company: string, days = 3): Promise<Headline[]> {
-  const q = `"${company}" stock when:${days}d`;
+  return newsHeadlines(`"${company}" stock`, days);
+}
+
+/** Headlines for any topic ("Strait of Hormuz tanker", "Fed rate decision"). */
+export function newsHeadlines(topic: string, days = 3): Promise<Headline[]> {
+  const q = `${topic} when:${days}d`;
   const hit = cache.get(q);
   if (hit && Date.now() - hit.at < 30 * 60_000) return hit.v;
   const v = fetch(`https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=en-US&gl=US&ceid=US:en`, {

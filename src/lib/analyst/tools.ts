@@ -135,6 +135,15 @@ export interface ToolDeps {
   scanSetups: (opts: { max: number; minScore: number }) => Promise<{ setups: import("@/lib/finance/setups").Setup[]; scanned: number }>;
   /** Why a stock moved and how the business is doing (headlines, filings, earnings, fundamentals, insiders, funds). */
   researchStock: (ticker: string, nameHint?: string) => Promise<import("@/lib/finance/stock-research").StockResearch>;
+  insiders: (ticker: string) => Promise<import("@/lib/finance/insiders").InsiderSummary | null>;
+  dividends: (symbol: string) => Promise<import("@/lib/finance/dividends").Dividends>;
+  shortVolume: (symbol: string) => Promise<import("@/lib/finance/short-volume").ShortVolume>;
+  earningsOn: (date: string) => Promise<import("@/lib/finance/earnings-calendar").UpcomingEarnings[]>;
+  headlines: (topic: string, days: number) => Promise<import("@/lib/finance/stock-news").Headline[]>;
+  resolvePlace: (name: string) => import("./world-data").Place | null;
+  infraNear: (lat: number, lon: number, radiusKm: number, kinds: import("./world-data").InfraKind[]) => Promise<unknown>;
+  tracking: (kind: import("./world-data").TrackKind, place: import("./world-data").Place | null) => Promise<unknown>;
+  sourceHealth: () => Promise<Array<{ id: string; name: string; status: string; categories: string[]; lastSuccessAt: string | null; description: string }>>;
   /** Backtest of the same rules: excess return vs the S&P 500 by horizon. */
   setupsTrackRecord: () => Promise<{ from: string | null; to: string | null; signals: import("@/lib/finance/setups-score").ScoreSummary; baseline: import("@/lib/finance/setups-score").ScoreSummary }>;
   getEarningsReleases: () => Promise<EarningsFeed>;
@@ -286,9 +295,27 @@ export const TOOLS: ToolDef[] = [
       country: { type: "string", description: "Country name or ISO-2 code" },
       hours: { type: "integer", description: "Look back this many hours (default 24, max 168)" },
       limit: { type: "integer", description: "Max events (default 8, max 15)" },
+      source: { type: "string", description: "Only one data source by id, e.g. central-banks, ofac-sanctions, cloud-status, app-status, fda-recalls, hibp-breaches, un-press, usgs, gdacs, news-rss (see data_sources)" },
     },
     async run(a, d) {
       const hours = clamp(num(a.hours), 1, 168, 24);
+      const sourceId = str(a.source);
+      if (sourceId) {
+        const repo = await d.repo();
+        const all = await repo.scan({ from: new Date(d.now() - hours * 3_600_000).toISOString() });
+        const q = str(a.query)?.toLowerCase();
+        const events = all
+          .filter((e) => e.sources.some((s) => s.dataSourceId === sourceId) && (!q || `${e.title} ${e.summary}`.toLowerCase().includes(q)))
+          .sort((x, y) => Date.parse(y.timestamp) - Date.parse(x.timestamp))
+          .slice(0, clamp(num(a.limit), 1, 15, 8));
+        return {
+          data: { source: sourceId, window: `last ${hours} h`, count: events.length, events: events.map(compactEvent) },
+          summary: `${events.length} from ${sourceId}`,
+          source: `WorldView event store (${sourceId})`,
+          asOf: latest(events.map((e) => e.updatedAt)),
+          actions: events.slice(0, 5).map(eventAction),
+        };
+      }
       const country = str(a.country) ? d.findCountry(str(a.country)!)?.code : undefined;
       const repo = await d.repo();
       const limit = clamp(num(a.limit), 1, 15, 8);
@@ -557,6 +584,163 @@ export const TOOLS: ToolDef[] = [
         source: "Google News, SEC EDGAR (filings, XBRL, Form 4, 13F), Nasdaq earnings calendar",
         asOf: new Date(d.now()).toISOString(),
         actions: [instrumentAction(t, r.company ?? t)],
+      };
+    },
+  },
+  {
+    name: "insider_trades",
+    description: "Open-market insider buys and sells for a US stock in the last 90 days (SEC Form 4): who, role, date, value.",
+    params: { ticker: { type: "string", description: "US ticker", required: true } },
+    async run(a, d) {
+      const t = (str(a.ticker) ?? "").toUpperCase();
+      const s = await d.insiders(t);
+      if (!s) throw new Error(`No SEC filer for ${t}`);
+      return {
+        data: { ticker: t, buyers: s.buyers, buyValueUsd: s.buyValue, sellers: s.sellers, sellValueUsd: s.sellValue, severalInsidersBuying: s.clusterBuy, trades: s.trades.slice(0, 10).map((x) => ({ date: x.date, who: x.owner, role: x.role, action: x.code === "P" ? "buy" : "sell", shares: x.shares, price: x.price, valueUsd: x.value })) },
+        summary: `${s.buyers} buying, ${s.sellers} selling`,
+        source: "SEC EDGAR Form 4",
+        asOf: s.asOf,
+        actions: [instrumentAction(t, t)],
+      };
+    },
+  },
+  {
+    name: "dividends",
+    description: "Dividend history for a stock or ETF: recent payments, trailing-12-month total, yield, payments per year.",
+    params: { symbol: { type: "string", description: "Ticker", required: true } },
+    async run(a, d) {
+      const s = (str(a.symbol) ?? "").toUpperCase();
+      const v = await d.dividends(s);
+      return { data: { ...v, payments: v.payments.slice(-8) }, summary: v.yieldPct !== null ? `yield ${v.yieldPct.toFixed(2)}%` : `${v.payments.length} payments`, source: "Yahoo Finance (unofficial)", asOf: new Date(d.now()).toISOString(), actions: [instrumentAction(s, s)] };
+    },
+  },
+  {
+    name: "short_volume",
+    description: "Daily short-sale volume share for a US stock over recent sessions (FINRA). High share = more short selling that day (not short interest).",
+    params: { symbol: { type: "string", description: "US ticker", required: true } },
+    async run(a, d) {
+      const s = (str(a.symbol) ?? "").toUpperCase();
+      const v = await d.shortVolume(s);
+      return { data: v, summary: `${v.days.length} sessions`, source: v.source, asOf: v.days.at(-1) ? String((v.days.at(-1) as { date?: string }).date ?? "") || null : null, actions: [instrumentAction(s, s)] };
+    },
+  },
+  {
+    name: "earnings_calendar",
+    description: "Upcoming earnings reports for the next few trading days (Nasdaq calendar): who reports, before open or after close, EPS forecast. Give symbols to filter, otherwise the largest companies are listed.",
+    params: {
+      days: { type: "integer", description: "Trading days ahead (default 5, max 10)" },
+      symbols: { type: "string[]", description: "Only these tickers" },
+    },
+    async run(a, d) {
+      const days = clamp(num(a.days), 1, 10, 5);
+      const want = new Set(((a.symbols as string[] | undefined) ?? []).map((s) => s.toUpperCase()));
+      const dates: string[] = [];
+      const t = new Date(d.now());
+      while (dates.length < days) {
+        t.setUTCDate(t.getUTCDate() + 1);
+        if (t.getUTCDay() !== 0 && t.getUTCDay() !== 6) dates.push(t.toISOString().slice(0, 10));
+      }
+      const rows = (await Promise.all(dates.map((x) => d.earningsOn(x).catch(() => [])))).flat();
+      const pick = want.size ? rows.filter((r) => want.has(r.symbol)) : [...rows].sort((x, y) => (y.marketCap ?? 0) - (x.marketCap ?? 0)).slice(0, 20);
+      return {
+        data: { window: `${dates[0]} to ${dates.at(-1)}`, totalReporting: rows.length, reports: pick.map((r) => ({ date: r.date, symbol: r.symbol, name: r.name, when: r.when, epsForecast: r.epsForecast, yearAgoEps: r.lastYearEps })) },
+        summary: `${pick.length} reports`,
+        source: "Nasdaq earnings calendar (unofficial)",
+        asOf: new Date(d.now()).toISOString(),
+        actions: pick.slice(0, 5).map((r) => instrumentAction(r.symbol, r.name)),
+      };
+    },
+  },
+  {
+    name: "news_headlines",
+    description: "Latest news headlines on any topic or company from Google News (last few days): use to find WHY something happened.",
+    params: {
+      query: { type: "string", description: "Topic, e.g. 'Valero downgrade', 'Strait of Hormuz tanker'", required: true },
+      days: { type: "integer", description: "Look back days (default 3, max 7)" },
+    },
+    async run(a, d) {
+      const q = str(a.query) ?? "";
+      const h = await d.headlines(q, clamp(num(a.days), 1, 7, 3));
+      return {
+        data: { query: q, headlines: h.map((x) => ({ title: x.title, source: x.source, published: x.published?.slice(0, 16) ?? null })) },
+        summary: `${h.length} headlines`,
+        source: "Google News RSS (headlines only)",
+        asOf: h[0]?.published ?? null,
+        links: h.slice(0, 5).map((x) => ({ label: x.source, url: x.url })),
+      };
+    },
+  },
+  {
+    name: "daily_briefing",
+    description: "Today's world briefing built from all events: top developments, what changed vs yesterday, sections by theme, what to watch.",
+    params: {},
+    async run(_a, d) {
+      const { buildDailyBriefing } = await import("@/lib/briefing");
+      const repo = await d.repo();
+      const b = buildDailyBriefing(await repo.scan({ from: new Date(d.now() - 2 * 86_400_000).toISOString() }), d.now());
+      const item = (i: { change: string; event: { title: string; countryName: string | null; importanceScore: number } }) => `${i.change}: ${i.event.title}${i.event.countryName ? ` (${i.event.countryName})` : ""}`;
+      return {
+        data: {
+          top: b.topDevelopments.slice(0, 8).map(item),
+          changes: b.changes,
+          busiestCategories: b.comparison.sort((x, y) => y.today - x.today).slice(0, 6).map((c) => `${c.label}: ${c.today} today vs ${c.yesterday} yesterday`),
+          sections: b.sections.slice(0, 6).map((s) => ({ title: s.title, items: s.items.slice(0, 3).map(item) })),
+          whatToWatch: b.whatToWatch.slice(0, 5).map(item),
+        },
+        summary: `${b.topDevelopments.length} top developments`,
+        source: "WorldView daily briefing (all sources)",
+        asOf: b.generatedAt,
+      };
+    },
+  },
+  {
+    name: "live_tracking",
+    description: "Live positions from the map: ships (by AIS type: tankers, cargo…) or aircraft (incl. emergencies) in an area; military aircraft worldwide or in an area; the ISS; tracked satellites; aurora forecast.",
+    params: {
+      kind: { type: "string", description: "What to track", enum: ["ships", "aircraft", "military_aircraft", "iss", "satellites", "aurora"], required: true },
+      place: { type: "string", description: "Place name, e.g. 'Strait of Hormuz', 'Taiwan', 'London' (needed for ships/aircraft)" },
+      radius_km: { type: "number", description: "Override the search radius (km)" },
+    },
+    async run(a, d) {
+      const kind = str(a.kind) as import("./world-data").TrackKind;
+      const placeName = str(a.place);
+      let place = placeName ? d.resolvePlace(placeName) : null;
+      if (placeName && !place) throw new Error(`Unknown place "${placeName}"`);
+      if (place && num(a.radius_km)) place = { ...place, radiusKm: clamp(num(a.radius_km), 10, 2000, place.radiusKm) };
+      const data = await d.tracking(kind, place);
+      return { data: data as object, summary: `${kind}${place ? ` near ${place.name}` : ""}`, source: "Live map layers (AIS, ADS-B via adsb.lol, wheretheiss.at, CelesTrak, NOAA SWPC)", asOf: (data as { observedAt?: string }).observedAt ?? null };
+    },
+  },
+  {
+    name: "infrastructure_near",
+    description: "Critical infrastructure near a place: military bases, ports, power plants (incl. nuclear), oil/gas pipelines, undersea cables and landing points, data centers, LNG terminals — counts and the nearest ones.",
+    params: {
+      place: { type: "string", description: "Place name, e.g. 'Taiwan', 'Rotterdam', 'Strait of Hormuz'", required: true },
+      types: { type: "string[]", description: "Subset of: bases, ports, power, nuclear, pipelines, cables, landing, datacenters, lng (default all)" },
+      radius_km: { type: "number", description: "Radius in km (default depends on the place)" },
+    },
+    async run(a, d) {
+      const name = str(a.place) ?? "";
+      const place = d.resolvePlace(name);
+      if (!place) throw new Error(`Unknown place "${name}"`);
+      const all = ["bases", "ports", "power", "nuclear", "pipelines", "cables", "landing", "datacenters", "lng"] as const;
+      const kinds = ((a.types as string[] | undefined) ?? []).filter((k): k is (typeof all)[number] => (all as readonly string[]).includes(k));
+      const radius = clamp(num(a.radius_km), 10, 2000, place.radiusKm);
+      const data = await d.infraNear(place.lat, place.lon, radius, kinds.length ? kinds : [...all]);
+      return { data: { place: place.name, radiusKm: radius, ...(data as object) }, summary: `infrastructure within ${radius} km of ${place.name}`, source: "OpenStreetMap (ODbL), WRI Global Power Plant Database, NGA World Port Index", asOf: null };
+    },
+  },
+  {
+    name: "data_sources",
+    description: "Every data source WorldView pulls from, with its category and whether it's working right now. Use to answer what data exists, or to find a source id for search_events.",
+    params: {},
+    async run(_a, d) {
+      const s = await d.sourceHealth();
+      return {
+        data: { count: s.length, online: s.filter((x) => x.status === "ONLINE").length, sources: s.map((x) => ({ id: x.id, name: x.name, status: x.status, categories: x.categories.join(",") })) },
+        summary: `${s.length} sources`,
+        source: "WorldView source registry",
+        asOf: new Date(d.now()).toISOString(),
       };
     },
   },

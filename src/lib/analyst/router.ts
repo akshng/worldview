@@ -8,6 +8,8 @@ import type { PlannedCall } from "./protocol";
 export interface RouteContext {
   watchlist: string[];
   findCountry?: (name: string) => { code: string; name: string } | null;
+  /** Name → point, for live tracking and infrastructure questions. */
+  resolvePlace?: (name: string) => { name: string } | null;
 }
 
 export const MAX_TOOL_CALLS = 6;
@@ -71,8 +73,47 @@ const TOPICS: Topic[] = [
   { re: /\b(trend\w*|searching|viral)\b/i, calls: [{ tool: "trends", args: {} }] },
   { re: /\b(war|conflict|attack\w*|strikes?|military|missiles?|geopolitic\w*)\b/i, symbols: ["GC=F", "^VIX"], calls: [{ tool: "search_events", args: { category: "CONFLICT", hours: 48 } }, { tool: "exposure", args: {} }] },
   { re: /\b(earthquake|hurricane|typhoon|cyclone|flood|wildfire|disaster)\b/i, calls: [{ tool: "search_events", args: { category: "DISASTER", hours: 72 } }, { tool: "exposure", args: {} }] },
+  // Sources added for the analyst to reach every kind of data in the app.
+  { re: /\b(central banks?|fed|fomc|ecb|bank of (england|japan|canada)|boe|boj|rate (decision|cut|hike)s?)\b/i, calls: [{ tool: "search_events", args: { source: "central-banks", hours: 168 } }] },
+  { re: /\bsanction\w*\b/i, calls: [{ tool: "search_events", args: { source: "ofac-sanctions", hours: 168 } }, { tool: "search_events", args: { source: "sanctions-news", hours: 168 } }] },
+  { re: /\b(outages?|is (\w+ )?down|aws|azure|gcp|google cloud|cloudflare|status pages?|service disruptions?)\b/i, calls: [{ tool: "search_events", args: { source: "cloud-status", hours: 48 } }, { tool: "search_events", args: { source: "app-status", hours: 48 } }] },
+  { re: /\brecall(s|ed)?\b/i, calls: [{ tool: "search_events", args: { source: "fda-recalls", hours: 168 } }, { tool: "search_events", args: { source: "cpsc-recalls", hours: 168 } }] },
+  { re: /\b(data breach\w*|breach\w*|leaked|pwned)\b/i, calls: [{ tool: "search_events", args: { source: "hibp-breaches", hours: 168 } }, { tool: "cyber", args: {} }] },
+  { re: /\b(united nations|security council|general assembly|secretary-general)\b/i, calls: [{ tool: "search_events", args: { source: "un-press", hours: 168 } }] },
+  { re: /\b(briefing|catch me up|what('s| is) happening|what happened today|summary of (today|the day)|today in the world)\b/i, calls: [{ tool: "daily_briefing", args: {} }] },
+  { re: /\b(data sources?|what data|which sources|where does (the|your) data)\b/i, calls: [{ tool: "data_sources", args: {} }] },
+  { re: /\b(iss|space station)\b/i, calls: [{ tool: "live_tracking", args: { kind: "iss" } }] },
+  { re: /\b(aurora|northern lights|southern lights)\b/i, calls: [{ tool: "live_tracking", args: { kind: "aurora" } }, { tool: "planet", args: {} }] },
+  { re: /\bsatellites?\b/i, calls: [{ tool: "live_tracking", args: { kind: "satellites" } }] },
+  { re: /\b(earnings (calendar|this week|next week|tomorrow|today|season)|who reports|reports? earnings|when (does|do|is) \w+ (report|reporting)|upcoming earnings)\b/i, calls: [{ tool: "earnings_calendar", args: { days: 5 } }] },
   { re: /\b(fx|currenc\w*|dollar|euro|yen|yuan|forex)\b/i, symbols: ["DX-Y.NYB", "EURUSD=X", "USDJPY=X"], calls: [{ tool: "cftc_positioning", args: { market: "dollar" } }] },
 ];
+
+const SHIP_WORDS = /\b(ships?|vessels?|tankers?|cargo ships?|shipping traffic|boats?|fleet)\b/i;
+const AIR_WORDS = /\b(planes?|aircraft|flights?|air traffic|jets?)\b/i;
+const MIL_AIR_WORDS = /\bmilitary (aircraft|jets?|planes?|flights?)\b/i;
+const INFRA_WORDS = /\b(infrastructure|undersea cables?|cables?|pipelines?|ports?|military bases?|bases|nuclear (plants?|reactors?)|power plants?|data cent(er|re)s?|lng terminals?)\b/i;
+const INFRA_TYPES: Array<[RegExp, string]> = [
+  [/\bcables?\b/i, "cables"], [/\bpipelines?\b/i, "pipelines"], [/\bports?\b/i, "ports"], [/\bbases?\b/i, "bases"],
+  [/\bnuclear\b/i, "nuclear"], [/\bpower plants?\b/i, "power"], [/\bdata cent(er|re)s?\b/i, "datacenters"], [/\blng\b/i, "lng"],
+];
+const PLACE_HINT = /\b(?:near|in|over|around|off|at|through|by)\s+(?:the\s+)?([A-Za-z][\w'-]*(?:\s+(?:of|el|al)?\s*[A-Za-z][\w'-]*){0,3})/g;
+const KNOWN_WATERS = /\b(hormuz|suez|malacca|bab[ -]el[ -]mandeb|bosporus|panama canal|red sea|taiwan strait|south china sea|black sea|english channel|gibraltar)\b/i;
+
+/** The place a question is about, if the app can locate it. */
+export function detectPlace(question: string, ctx: RouteContext): string | null {
+  if (!ctx.resolvePlace) return null;
+  const tries: string[] = [];
+  const w = question.match(KNOWN_WATERS);
+  if (w) tries.push(w[0]);
+  for (const m of question.matchAll(PLACE_HINT)) {
+    const words = m[1].replace(/[?.!,]+$/, "").split(/\s+/);
+    for (let n = words.length; n >= 1; n--) tries.push(words.slice(0, n).join(" "));
+  }
+  for (const c of detectCountries(question, ctx.findCountry)) tries.push(c.name);
+  for (const t of tries) if (t.length >= 3 && ctx.resolvePlace(t)) return t;
+  return null;
+}
 
 const MACRO_WORDS = /\b(market|markets|stocks|equities|s&p|nasdaq|dow|risk|sentiment|today|overview|rundown|wrap)\b/i;
 /** "What should I buy?", picks, opportunities → the stock-ideas screen. */
@@ -130,6 +171,16 @@ export function routeQuestion(question: string, ctx: RouteContext): PlannedCall[
   if ((BUY_WORDS.test(question) || RESEARCH_WORDS.test(question)) && equityTickers.length)
     for (const t of equityTickers.slice(0, 2)) push(plan, { tool: "research_stock", args: { ticker: t } });
 
+  // 0b. Map questions: what's moving where, and what infrastructure is there.
+  const place = SHIP_WORDS.test(question) || AIR_WORDS.test(question) || INFRA_WORDS.test(question) ? detectPlace(question, ctx) : null;
+  if (place && SHIP_WORDS.test(question)) push(plan, { tool: "live_tracking", args: { kind: "ships", place } });
+  if (MIL_AIR_WORDS.test(question)) push(plan, { tool: "live_tracking", args: { kind: "military_aircraft", ...(place ? { place } : {}) } });
+  else if (place && AIR_WORDS.test(question)) push(plan, { tool: "live_tracking", args: { kind: "aircraft", place } });
+  if (place && INFRA_WORDS.test(question)) {
+    const types = INFRA_TYPES.filter(([re]) => re.test(question)).map(([, t]) => t);
+    push(plan, { tool: "infrastructure_near", args: { place, ...(types.length ? { types } : {}) } });
+  }
+
   // 1. Quotes first: tickers, topic instruments, watchlist.
   symbols.push(...tickers.slice(0, 5));
   for (const t of topics) symbols.push(...(t.symbols ?? []));
@@ -146,6 +197,10 @@ export function routeQuestion(question: string, ctx: RouteContext): PlannedCall[
     if (/\b(10-?k|annual report|risks?|filing)\b/i.test(question) && equityLike) push(plan, { tool: "annual_report_analysis", args: { ticker: t } });
     if (/\b(funds?|holders?|13f|owns?|institution\w*)\b/i.test(question)) push(plan, { tool: "held_by", args: { ticker: t } });
     if (/\b(earnings|results)\b/i.test(question)) push(plan, { tool: "earnings_releases", args: { query: t } });
+    if (/\b(insiders?|form 4|executives? (buy|sell)\w*)\b/i.test(question) && equityLike) push(plan, { tool: "insider_trades", args: { ticker: t } });
+    if (/\bdividends?\b|\byield\b/i.test(question)) push(plan, { tool: "dividends", args: { symbol: t } });
+    if (/\bshort(s|ing| sell\w*| volume| interest)?\b/i.test(question) && equityLike) push(plan, { tool: "short_volume", args: { symbol: t } });
+    if (/\b(why|what happened|news|headlines?)\b/i.test(question)) push(plan, { tool: "news_headlines", args: { query: `${t} stock` } });
     push(plan, { tool: "search_events", args: { query: t, hours: 168 } });
   }
 
@@ -162,6 +217,12 @@ export function routeQuestion(question: string, ctx: RouteContext): PlannedCall[
   for (const c of detectCountries(question, ctx.findCountry)) {
     push(plan, { tool: "search_events", args: { country: c.code, hours: 72 } });
     if (/\b(economy|gdp|profile|inflation|debt|macro)\b/i.test(question)) push(plan, { tool: "country_profile", args: { country: c.code } });
+  }
+
+  // 5b. "Why did …" / news about a topic without a ticker: search the news.
+  if (!tickers.length && /\b(why (did|is|are|has|have)|what happened (to|with|in)|news (on|about)|headlines? (on|about))\b/i.test(question)) {
+    const topic = question.replace(/\b(why (did|is|are|has|have)|what happened (to|with|in)|news (on|about)|headlines? (on|about))\b/gi, "").replace(/[?!.]/g, "").trim();
+    if (topic.length >= 3) push(plan, { tool: "news_headlines", args: { query: topic.slice(0, 80) } });
   }
 
   // 6. General market questions or nothing matched: the snapshot and event exposure.

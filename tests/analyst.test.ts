@@ -86,6 +86,15 @@ function mockDeps(over: Partial<ToolDeps> = {}): ToolDeps {
     trackedManagers: [{ cik: "1067983", label: "Berkshire Hathaway", note: "Warren Buffett" } as never],
     managerHoldings: fail,
     holdersOf: fail,
+    insiders: async (t: string) => ({ ticker: t, cik: "1", days: 90, trades: [{ owner: "DOE JANE", role: "CEO", date: "2026-10-01", code: "P" as const, shares: 1000, price: 50, value: 50000, filed: "2026-10-02", filingUrl: "https://x" }], buyers: 1, buyValue: 50000, sellers: 0, sellValue: 0, clusterBuy: false, asOf: "2026-10-28T00:00:00Z" }),
+    dividends: fail,
+    shortVolume: fail,
+    earningsOn: async (date: string) => (date.endsWith("1") ? [] : [{ symbol: "AAPL", name: "Apple", date, when: "after close" as const, epsForecast: "$1.70", lastYearEps: "$1.60", marketCap: 3e12 }, { symbol: "TINY", name: "Tiny", date, when: "before open" as const, epsForecast: null, lastYearEps: null, marketCap: 1e8 }]),
+    headlines: async (topic: string) => [{ title: `${topic} headline`, source: "Reuters", published: "2026-10-28T10:00:00.000Z", url: "https://news.google.com/x" }],
+    resolvePlace: (name: string) => (/hormuz/i.test(name) ? { name: "Strait of Hormuz", lat: 26.5, lon: 56.4, radiusKm: 150 } : null),
+    infraNear: async () => ({ ports: { total: 2, nearest: [{ name: "Bandar Abbas", km: 40 }] } }),
+    tracking: async (kind: string, place: { name: string } | null) => ({ kind, area: place?.name ?? "worldwide", vessels: 12, observedAt: "2026-10-28T00:00:00Z" }),
+    sourceHealth: async () => [{ id: "central-banks", name: "Central banks", status: "ONLINE", categories: ["MARKETS"], lastSuccessAt: null, description: "" }],
     scanSetups: async () => ({ scanned: 2, setups: [{ symbol: "META", name: "Meta", score: 3, signals: ["Pullback in an uptrend"], risks: [], metrics: { price: 640, change1d: -1, change5d: -3, rsi14: 36, sma50: 690, sma200: 610, high52: 775, low52: 480, fromHigh: -17.4, fromLow: 33 } }] }),
     researchStock: async (t: string) => ({ ticker: t, company: "Meta Platforms, Inc.", industry: "Services-Computer Programming", headlines: [{ title: "Meta slides after capex guidance", source: "Reuters", published: "2026-10-27" }], recentFilings: [{ form: "8-K", filed: "2026-10-27", what: "Results of operations" }], earnings: "Reported earnings on 2026-10-27 (after close).", fundamentals: [{ metric: "Revenue", latest: "$51.2B", vsYearAgo: "+22% vs a year earlier", period: "Q3 2026" }], insiders: { buyers: 0, buyValue: 0, sellers: 3, sellValue: 5e7, notable: [] }, trackedFundsHolding: 26, upcomingEarnings: null, take: { likelyCause: 'Reported cause: "Meta slides after capex guidance"', take: "Wait" as const, reason: "r" } }),
     setupsTrackRecord: async () => ({ from: "2025-08-14", to: "2026-10-22", signals: { n: 178, horizons: [{ days: 5, n: 176, avgExcess: 0.43, beatRate: 0.53, avgReturn: 1 }, { days: 21, n: 160, avgExcess: -0.27, beatRate: 0.44, avgReturn: 1.8 }] }, baseline: { n: 4800, horizons: [{ days: 21, n: 4480, avgExcess: 0.19, beatRate: 0.47, avgReturn: 1.7 }] } }),
@@ -449,5 +458,52 @@ describe("analyst: stock-idea helpers", () => {
     expect(note).toMatch(/VLO, MPC are all in petroleum refining.*one bet, not 2/);
     expect(note).not.toContain("GWRE");
     expect(sameDayDrops([mk("VLO", -9), mk("META", -1)])).toBeNull();
+  });
+});
+
+
+describe("analyst: whole-app data tools", () => {
+  it("lists insider trades", async () => {
+    const r = await run("insider_trades", { ticker: "XYZ" });
+    expect((r.data as { trades: Array<{ action: string }> }).trades[0].action).toBe("buy");
+  });
+  it("lists the biggest upcoming earnings, or only the asked symbols", async () => {
+    const all = (await run("earnings_calendar", { days: 2 })).data as { reports: Array<{ symbol: string }> };
+    expect(all.reports[0].symbol).toBe("AAPL");
+    const only = (await run("earnings_calendar", { days: 2, symbols: ["tiny"] })).data as { reports: Array<{ symbol: string }> };
+    expect(only.reports.every((r) => r.symbol === "TINY")).toBe(true);
+  });
+  it("tracks ships near a named place and rejects unknown places", async () => {
+    const r = await run("live_tracking", { kind: "ships", place: "Hormuz" });
+    expect(r.data).toMatchObject({ area: "Strait of Hormuz", vessels: 12 });
+    await expect(run("live_tracking", { kind: "ships", place: "Atlantis" })).rejects.toThrow(/Unknown place/);
+  });
+  it("finds infrastructure near a place and lists data sources", async () => {
+    expect((await run("infrastructure_near", { place: "Strait of Hormuz" })).data).toMatchObject({ place: "Strait of Hormuz", ports: { total: 2 } });
+    expect((await run("data_sources", {})).data).toMatchObject({ count: 1, online: 1 });
+  });
+});
+
+describe("analyst: routing to the whole app's data", () => {
+  const ctx = { watchlist: [], resolvePlace: (n: string) => (/hormuz|taiwan/i.test(n) ? { name: n } : null), findCountry: (s: string) => (/taiwan/i.test(s) ? { code: "TW", name: "Taiwan" } : null) };
+  const tools = (q: string) => routeQuestion(q, ctx).map((c) => `${c.tool}${c.args.kind ? `:${c.args.kind}` : ""}${c.args.source ? `:${c.args.source}` : ""}`);
+  it("tracks ships and infrastructure at a named place", () => {
+    expect(tools("how many tankers are in the Strait of Hormuz right now")).toContain("live_tracking:ships");
+    const plan = routeQuestion("what undersea cables and ports are near Taiwan?", ctx);
+    expect(plan.find((c) => c.tool === "infrastructure_near")?.args).toMatchObject({ place: "Taiwan", types: ["cables", "ports"] });
+  });
+  it("reaches the new event sources", () => {
+    expect(tools("any sanctions this week?")).toContain("search_events:ofac-sanctions");
+    expect(tools("is AWS having an outage")).toContain("search_events:cloud-status");
+    expect(tools("what did the ECB decide")).toContain("search_events:central-banks");
+    expect(tools("catch me up on today")).toContain("daily_briefing");
+  });
+  it("gets insider, dividend and short data for a ticker", () => {
+    const t = tools("are insiders buying NVDA and what is its dividend yield");
+    expect(t).toContain("insider_trades");
+    expect(t).toContain("dividends");
+  });
+  it("searches the news for 'why did …' questions", () => {
+    expect(tools("why did oil spike today")).toContain("news_headlines");
   });
 });

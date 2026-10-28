@@ -128,7 +128,7 @@ export async function runAnalyst(req: AnalystRequest, env: AnalystEnv): Promise<
   let text: string;
   if (mode === "native") text = await runNative(env.llm as NativeLLM);
   else if (mode === "agent") text = await runAgent(env.llm as JsonLLM);
-  else text = await runRouted(req.plan ?? routeQuestion(question, { watchlist: req.watchlist, findCountry: env.deps.findCountry }));
+  else text = await runRouted(req.plan ?? routeQuestion(question, { watchlist: req.watchlist, findCountry: env.deps.findCountry, resolvePlace: env.deps.resolvePlace }));
 
   const final = finalizeAnswer(text, citations);
   env.emit({ type: "answer", text: final, citations, disclaimer: ANALYST_DISCLAIMER, ms: now() - started, toolCalls: executed });
@@ -181,7 +181,7 @@ export async function runAnalyst(req: AnalystRequest, env: AnalystEnv): Promise<
         if (!calls.length && round === 0) {
           // The model wanted to answer without data: fall back to routing.
           env.emit({ type: "status", text: "Model chose no tools; routing by keywords." });
-          calls = routeQuestion(question, { watchlist: req.watchlist, findCountry: env.deps.findCountry }).slice(0, max - executed);
+          calls = routeQuestion(question, { watchlist: req.watchlist, findCountry: env.deps.findCountry, resolvePlace: env.deps.resolvePlace }).slice(0, max - executed);
         }
         if (!calls.length) break;
         const blocks: string[] = [];

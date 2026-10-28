@@ -1,4 +1,5 @@
 /** Real implementations behind the analyst's tools (server only). */
+import { resolvePlace } from "./world-data";
 import "server-only";
 import { getRepository } from "@/lib/server/context";
 import { changeSince, getHistory, getMarketSnapshot, getQuote, getYieldCurve } from "@/lib/finance/service";
@@ -58,6 +59,15 @@ export const realDeps: ToolDeps = {
   managerHoldings,
   holdersOf,
   scanSetups: async (opts) => (await import("@/lib/finance/setups-service")).scanSetups(opts),
+  insiders: async (t) => (await import("@/lib/finance/insiders-service")).insiderActivity(t),
+  dividends: async (s) => (await import("@/lib/finance/dividends")).getDividends(s),
+  shortVolume: async (s) => (await import("@/lib/finance/short-volume")).getShortVolume(s),
+  earningsOn: async (date) => (await import("@/lib/finance/earnings-calendar")).earningsOn(date),
+  headlines: async (topic, days) => (await import("@/lib/finance/stock-news")).newsHeadlines(topic, days),
+  resolvePlace: (name) => resolvePlace(name),
+  infraNear: async (lat, lon, r, kinds) => (await import("./world-data")).infraNear(lat, lon, r, kinds),
+  tracking: async (kind, place) => (await import("./world-data")).tracking(kind, place),
+  sourceHealth: async () => (await import("@/lib/server/context")).getSourceHealth(),
   researchStock: async (t, name) => (await import("@/lib/finance/stock-research")).researchStock(t, name),
   setupsTrackRecord: async () => (await import("@/lib/finance/setups-score-service")).backtestSetups(),
   getEarningsReleases: () => getEarningsReleases(),
