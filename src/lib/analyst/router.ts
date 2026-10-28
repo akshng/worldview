@@ -215,6 +215,8 @@ export function routeQuestion(question: string, ctx: RouteContext): PlannedCall[
 
   // 5. Countries.
   for (const c of detectCountries(question, ctx.findCountry)) {
+    // "protests in Serbia": the headlines say what's actually happening; events add the map's view.
+    if (EVENT_WORDS.test(question)) push(plan, { tool: "news_headlines", args: { query: searchTopic(question) || c.name } });
     push(plan, { tool: "search_events", args: { country: c.code, hours: 72 } });
     if (/\b(economy|gdp|profile|inflation|debt|macro)\b/i.test(question)) push(plan, { tool: "country_profile", args: { country: c.code } });
   }
@@ -225,14 +227,46 @@ export function routeQuestion(question: string, ctx: RouteContext): PlannedCall[
     if (topic.length >= 3) push(plan, { tool: "news_headlines", args: { query: topic.slice(0, 80) } });
   }
 
-  // 6. General market questions or nothing matched: the snapshot and event exposure.
+  // 6. General market questions: the snapshot and event exposure.
   //    (A buy question already has its answer from stock_ideas; skip the big snapshot.)
-  if ((MACRO_WORDS.test(question) && !wantsIdeas) || plan.length === 0) {
+  if (MACRO_WORDS.test(question) && !wantsIdeas && !isKnowledgeQuestion(question)) {
     push(plan, { tool: "market_snapshot", args: {} });
     push(plan, { tool: "exposure", args: {} });
   }
-  if (plan.length === 0) push(plan, { tool: "search_events", args: { query: question.slice(0, 80) } });
+  // 7. Nothing matched. An explanation/definition/how-to question needs no data (the model
+  //    answers from general knowledge); anything else is searched in the news and the event store.
+  if (plan.length === 0 && !isKnowledgeQuestion(question) && !isChitChat(question)) {
+    const topic = searchTopic(question);
+    if (topic) {
+      push(plan, { tool: "news_headlines", args: { query: topic } });
+      push(plan, { tool: "search_events", args: { query: topic, hours: 168 } });
+    }
+  }
   return plan.slice(0, MAX_TOOL_CALLS);
+}
+
+const NOW_WORDS = /\b(today|now|right now|currently|current|latest|this (week|month|morning)|tonight|yesterday|price|trading at|live|recent(ly)?|breaking|so far)\b/i;
+const KNOWLEDGE_START = /^\s*(what (is|are|was|were|does|do)( an?| the)?|what'?s (an?|the)|explain|define|definition|meaning of|how (does|do|did|is|are|can|would|should)|how to|why (do|does|is|are|would|did .* (happen|start))|difference between|teach me|help me understand|who was|when (was|were|did)|what happens (if|when)|can you explain|eli5|summari[sz]e the history)/i;
+
+/** Background/explanations answered from general knowledge (no live data needed). */
+const EVENT_WORDS = /\b(protests?|war|fighting|attacks?|elections?|strikes?|crisis|outbreak|earthquake|storm|hurricane|ceasefire|talks|summit|coup|sanctions?|tariffs? on|deal between|scandal|lawsuit|shooting|explosion|fire in)\b/i;
+
+export function isKnowledgeQuestion(q: string): boolean {
+  return KNOWLEDGE_START.test(q) && !NOW_WORDS.test(q) && !EVENT_WORDS.test(q) && !detectTickers(q).filter((t) => !/[=^]/.test(t)).length;
+}
+
+export function isChitChat(q: string): boolean {
+  return /^\s*(hi|hey|hello|yo|thanks|thank you|ty|ok(ay)?|cool|nice|lol|who are you|what can you do|help)\b[\s!.?]*$/i.test(q);
+}
+
+/** The subject of a free-form question, for a news/event search. */
+export function searchTopic(q: string): string {
+  return q
+    .replace(/[?!.]/g, " ")
+    .replace(/\b(what('s| is| are)?|whats|tell me|give me|any|anything|about|the|latest|news|on|with|happening|going on|right now|today|currently|is there|are there|can you|please|me|update|updates)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 80);
 }
 
 /** Plan for the watchlist desk note. */

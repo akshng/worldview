@@ -286,8 +286,9 @@ describe("analyst: deterministic routing", () => {
     expect(plan[0]).toEqual({ tool: "get_quote", args: { symbols: ["AAPL", "GC=F"] } });
     expect(plan).toContainEqual({ tool: "exposure", args: { symbols: ["AAPL", "GC=F"] } });
   });
-  it("always returns something and never more than the cap", () => {
-    expect(routeQuestion("hello", { watchlist: [] }).length).toBeGreaterThan(0);
+  it("looks something up for any real question, nothing for small talk, and never more than the cap", () => {
+    expect(routeQuestion("hello", { watchlist: [] })).toEqual([]);
+    expect(routeQuestion("tell me about the protests in Serbia", { watchlist: [] }).length).toBeGreaterThan(0);
     expect(routeQuestion("oil gold wheat inflation jobs fed crypto war NVDA AAPL my watchlist", { watchlist: ["MSFT"] }).length).toBe(MAX_TOOL_CALLS);
     expect(deskNotePlan(["NVDA", "BTC-USD"]).length).toBeLessThanOrEqual(MAX_TOOL_CALLS);
   });
@@ -505,5 +506,20 @@ describe("analyst: routing to the whole app's data", () => {
   });
   it("searches the news for 'why did …' questions", () => {
     expect(tools("why did oil spike today")).toContain("news_headlines");
+  });
+});
+
+describe("analyst: any question", () => {
+  it("answers explanations from general knowledge without tools", async () => {
+    const { isKnowledgeQuestion } = await import("@/lib/analyst/router");
+    expect(routeQuestion("what is a P/E ratio?", { watchlist: [] })).toEqual([]);
+    expect(routeQuestion("explain how tariffs affect stock prices", { watchlist: [] })).toEqual([]);
+    expect(isKnowledgeQuestion("what is the price of gold today")).toBe(false);
+    expect(routeQuestion("hi", { watchlist: [] })).toEqual([]);
+  });
+  it("searches news and events for anything current it has no special tool for", () => {
+    const plan = routeQuestion("what's going on with the Formula 1 season", { watchlist: [] });
+    expect(plan.map((c) => c.tool)).toEqual(["news_headlines", "search_events"]);
+    expect(String(plan[0].args.query)).toMatch(/Formula 1 season/);
   });
 });

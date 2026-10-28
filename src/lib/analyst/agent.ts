@@ -12,7 +12,7 @@ import { bestIdea, bestPrompt, bottomLinePrompt, ideasHead, ideasTail, noBestLin
 import { capJson } from "./cap";
 import { finalizeAnswer, makeCitation } from "./citations";
 import type { AnalystLLM, JsonLLM, NativeHistoryItem, NativeLLM } from "./llm";
-import { ANALYST_SYSTEM, WRITER_SYSTEM, localSystem, morePrompt, planPrompt, resultBlock, routedPrompt, toolResultsPrompt, writePrompt } from "./prompts";
+import { knowledgePrompt, ANALYST_SYSTEM, WRITER_SYSTEM, localSystem, morePrompt, planPrompt, resultBlock, routedPrompt, toolResultsPrompt, writePrompt } from "./prompts";
 import { parseStep, stepJsonSchema, type PlannedCall } from "./protocol";
 import { MAX_TOOL_CALLS, routeQuestion } from "./router";
 import { TOOLS, describeCall, toolCatalog, validateArgs, type ToolDef, type ToolDeps } from "./tools";
@@ -224,6 +224,13 @@ export async function runAnalyst(req: AnalystRequest, env: AnalystEnv): Promise<
 
   async function runRouted(plan: PlannedCall[]): Promise<string> {
     const calls = plan.slice(0, max);
+    // Nothing to look up (an explanation, a definition, small talk): answer from general knowledge.
+    if (!calls.length) {
+      env.emit({ type: "status", text: "Answering from general knowledge…" });
+      const prompt = knowledgePrompt(question, historyContext(req.messages));
+      if (env.llm.kind === "native") return (await env.llm.turn({ system: WRITER_SYSTEM, history: [{ role: "user", text: prompt }], tools, allowTools: false })).text;
+      return env.llm.session(WRITER_SYSTEM, (s) => write(s, prompt));
+    }
     const cap = env.llm.kind === "native" ? NATIVE_RESULT_CHARS : Math.min(2_600, Math.floor(LOCAL_ROUTED_BUDGET / Math.max(1, calls.length)));
     // Stock ideas ARE the answer to a buy question: give them room so nothing is cut mid-sentence.
     const capFor = (tool: string) => (env.llm.kind === "native" ? cap : tool === "stock_ideas" ? 9_000 : tool === "research_stock" ? 3_500 : cap);
