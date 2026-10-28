@@ -1,5 +1,6 @@
 "use client";
 import clsx from "clsx";
+import { usePageMode } from "@/components/layout/page-mode";
 import { useEffect, useState } from "react";
 import { api, type CountryResponse } from "@/lib/client/api";
 import { useUI } from "@/lib/store/ui";
@@ -64,6 +65,7 @@ function CountrySearches({ code, name }: { code: string; name: string }) {
 }
 
 export function CountryPanel() {
+  const page = usePageMode();
   const code = useUI((s) => s.selectedCountry);
   const version = useData((s) => s.version);
   const [data, setData] = useState<CountryResponse | null>(null);
@@ -98,7 +100,7 @@ export function CountryPanel() {
   const list = d ? (tab === "top" ? d.topEvents : d.recentEvents) : [];
 
   return (
-    <div className="glass panel-in pointer-events-auto flex max-h-full w-[400px] max-w-[calc(100vw-24px)] flex-col self-start rounded-md shadow-2xl shadow-black/50">
+    <div className={page ? "glass flex w-full max-w-[880px] flex-col self-start rounded-md" : "glass panel-in pointer-events-auto flex max-h-full w-[400px] max-w-[calc(100vw-24px)] flex-col self-start rounded-md shadow-2xl shadow-black/50"}>
       <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
         <span className="meta text-faint">Country overview</span>
         <button onClick={() => useUI.getState().selectCountry(null)} className="rounded-md p-1.5 text-muted hover:bg-panel-hover hover:text-fg" aria-label="Close country overview" title="Close (Esc)">

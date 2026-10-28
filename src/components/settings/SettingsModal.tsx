@@ -239,6 +239,8 @@ const STATUS_COLOR: Record<string, string> = {
   DISABLED: "var(--text-faint)",
 };
 
+export { Sources as SourcesList };
+
 function Sources() {
   const developer = useUI((s) => s.settings.developerMode);
   const [data, setData] = useState<SourcesResponse | null>(null);

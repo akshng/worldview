@@ -5,7 +5,7 @@
  * bar, and `?event=…`, `?ticker=…`, `?panel=…` on the URL.
  */
 import { useEffect } from "react";
-import { useUI } from "@/lib/store/ui";
+import { APP_VIEWS, useUI, type AppView } from "@/lib/store/ui";
 import { watchBrowserBattery } from "./power";
 
 const PANELS = {
@@ -21,7 +21,7 @@ const PANELS = {
 export type PanelName = keyof typeof PANELS;
 
 function openPanel(name: string) {
-  if (name === "world" || name === "news") return useUI.getState().setView(name);
+  if ((APP_VIEWS as readonly string[]).includes(name) && !(name in PANELS)) return useUI.getState().setView(name as AppView);
   const setter = PANELS[name as PanelName];
   if (setter) (useUI.getState()[setter] as (v: boolean) => void)(true);
 }

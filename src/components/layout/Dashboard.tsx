@@ -12,6 +12,8 @@ import { IMPORTANCE_FILTERS } from "@/lib/categories";
 import { visibleWindow } from "@/lib/time";
 import { NavRail } from "./NavRail";
 import { NewsPage } from "./NewsPage";
+import { CountriesPage } from "./CountriesPage";
+import { SourcesPage } from "./SourcesPage";
 import { PageModeContext } from "./page-mode";
 import { TopBar } from "./TopBar";
 import { Sidebar } from "@/components/sidebar/Sidebar";
@@ -140,6 +142,8 @@ export function Dashboard() {
           <main className="min-w-0 flex-1 overflow-y-auto bg-bg">
             <PageModeContext.Provider value={true}>
               {view === "news" && <NewsPage />}
+              {view === "countries" && <CountriesPage />}
+              {view === "sources" && <SourcesPage />}
               {view === "markets" && <MarketsPanel />}
               {view === "analyst" && <AnalystPanel />}
               {view === "briefing" && <BriefingModal />}

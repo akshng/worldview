@@ -13,7 +13,7 @@ import type { HiresProviderId, SatSourceId } from "@/lib/imagery";
 import { INFRA_LAYER_IDS, type InfraLayerId } from "@/lib/infra/catalog";
 
 
-export const APP_VIEWS = ["world", "news", "markets", "analyst", "briefing", "planet", "energy", "security", "trends"] as const;
+export const APP_VIEWS = ["world", "news", "countries", "markets", "analyst", "briefing", "planet", "energy", "security", "trends", "sources"] as const;
 export type AppView = (typeof APP_VIEWS)[number];
 
 export type MapStyleId = "dark" | "satellite" | "night";
