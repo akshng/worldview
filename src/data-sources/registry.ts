@@ -53,6 +53,13 @@ import { fdaRecallsConnector } from "./fda-recalls";
 import { cpscRecallsConnector } from "./cpsc-recalls";
 import { hibpBreachesConnector } from "./hibp-breaches";
 import { unPressConnector } from "./un-press";
+import { nasdaqHaltsConnector } from "./nasdaq-halts";
+import { secInsiderBuysConnector } from "./sec-insider-buys";
+import { secEnforcementConnector } from "./sec-enforcement";
+import { treasuryAuctionsConnector } from "./treasury-auctions";
+import { ecdcConnector } from "./ecdc";
+import { iaeaConnector } from "./iaea";
+import { volcanicAshConnector } from "./volcanic-ash";
 import { demoConnector } from "./demo";
 
 export const CONNECTORS = [
@@ -75,6 +82,7 @@ export const CONNECTORS = [
   eonetConnector,
   usgsVolcanoConnector,
   jmaVolcanoConnector,
+  volcanicAshConnector,
   cemsConnector,
   firmsConnector,
   nifcConnector,
@@ -94,6 +102,7 @@ export const CONNECTORS = [
   // honest User-Agent, and we don't disguise the client. Re-enable if that changes.
   hibpBreachesConnector,
   whoConnector,
+  ecdcConnector,
   fdaRecallsConnector,
   cpscRecallsConnector,
   cdcTravelConnector,
@@ -104,10 +113,15 @@ export const CONNECTORS = [
   smartravellerConnector,
   federalRegisterConnector,
   unPressConnector,
+  iaeaConnector,
   ofacSanctionsConnector,
   sanctionsNewsConnector,
   centralBanksConnector,
   secConnector,
+  secInsiderBuysConnector,
+  secEnforcementConnector,
+  nasdaqHaltsConnector,
+  treasuryAuctionsConnector,
   fdicFailuresConnector,
   demoConnector,
 ] as unknown as DataSourceConnector<unknown>[];

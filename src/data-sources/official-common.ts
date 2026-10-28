@@ -3,6 +3,7 @@
  * status pages, recalls, …). Feeds are read with the news-rss XML reader; no extra dependency.
  */
 import type { EventSource, SourceAssertion, SourceType } from "@/types/events";
+import { placesInText } from "@/lib/geo/headline-places";
 import { mapLimited, parseFeedXml } from "./news-rss/client";
 import type { RssItem } from "./news-rss/types";
 import { httpGet, type FetchContext } from "./types";
@@ -23,8 +24,26 @@ export const HQ = {
   fda: { lat: 39.0346, lon: -76.9834, name: "U.S. FDA, Silver Spring, MD", country: "US" },
   cpsc: { lat: 38.9847, lon: -77.0947, name: "U.S. CPSC, Bethesda, MD", country: "US" },
   hibp: { lat: -28.0167, lon: 153.4, name: "Have I Been Pwned, Gold Coast, Australia", country: "AU" },
+  sec: { lat: 38.8973, lon: -77.0063, name: "U.S. SEC, Washington, DC", country: "US" },
+  nasdaq: { lat: 40.757, lon: -73.9859, name: "Nasdaq MarketSite, New York", country: "US" },
+  nyse: { lat: 40.7069, lon: -74.0113, name: "New York Stock Exchange, New York", country: "US" },
+  ecdc: { lat: 59.3598, lon: 17.9989, name: "ECDC, Solna (Stockholm)", country: "SE" },
+  iaea: { lat: 48.2349, lon: 16.4162, name: "IAEA, Vienna International Centre", country: "AT" },
 } as const;
 export type Place = { lat: number; lon: number; name: string; country: string };
+
+/**
+ * The place a headline names (a cued mention first), skipping the issuer's own countries.
+ * Returns null when the headline names none — callers then use the issuer's HQ.
+ */
+export function placeInTitle(title: string, avoid: readonly string[] = []): { lat: number; lon: number; precision: "city" | "country"; name: string; country: string } | null {
+  const places = placesInText(title).filter((p) => !avoid.includes(p.country.code));
+  const p = places.find((x) => x.cued) ?? places[0];
+  if (!p) return null;
+  return p.city
+    ? { lat: p.city.lat, lon: p.city.lon, precision: "city", name: `${p.city.name}, ${p.country.name}`, country: p.country.code }
+    : { lat: p.country.label[1], lon: p.country.label[0], precision: "country", name: p.country.name, country: p.country.code };
+}
 
 /** FNV-1a, base 36: a short stable id from a URL or composite key. */
 export function hashId(s: string): string {
@@ -37,6 +56,23 @@ export function isoOrNull(s: string | null | undefined): string | null {
   if (!s) return null;
   const t = Date.parse(s);
   return Number.isNaN(t) ? null : new Date(t).toISOString();
+}
+
+/**
+ * Wall-clock time in an IANA zone → UTC, using the platform time-zone database (handles DST).
+ * Upstream feeds that print local times without an offset (Nasdaq, TreasuryDirect, IAEA) need this.
+ */
+export function zonedToUtc(timeZone: string, y: number, mo: number, d: number, h: number, mi: number, s = 0): Date {
+  const wanted = Date.UTC(y, mo - 1, d, h, mi, s);
+  const fmt = new Intl.DateTimeFormat("en-US", { timeZone, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const shownAt = (ms: number) => {
+    const p = Object.fromEntries(fmt.formatToParts(new Date(ms)).filter((x) => x.type !== "literal").map((x) => [x.type, Number(x.value)]));
+    return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
+  };
+  // Two passes settle the offset, also next to a DST change.
+  let guess = wanted - (shownAt(wanted) - wanted);
+  guess += wanted - shownAt(guess);
+  return new Date(guess);
 }
 
 export function clip(s: string, max = 290): string {
