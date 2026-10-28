@@ -173,6 +173,8 @@ function push(plan: PlannedCall[], call: PlannedCall) {
 
 /** Pick up to MAX_TOOL_CALLS tool calls for a question. */
 export function routeQuestion(question: string, ctx: RouteContext): PlannedCall[] {
+  // "Explain how tariffs work": a concept, not today's data, even if it names a topic.
+  if (isExplanation(question)) return [];
   const plan: PlannedCall[] = [];
   const symbols: string[] = [];
   const tickers = detectTickers(question).filter((t) => !/[=^]/.test(t));
@@ -269,6 +271,13 @@ const EVENT_WORDS = /\b(protests?|war|fighting|attacks?|elections?|strikes?|cris
 
 export function isKnowledgeQuestion(q: string): boolean {
   return KNOWLEDGE_START.test(q) && !NOW_WORDS.test(q) && !EVENT_WORDS.test(q) && !detectTickers(q).filter((t) => !/[=^]/.test(t)).length;
+}
+
+const EXPLAIN_START = /^\s*(explain|define|definition of|meaning of|how (does|do|did|would|can) [\w\s]{0,30}(work|affect|impact|influence|relate|cause|happen)|difference between|teach me|help me understand|eli5|what (is|are) (an?|the concept of)\s|can you explain)/i;
+
+/** Concept questions answered from general knowledge alone. */
+export function isExplanation(q: string): boolean {
+  return EXPLAIN_START.test(q) && !NOW_WORDS.test(q) && !EVENT_WORDS.test(q) && !detectTickers(q).filter((t) => !/[=^]/.test(t)).length;
 }
 
 export function isChitChat(q: string): boolean {
