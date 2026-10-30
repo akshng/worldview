@@ -17,6 +17,8 @@ export const HQ = {
   bankOfEngland: { lat: 51.5142, lon: -0.0886, name: "Bank of England, London", country: "GB" },
   bankOfJapan: { lat: 35.6866, lon: 139.7713, name: "Bank of Japan, Tokyo", country: "JP" },
   bankOfCanada: { lat: 45.4215, lon: -75.7003, name: "Bank of Canada, Ottawa", country: "CA" },
+  reserveBankOfAustralia: { lat: -33.8678, lon: 151.2111, name: "Reserve Bank of Australia, Sydney", country: "AU" },
+  reserveBankOfIndia: { lat: 18.9322, lon: 72.8354, name: "Reserve Bank of India, Mumbai", country: "IN" },
   treasury: { lat: 38.8981, lon: -77.0344, name: "U.S. Treasury, Washington, DC", country: "US" },
   euCouncil: { lat: 50.8423, lon: 4.3817, name: "Council of the EU, Brussels", country: "BE" },
   ukGov: { lat: 51.5033, lon: -0.1276, name: "Whitehall, London", country: "GB" },

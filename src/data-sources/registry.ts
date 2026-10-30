@@ -70,6 +70,11 @@ import { dojPressConnector } from "./doj-press";
 import { euCommissionConnector } from "./eu-commission";
 import { usEconomicReleasesConnector } from "./us-economic-releases";
 import { ifrcAppealsConnector } from "./ifrc-appeals";
+import { cisaAdvisoriesConnector } from "./cisa-advisories";
+import { femaDeclarationsConnector } from "./fema-declarations";
+import { gvpVolcanoConnector } from "./gvp-volcano";
+import { swpcAlertsConnector } from "./swpc-alerts";
+import { emaMedicinesConnector } from "./ema-medicines";
 import { demoConnector } from "./demo";
 
 export const CONNECTORS = [
@@ -93,6 +98,8 @@ export const CONNECTORS = [
   usgsVolcanoConnector,
   jmaVolcanoConnector,
   volcanicAshConnector,
+  gvpVolcanoConnector,
+  femaDeclarationsConnector,
   cemsConnector,
   firmsConnector,
   nifcConnector,
@@ -102,6 +109,7 @@ export const CONNECTORS = [
   wikipediaEventsConnector,
   spaceConnector,
   fireballsConnector,
+  swpcAlertsConnector,
   nasaNewsConnector,
   tsunamiConnector,
   faaConnector,
@@ -112,11 +120,13 @@ export const CONNECTORS = [
   // ransomwareLiveConnector — off: the API answers browsers but returns 404 to WorldView's
   // honest User-Agent, and we don't disguise the client. Re-enable if that changes.
   hibpBreachesConnector,
+  cisaAdvisoriesConnector,
   whoConnector,
   ecdcConnector,
   fdaRecallsConnector,
   cpscRecallsConnector,
   fdaMedwatchConnector,
+  emaMedicinesConnector,
   ifrcAppealsConnector,
   cdcTravelConnector,
   airQualityConnector,

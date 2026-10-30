@@ -1,6 +1,6 @@
 /**
- * Central-bank press releases: Federal Reserve, ECB, Bank of England, Bank of Japan and
- * Bank of Canada official RSS feeds (keyless). Placed at each bank's headquarters.
+ * Central-bank press releases: Federal Reserve, ECB, Bank of England, Bank of Japan,
+ * Bank of Canada, Reserve Bank of Australia and Reserve Bank of India official RSS feeds (keyless). Placed at each bank's headquarters.
  * Rate decisions are recognised from the bank's own release title and labelled as such;
  * the title text itself is never rewritten.
  */
@@ -9,7 +9,7 @@ import { plainText, safeUrl, type DataSourceConnector, type FetchContext, type P
 import { HQ, clip, fetchEach, hashId, makeSource, readFeedItems, type Place, type RssItem } from "../official-common";
 
 export interface CentralBank {
-  id: "fed" | "ecb" | "boe" | "boj" | "boc";
+  id: "fed" | "ecb" | "boe" | "boj" | "boc" | "rba" | "rbi";
   name: string;
   url: string;
   place: Place;
@@ -72,6 +72,28 @@ export const CENTRAL_BANKS: CentralBank[] = [
     place: HQ.bankOfCanada,
     rateDecision: /\b(maintains|lowers|raises|reduces|increases|cuts|holds) (the |its )?policy (interest )?rate\b/i,
     monetary: /\b(Monetary Policy|policy interest rate)\b/i,
+  },
+  {
+    id: "rba",
+    alias: /\b(RBA|Reserve Bank( of Australia)?)\b/,
+    name: "Reserve Bank of Australia",
+    url: "https://www.rba.gov.au/rss/rss-cb-media-releases.xml",
+    place: HQ.reserveBankOfAustralia,
+    rateDecision: /\bMonetary Policy Decision\b/i,
+    monetary: /\b(Monetary Policy|cash rate|Statement on Monetary Policy)\b/i,
+  },
+  {
+    id: "rbi",
+    alias: /\b(RBI|Reserve Bank of India)\b/,
+    name: "Reserve Bank of India",
+    url: "https://www.rbi.org.in/pressreleases_rss.xml",
+    place: HQ.reserveBankOfIndia,
+    rateDecision: /\bResolution of the Monetary Policy Committee\b|\bMonetary Policy Statement\b/i,
+    monetary: /\b(Monetary Policy|MPC|repo rate|Policy Repo)\b/i,
+    // The feed is dominated by routine notices: penalties on co-operative banks, licence
+    // cancellations, auction results, money-market operations and statistical releases.
+    skip: (it) =>
+      /\b(imposes (monetary )?penalty|Monetary Penalty|cancels? (the )?(certificate of registration|licence)|Money Market Operations|Auction Result|Result of .*Auction|Weekly Statistical Supplement|Directions under Section|Lending and Deposit Rates|Reserve Money|Money Supply|Sectoral Deployment)\b/i.test(it.title),
   },
 ];
 
@@ -155,9 +177,9 @@ export function parseCentralBanks(raw: CentralBanksRaw, ctx: ParseContext): Pars
 export const centralBanksConnector: DataSourceConnector<CentralBanksRaw> = {
   id: "central-banks",
   name: "Central bank releases",
-  description: "Press releases from the Federal Reserve, ECB, Bank of England, Bank of Japan and Bank of Canada (last 14 days); rate decisions labelled.",
+  description: "Press releases from the Federal Reserve, ECB, Bank of England, Bank of Japan, Bank of Canada, Reserve Bank of Australia and Reserve Bank of India (last 14 days); rate decisions labelled.",
   homepage: "https://www.federalreserve.gov/newsevents/pressreleases.htm",
-  attribution: "Federal Reserve Board (public domain), European Central Bank, Bank of England, Bank of Japan, Bank of Canada — official RSS feeds; link back to each release",
+  attribution: "Federal Reserve Board (public domain), European Central Bank, Bank of England, Bank of Japan, Bank of Canada, Reserve Bank of Australia, Reserve Bank of India — official RSS feeds; link back to each release",
   sourceType: "OFFICIAL_AGENCY",
   categories: ["MARKETS"],
   refreshIntervalMs: 15 * 60_000,

@@ -16,7 +16,7 @@ export const MAX_TOOL_CALLS = 6;
 
 /** Uppercase words that look like tickers but aren't. */
 const NOT_TICKERS = new Set(
-  "I A AN AM AS AT BE BY DO GO IF IN IS IT ME MY NO OF OK ON OR SO TO UP US WE UK EU UN AI CEO CFO GDP CPI PPI PCE FED FOMC ETF ETFS IPO IPOS OPEC USD EUR GBP JPY CNY YOY QOQ API SEC CFTC COT VIX WTI LNG NATO OECD IMF ECB BOJ BOE PMI ISM ESG EPS PE EV EVS FX AND THE FOR WHAT WHY HOW WHO ANY ALL NEW TODAY NOW 10-K 13F".split(" "),
+  "I A AN AM AS AT BE BY DO GO IF IN IS IT ME MY NO OF OK ON OR SO TO UP US WE UK EU UN AI CEO CFO GDP CPI PPI PCE FED FOMC ETF ETFS IPO IPOS OPEC USD EUR GBP JPY CNY YOY QOQ API SEC CFTC COT VIX WTI LNG NATO OECD IMF ECB BOJ BOE PMI ISM ESG EPS PE EV EVS FX AND THE FOR WHAT WHY HOW WHO ANY ALL NEW TODAY NOW 10-K 13F FEMA CISA ICS CVE CVES EMA CHMP PRAC NOAA SWPC CME".split(" "),
 );
 
 const COMPANIES: Record<string, string> = {
@@ -92,12 +92,16 @@ const TOPICS: Topic[] = [
   { re: /\b(medwatch|medical devices?|drug safety)\b/i, calls: [{ tool: "search_events", args: { source: "fda-medwatch", hours: 336 } }] },
   { re: /\b(nasa|artemis|space (mission|agency))\b/i, calls: [{ tool: "search_events", args: { source: "nasa-news", hours: 168 } }] },
   { re: /\b(humanitarian|aid appeals?|ifrc|red cross|famine|refugees?)\b/i, calls: [{ tool: "search_events", args: { source: "ifrc-appeals", hours: 720 } }] },
+  { re: /\b(cisa|ics advisor\w*|cyber ?security advisor\w*|exploited vulnerabilit\w*|cves?)\b/i, calls: [{ tool: "search_events", args: { source: "cisa-advisories", hours: 168 } }] },
+  { re: /\b(fema|disaster declarations?|emergency declarations?|declared (a )?(major )?disaster)\b/i, calls: [{ tool: "search_events", args: { source: "fema-declarations", hours: 720 } }] },
+  { re: /\b(space weather|geomagnetic|solar (storm|flare)s?|auroras?|northern lights|swpc|coronal mass ejections?)\b/i, calls: [{ tool: "search_events", args: { source: "swpc-alerts", hours: 72 } }] },
+  { re: /\b(european medicines agency|chmp|ema (approv\w*|recommend\w*|review\w*|safety))\b/i, calls: [{ tool: "search_events", args: { source: "ema-medicines", hours: 336 } }] },
   { re: /\b(trading halts?|halted|halts?)\b/i, calls: [{ tool: "search_events", args: { source: "nasdaq-halts", hours: 48 } }] },
   { re: /\binsider (buying|buys|purchases?)\b/i, calls: [{ tool: "search_events", args: { source: "sec-insider-buys", hours: 168 } }] },
   { re: /\b(sec (charges?|enforcement|lawsuits?|suspensions?)|enforcement actions?|securities fraud)\b/i, calls: [{ tool: "search_events", args: { source: "sec-enforcement", hours: 168 } }] },
   { re: /\b(outbreaks?|diseases?|ebola|measles|cholera|mpox|bird flu|h5n1|epidemic|pandemic|ecdc)\b/i, calls: [{ tool: "search_events", args: { source: "ecdc", hours: 168 } }, { tool: "search_events", args: { category: "HEALTH", hours: 168 } }] },
   { re: /\b(iaea|nuclear (plant|safety|power|program\w*)|zaporizhzhia)\b/i, calls: [{ tool: "search_events", args: { source: "iaea", hours: 168 } }] },
-  { re: /\b(volcan\w*|eruptions?|ash cloud)\b/i, calls: [{ tool: "search_events", args: { source: "volcanic-ash", hours: 72 } }, { tool: "search_events", args: { category: "VOLCANO", hours: 168 } }] },
+  { re: /\b(volcan\w*|eruptions?|ash cloud)\b/i, calls: [{ tool: "search_events", args: { source: "volcanic-ash", hours: 72 } }, { tool: "search_events", args: { source: "gvp-volcano", hours: 240 } }, { tool: "search_events", args: { category: "VOLCANO", hours: 168 } }] },
   { re: /\b(iss|space station)\b/i, calls: [{ tool: "live_tracking", args: { kind: "iss" } }] },
   { re: /\b(aurora|northern lights|southern lights)\b/i, calls: [{ tool: "live_tracking", args: { kind: "aurora" } }, { tool: "planet", args: {} }] },
   { re: /\bsatellites?\b/i, calls: [{ tool: "live_tracking", args: { kind: "satellites" } }] },
