@@ -96,8 +96,9 @@ Settings → General → Developer mode adds: recent ingestion runs (received/ne
 | `new-sources.test.ts` | IODA, FAA, tsunami, WHO, SEC parsers; airport and address lookups |
 | `finance.test.ts` | Market exposure rules, mover diversity, Treasury CSV parsing |
 | `ai.test.ts` | AI command handling with a mock model: schema validation, gazetteer-only place resolution, narrative cache |
+| `institutional-sources.test.ts`, `event-sources-batch2.test.ts`, `agency-sources.test.ts`, `data-sources-batch4.test.ts` | Institutional and agency feeds: central banks, sanctions, status pages, recalls, SEC/Nasdaq, ECDC/IAEA, DoD/DOJ/EU/WTO/BEA/EIA/NASA/IFRC, CISA, FEMA, GVP, SWPC, EMA; analyst routing to them |
 
-Parsers are pure functions, so new connectors are tested without network access.
+Parsers are pure functions, so new connectors are tested without network access. To check the real feeds, run `npm run sources:check` (all live sources, or pass ids): it fetches and parses each once, prints events / skipped / errors and exits 1 if any source fails.
 
 ## Conventions
 
@@ -112,6 +113,7 @@ Parsers are pure functions, so new connectors are tested without network access.
 | --- | --- |
 | Globe area is blank | Check the browser console for WebGL errors; ensure `public/vendor/maplibre/maplibre-gl-worker.mjs` exists (`node scripts/copy-maplibre-worker.mjs`) |
 | A source shows `ERROR` | Read the error in Settings → Data sources. Other sources keep working; the scheduler backs off and retries |
+| Is a feed dead or changed? | `npm run sources:check -- <id>` shows the error or "feed returned nothing" without starting the app |
 | No events after start | Wait ~30 s for the first runs; check `curl -s localhost:3000/api/sources` |
 | Launch Library 429 | Free tier is 15 req/h; the scheduler waits out intervals across restarts — avoid repeated "Run now" |
 | Rebuild country/city data | `npm run geo:build` (downloads Natural Earth) |

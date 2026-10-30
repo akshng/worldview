@@ -114,6 +114,24 @@ Secrets are read only on the server (`src/lib/env.ts`, guarded by `server-only`)
 | adsb.lol community ADS-B | Aircraft squawking 7700 / 7600 / 7500 right now | 2 min | none |
 | WHO Disease Outbreak News | Disease outbreaks (Health) | 60 min | none |
 | SEC EDGAR 8-K | Material corporate events at company HQ | 10 min | none |
+| Smithsonian GVP / USGS Weekly Volcanic Activity Report | Volcanoes with new or ongoing activity worldwide (weekly summary) | 6 h | none |
+| NOAA AWC international SIGMETs | Volcanic ash advisories for aviation | 15 min | none |
+| FEMA disaster declarations (OpenFEMA) | US major disaster, emergency and fire management declarations (30 days), per state | 60 min | none |
+| IFRC GO appeals | Red Cross / Red Crescent DREF allocations and Emergency Appeals, with amounts | 60 min | none |
+| NOAA Space Weather Prediction Center | Geomagnetic storms G2+, radiation storms S2+, radio blackouts R3+ | 10 min | none |
+| NASA news | NASA releases (missions, science) | 30 min | none |
+| Cloud and app status pages | Incidents at AWS, Google Cloud, Azure, Cloudflare, GitHub, Discord, OpenAI, Claude, Slack… | 5–10 min | none |
+| Have I Been Pwned | Data breaches added in the last 14 days | 6 h | none |
+| CISA cybersecurity advisories | Alerts, joint advisories, ICS advisories, known-exploited-vulnerability additions (7 days) | 30 min | none |
+| ECDC | European disease risk assessments, epidemiological updates, news | 60 min | none |
+| European Medicines Agency | Committee highlights, safety reviews, shortages, approvals | 60 min | none |
+| openFDA enforcement, FDA MedWatch, CPSC recalls | Class I food/drug/device recalls, safety alerts, consumer product recalls | 1–6 h | none |
+| UN press, IAEA, European Commission | Security Council / General Assembly / Secretary-General releases, nuclear safety news, Commission press releases | 30–60 min | none |
+| U.S. Department of War (DoD), DOJ, USTR / WTO | Defense releases and contracts, major DOJ cases, trade remedies and disputes | 30–60 min | none |
+| OFAC sanctions list service + EU Council / GOV.UK sanctions news | New sanctions designations and announcements | 30–60 min | none |
+| Central banks: Federal Reserve, ECB, Bank of England, Bank of Japan, Bank of Canada, Reserve Bank of Australia, Reserve Bank of India | Press releases; rate decisions labelled | 15 min | none |
+| BEA / Census economic releases, EIA, TreasuryDirect auctions | GDP, trade, retail sales, housing; energy analysis and outlooks; Treasury auction results | 15–60 min | none |
+| SEC enforcement + insider buys, CFTC, Nasdaq trading halts | Trading suspensions and enforcement, Form 4 open-market purchases, CFTC releases, halts with reason codes | 5–30 min | none |
 
 Live layers (shown in map modes, not stored as events, fetched only while in use):
 
@@ -225,7 +243,8 @@ Each connector runs on its own schedule (respecting upstream limits, with expone
 
 1. Create `src/data-sources/<id>/` with `types.ts` (raw upstream types), `client.ts` (fetch), `parser.ts` (pure raw → `EventCandidate[]`) and `index.ts` (the `DataSourceConnector`).
 2. Register it in `src/data-sources/registry.ts`.
-3. Add a parser test with a small fixture in `tests/connectors.test.ts`.
+3. Add a parser test with a small fixture in `tests/connectors.test.ts` (or the batch's own test file).
+4. Check it against the live feed: `npm run sources:check -- <id>`.
 
 The full walkthrough is in [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md#adding-a-new-data-source).
 
@@ -241,6 +260,7 @@ The full walkthrough is in [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md#adding-a-
 | `npm run service:install` / `service:restart` / `service:uninstall` | Always-on production server on localhost:3000 (macOS LaunchAgent; build first) |
 | `npm run briefing:morning` | Prepare today's morning briefing once, then exit |
 | `npm run briefing:schedule` / `briefing:unschedule` | Install / remove the daily job (macOS LaunchAgent, default 07:30) |
+| `npm run sources:check` | Fetch + parse every live data source once and report events / skipped / errors (pass ids to check only some; stores nothing) |
 | `npm run geo:build` | Rebuild bundled Natural Earth geography |
 
 ## API

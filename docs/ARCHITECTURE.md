@@ -71,7 +71,7 @@ docs/
 
 | Want to… | Do this |
 | --- | --- |
-| Add a data source | New folder in `src/data-sources/`, register in `registry.ts` (see DATA_SOURCES.md) |
+| Add a data source | New folder in `src/data-sources/`, register in `registry.ts` (see DATA_SOURCES.md); verify live with `npm run sources:check -- <id>` |
 | Use PostgreSQL | Set `DATABASE_URL=postgres://…` (or `pglite` for embedded) |
 | Add PostGIS indexing | Add a `geography` column + GIST index in a new migration; use `ST_DWithin` in `findNear` |
 | Add a live layer | `src/layers/<id>/` + registry + map mode (see DATA_SOURCES.md) |
