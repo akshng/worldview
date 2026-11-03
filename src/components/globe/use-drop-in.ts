@@ -7,7 +7,7 @@
 import { useEffect, useRef } from "react";
 import type { Map as MlMap, SkySpecification } from "maplibre-gl";
 import { useUI, type MapStyleId } from "@/lib/store/ui";
-import { BUILDINGS_LAYER, DROPIN_SKY, TERRAIN_EXAGGERATION, TERRAIN_SOURCE, buildingsLayer, terrainSource } from "./style";
+import { BUILDINGS_LAYER, DROPIN_LIGHT, DROPIN_SKY, HILLSHADE_LAYER, HILLSHADE_SOURCE, IMAGERY_TOP, TERRAIN_EXAGGERATION, TERRAIN_SOURCE, buildingsLayer, hillshadeLayer, hillshadeSource, terrainSource } from "./style";
 import {
   DROP_DURATION_MS,
   DROP_MAX_PITCH,
@@ -65,14 +65,34 @@ function enable3d(map: MlMap): SkySpecification | undefined {
   if (!map.getSource(TERRAIN_SOURCE)) map.addSource(TERRAIN_SOURCE, terrainSource());
   map.setTerrain({ source: TERRAIN_SOURCE, exaggeration: TERRAIN_EXAGGERATION });
   if (!map.getLayer(BUILDINGS_LAYER)) map.addLayer(buildingsLayer(), BUILDINGS_BEFORE.find((id) => map.getLayer(id)));
+  // Relief shading on top of the imagery (below labels and data).
+  if (!map.getSource(HILLSHADE_SOURCE)) map.addSource(HILLSHADE_SOURCE, hillshadeSource());
+  if (!map.getLayer(HILLSHADE_LAYER)) map.addLayer(hillshadeLayer(), map.getLayer(IMAGERY_TOP) ? IMAGERY_TOP : BUILDINGS_BEFORE.find((id) => map.getLayer(id)));
+  savedLight = map.getLight();
+  map.setLight(DROPIN_LIGHT);
+  // A touch more contrast and colour: imagery draped on terrain otherwise looks washed out.
+  for (const id of IMAGERY_LAYERS) if (map.getLayer(id)) {
+    map.setPaintProperty(id, "raster-contrast", 0.1);
+    map.setPaintProperty(id, "raster-saturation", 0.12);
+  }
   const sky = map.getSky();
   map.setSky(dropInSky(sky));
   return sky;
 }
 
+const IMAGERY_LAYERS = ["raster-esri", "raster-usgs"];
+let savedLight: ReturnType<MlMap["getLight"]> | undefined;
+
 function disable3d(map: MlMap, sky: SkySpecification | undefined) {
   map.setTerrain(null);
   if (map.getLayer(BUILDINGS_LAYER)) map.removeLayer(BUILDINGS_LAYER);
+  if (map.getLayer(HILLSHADE_LAYER)) map.removeLayer(HILLSHADE_LAYER);
+  if (map.getSource(HILLSHADE_SOURCE)) map.removeSource(HILLSHADE_SOURCE);
+  if (savedLight) map.setLight(savedLight);
+  for (const id of IMAGERY_LAYERS) if (map.getLayer(id)) {
+    map.setPaintProperty(id, "raster-contrast", 0);
+    map.setPaintProperty(id, "raster-saturation", 0);
+  }
   if (map.getSource(TERRAIN_SOURCE)) map.removeSource(TERRAIN_SOURCE);
   if (sky) map.setSky(sky);
   map.setMaxPitch(GLOBE_MAX_PITCH);
@@ -117,6 +137,13 @@ export function useDropIn(map: MlMap | null) {
       map.once("moveend", () =>
         map.once("idle", () => {
           if (token !== exitToken.current || !useUI.getState().dropInView) return;
+          // Mountains: street-level zoom on a peak just stares into the rock. Pull back so the
+          // landscape fits (the higher the ground, the further back), keeping the tilt.
+          const ground = map.queryTerrainElevation(map.getCenter()) ?? 0;
+          if (ground > 1200) {
+            map.easeTo({ zoom: ground > 3000 ? 13.2 : 14, pitch: Math.min(cam.pitch, 68), duration: 1600 });
+            return;
+          }
           if (map.getPitch() < cam.pitch - 8) map.easeTo({ pitch: cam.pitch, duration: 1200 });
         }),
       );

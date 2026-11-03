@@ -48,10 +48,12 @@ export function useAppBridge() {
     const ev = q.get("event");
     const tk = q.get("ticker");
     const pn = q.get("panel");
+    const di = q.get("dropin")?.split(",").map(Number);
+    if (di && di.length === 2 && di.every(Number.isFinite)) setTimeout(() => useUI.getState().dropIn({ lat: di[0], lon: di[1] }), 1500);
     if (ev && /^[\w-]{1,80}$/.test(ev)) openEvent(ev);
     if (tk && /^[A-Za-z0-9.^=-]{1,15}$/.test(tk)) openTicker(tk);
     if (pn) openPanel(pn);
-    if (ev || tk || pn) history.replaceState(null, "", location.pathname);
+    if (ev || tk || pn || di) history.replaceState(null, "", location.pathname);
     return () => {
       delete window.worldview;
     };

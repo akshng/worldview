@@ -393,10 +393,42 @@ export function terrainSource() {
   };
 }
 
+export const HILLSHADE_SOURCE = "dropin-hillshade-dem";
+export const HILLSHADE_LAYER = "dropin-hillshade";
+
+/**
+ * Relief shading from the same elevation tiles (MapLibre wants a separate source for
+ * hillshade): slopes facing away from the light darken, so ridges and valleys read in 3D
+ * even where the satellite photo is flat.
+ */
+export function hillshadeSource() {
+  return { ...terrainSource(), attribution: undefined };
+}
+export function hillshadeLayer(): LayerSpecification {
+  return {
+    id: HILLSHADE_LAYER,
+    type: "hillshade",
+    source: HILLSHADE_SOURCE,
+    paint: {
+      "hillshade-exaggeration": ["interpolate", ["linear"], ["zoom"], 10, 0.45, 15, 0.25, 17, 0.12],
+      "hillshade-shadow-color": "#1d2733",
+      "hillshade-highlight-color": "#fff8ea",
+      "hillshade-accent-color": "#3b4a5c",
+      "hillshade-illumination-direction": 315,
+    },
+  };
+}
+
+/** Sun-like light for extruded buildings: lit roofs, shaded walls facing away. */
+export const DROPIN_LIGHT = { anchor: "map" as const, position: [1.4, 210, 35] as [number, number, number], color: "#fff4e0", intensity: 0.42 };
+
 /** OpenFreeMap (OpenMapTiles schema) building footprints extruded to their OSM heights, from zoom 14. */
 export function buildingsLayer(): LayerSpecification {
   const height: ExpressionSpecification = ["coalesce", ["get", "render_height"], ["get", "height"], 6];
   const base: ExpressionSpecification = ["coalesce", ["get", "render_min_height"], ["get", "min_height"], 0];
+  // Mapped facade colour where OSM has one, else a palette by height: warm low-rise,
+  // stone mid-rise, cool glassy towers. The vertical gradient darkens walls toward the ground.
+  const byHeight: ExpressionSpecification = ["interpolate", ["linear"], height, 0, "#d9cfc1", 12, "#cfc6ba", 40, "#bfc3c6", 120, "#a9b9c8", 300, "#9fb6cc"];
   return {
     id: BUILDINGS_LAYER,
     type: "fill-extrusion",
@@ -405,22 +437,11 @@ export function buildingsLayer(): LayerSpecification {
     minzoom: 14,
     filter: ["!=", ["get", "hide_3d"], true],
     paint: {
-      "fill-extrusion-color": [
-        "interpolate",
-        ["linear"],
-        height,
-        0,
-        "#7d8590",
-        30,
-        "#99a2ad",
-        120,
-        "#b8c1cb",
-        300,
-        "#d4dbe3",
-      ],
+      // (to-color's fallback must be a constant: an interpolation inside it isn't allowed)
+      "fill-extrusion-color": ["case", ["has", "colour"], ["to-color", ["get", "colour"], "#cfc6ba"], byHeight],
       "fill-extrusion-height": ["interpolate", ["linear"], ["zoom"], 14, 0, 14.6, height],
       "fill-extrusion-base": ["interpolate", ["linear"], ["zoom"], 14, 0, 14.6, base],
-      "fill-extrusion-opacity": 0.92,
+      "fill-extrusion-opacity": 1,
       "fill-extrusion-vertical-gradient": true,
     },
   };
@@ -428,11 +449,11 @@ export function buildingsLayer(): LayerSpecification {
 
 /** Horizon while dropped in: a hazy daylight sky instead of the space-black globe backdrop. */
 export const DROPIN_SKY = {
-  "sky-color": "#3d6f9e",
-  "horizon-color": "#b9cde0",
-  "fog-color": "#c4d2e0",
-  "sky-horizon-blend": 0.7,
-  "horizon-fog-blend": 0.6,
-  "fog-ground-blend": 0.85,
+  "sky-color": "#5b8fc7",
+  "horizon-color": "#d6e3ef",
+  "fog-color": "#dce6ef",
+  "sky-horizon-blend": 0.55,
+  "horizon-fog-blend": 0.75,
+  "fog-ground-blend": 0.9,
   "atmosphere-blend": 0,
 } as const;
