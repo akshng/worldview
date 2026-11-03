@@ -100,6 +100,13 @@ export interface FlyToRequest {
   nonce: number;
 }
 
+/** Street-level 3D "drop in" view at a point (a new nonce re-flies there). */
+export interface DropInView {
+  lon: number;
+  lat: number;
+  nonce: number;
+}
+
 interface UIState {
   // filters
   categories: EventCategory[];
@@ -129,6 +136,10 @@ interface UIState {
   hoveredEventId: string | null;
   flyTo: FlyToRequest | null;
   searchPin: SearchPin | null;
+  /** Non-null while the globe is in the street-level "drop in" view */
+  dropInView: DropInView | null;
+  /** Waiting for a map click to choose where to drop in */
+  dropInPicking: boolean;
 
   // chrome
   sidebarCollapsed: boolean;
@@ -182,6 +193,11 @@ interface UIState {
   setHovered: (id: string | null) => void;
   requestFlyTo: (r: Omit<FlyToRequest, "nonce">) => void;
   setSearchPin: (p: SearchPin | null) => void;
+  /** Fly down into the 3D street-level view at a point (switches to the globe page). */
+  dropIn: (p: { lon: number; lat: number }) => void;
+  /** Leave the street-level view and fly back out to the previous globe view. */
+  exitDropIn: () => void;
+  setDropInPicking: (v: boolean) => void;
   setSidebarCollapsed: (v: boolean) => void;
   setSearchOpen: (v: boolean) => void;
   setBriefingOpen: (v: boolean) => void;
@@ -260,6 +276,8 @@ export const useUI = create<UIState>()(
       hoveredEventId: null,
       flyTo: null,
       searchPin: null,
+      dropInView: null,
+      dropInPicking: false,
       sidebarCollapsed: false,
       sourceFilter: [],
       toggleSource: (id) => set((s) => ({ sourceFilter: s.sourceFilter.includes(id) ? s.sourceFilter.filter((x) => x !== id) : [...s.sourceFilter, id] })),
@@ -316,6 +334,12 @@ export const useUI = create<UIState>()(
       setHovered: (hoveredEventId) => set({ hoveredEventId }),
       requestFlyTo: (r) => set({ flyTo: { ...r, nonce: Date.now() + Math.random() } }),
       setSearchPin: (searchPin) => set({ searchPin }),
+      dropIn: ({ lon, lat }) =>
+        Number.isFinite(lon) && Number.isFinite(lat)
+          ? set({ dropInView: { lon, lat, nonce: Date.now() + Math.random() }, dropInPicking: false, view: "world" })
+          : undefined,
+      exitDropIn: () => set({ dropInView: null, dropInPicking: false }),
+      setDropInPicking: (dropInPicking) => set({ dropInPicking }),
       setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
       setSearchOpen: (searchOpen) => set({ searchOpen }),
       // Panels are pages now: "open" means go to that page.
