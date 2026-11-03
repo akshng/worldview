@@ -371,3 +371,68 @@ export function labelLayers(): LayerSpecification[] {
     },
   ];
 }
+
+// ---------------------------------------------------------------------------
+// "Drop in" street-level view: terrain + 3D buildings, added only while dropped in.
+// ---------------------------------------------------------------------------
+
+export const TERRAIN_SOURCE = "dropin-terrain";
+export const BUILDINGS_LAYER = "dropin-buildings";
+export const TERRAIN_EXAGGERATION = 1.3;
+
+/** AWS Open Data / Mapzen Terrain Tiles (terrarium PNG, keyless). */
+export function terrainSource() {
+  return {
+    type: "raster-dem" as const,
+    tiles: ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],
+    encoding: "terrarium" as const,
+    tileSize: 256,
+    maxzoom: 15,
+    attribution:
+      'Terrain Tiles: <a href="https://registry.opendata.aws/terrain-tiles/" target="_blank" rel="noopener noreferrer">Mapzen/AWS Open Data</a>',
+  };
+}
+
+/** OpenFreeMap (OpenMapTiles schema) building footprints extruded to their OSM heights, from zoom 14. */
+export function buildingsLayer(): LayerSpecification {
+  const height: ExpressionSpecification = ["coalesce", ["get", "render_height"], ["get", "height"], 6];
+  const base: ExpressionSpecification = ["coalesce", ["get", "render_min_height"], ["get", "min_height"], 0];
+  return {
+    id: BUILDINGS_LAYER,
+    type: "fill-extrusion",
+    source: "omt",
+    "source-layer": "building",
+    minzoom: 14,
+    filter: ["!=", ["get", "hide_3d"], true],
+    paint: {
+      "fill-extrusion-color": [
+        "interpolate",
+        ["linear"],
+        height,
+        0,
+        "#7d8590",
+        30,
+        "#99a2ad",
+        120,
+        "#b8c1cb",
+        300,
+        "#d4dbe3",
+      ],
+      "fill-extrusion-height": ["interpolate", ["linear"], ["zoom"], 14, 0, 14.6, height],
+      "fill-extrusion-base": ["interpolate", ["linear"], ["zoom"], 14, 0, 14.6, base],
+      "fill-extrusion-opacity": 0.92,
+      "fill-extrusion-vertical-gradient": true,
+    },
+  };
+}
+
+/** Horizon while dropped in: a hazy daylight sky instead of the space-black globe backdrop. */
+export const DROPIN_SKY = {
+  "sky-color": "#3d6f9e",
+  "horizon-color": "#b9cde0",
+  "fog-color": "#c4d2e0",
+  "sky-horizon-blend": 0.7,
+  "horizon-fog-blend": 0.6,
+  "fog-ground-blend": 0.85,
+  "atmosphere-blend": 0,
+} as const;

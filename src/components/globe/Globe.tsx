@@ -101,6 +101,8 @@ import { loadRegions, REGION_ZOOM } from "@/lib/client/regions";
 import { useData } from "@/lib/client/data-store";
 import { CATEGORIES } from "@/lib/categories";
 import { relativeTime } from "@/lib/time";
+import { useDropIn } from "./use-drop-in";
+import { DropInContextMenu, DropInHud, DropInPickHint, PersonPinIcon } from "@/components/dropin/DropInHud";
 import type { EventCategory } from "@/types/events";
 
 export const HOME_VIEW = { center: [-30, 26] as [number, number], zoom: 2.05 };
@@ -313,6 +315,11 @@ export default function Globe({ window: win, live }: GlobeProps) {
     loading: shipsVp.loading,
   };
   const [layersOpen, setLayersOpen] = useState(false);
+  /** Street-level "drop in" view (terrain + 3D buildings while active) */
+  const dropInView = useUI((s) => s.dropInView);
+  const dropInPicking = useUI((s) => s.dropInPicking);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; lon: number; lat: number } | null>(null);
+  useDropIn(ready ? mapObj : null);
   /** Selected / hovered tracked-object positions and the trail, drawn by drawHighlight(). */
   const hl = useRef<{
     selected: { lon: number; lat: number } | null;
@@ -786,6 +793,12 @@ export default function Globe({ window: win, live }: GlobeProps) {
     };
 
     map.on("mousemove", (e) => {
+      // Choosing a drop-in spot: plain crosshair, no hover popups.
+      if (useUI.getState().dropInPicking) {
+        map.getCanvas().style.cursor = "crosshair";
+        popupRef.current?.remove();
+        return;
+      }
       const top = hitAt(e.point);
       map.getCanvas().style.cursor = top ? "pointer" : "";
       if (top && top.layer.id !== "ev-cluster") {
@@ -805,7 +818,9 @@ export default function Globe({ window: win, live }: GlobeProps) {
       if (useUI.getState().hoveredEventId !== hoveredEvent) useUI.getState().setHovered(hoveredEvent);
       // Zoomed in (outside markets mode), states/provinces take over from countries.
       const regionMode = map.getZoom() >= REGION_ZOOM && useUI.getState().mapMode !== "markets";
-      const region = top || !regionMode || !map.getLayer("region-fill") ? undefined : map.queryRenderedFeatures(e.point, { layers: ["region-fill"] })[0];
+      // At street level the state/country outlines would only get in the way.
+      const droppedIn = !!useUI.getState().dropInView;
+      const region = top || !regionMode || droppedIn || !map.getLayer("region-fill") ? undefined : map.queryRenderedFeatures(e.point, { layers: ["region-fill"] })[0];
       const rid = region?.id !== undefined ? Number(region.id) : null;
       if (rid !== hoveredRegion.current) {
         if (hoveredRegion.current !== null) map.setFeatureState({ source: REGIONS_SOURCE, id: hoveredRegion.current }, { hover: false });
@@ -823,7 +838,7 @@ export default function Globe({ window: win, live }: GlobeProps) {
       }
       // Country hover
       const country =
-        top || regionMode
+        top || regionMode || droppedIn
           ? undefined
           : map.queryRenderedFeatures(e.point, {
               layers: map.getLayer("country-fill") ? ["country-fill"] : [],
@@ -862,6 +877,10 @@ export default function Globe({ window: win, live }: GlobeProps) {
     });
 
     map.on("click", async (e) => {
+      if (useUI.getState().dropInPicking) {
+        useUI.getState().dropIn({ lon: e.lngLat.lng, lat: e.lngLat.lat });
+        return;
+      }
       const top = hitAt(e.point);
       // The aurora overlay and infrastructure lines/areas are hover-only; clicks pass through to countries/regions.
       const hoverOnly = top && (top.layer.id === "aurora" || (INFRA_LAYER_OF[top.layer.id] && top.geometry.type !== "Point"));
@@ -966,6 +985,7 @@ export default function Globe({ window: win, live }: GlobeProps) {
         return;
       }
       if (hit) return; // ISS: popup only
+      if (ui.dropInView) return; // street level: only markers are clickable
       if (map.getZoom() >= REGION_ZOOM && ui.mapMode !== "markets" && map.getLayer("region-fill")) {
         const region = map.queryRenderedFeatures(e.point, {
           layers: ["region-fill"],
@@ -978,6 +998,22 @@ export default function Globe({ window: win, live }: GlobeProps) {
       const country = map.getLayer("country-fill") ? map.queryRenderedFeatures(e.point, { layers: ["country-fill"] })[0] : undefined;
       if (country?.properties?.code) ui.selectCountry(String(country.properties.code));
     });
+
+    // Right-click (without dragging: right-drag tilts and turns) → "Drop in here".
+    let rightDown: { x: number; y: number } | null = null;
+    map.on("mousedown", (e) => {
+      if (e.originalEvent.button === 2) rightDown = { x: e.point.x, y: e.point.y };
+    });
+    map.on("contextmenu", (e) => {
+      e.preventDefault();
+      const moved = rightDown ? Math.hypot(e.point.x - rightDown.x, e.point.y - rightDown.y) : 0;
+      rightDown = null;
+      if (moved > 4 || useUI.getState().dropInPicking) return;
+      const w = map.getCanvas().clientWidth;
+      const h = map.getCanvas().clientHeight;
+      setCtxMenu({ x: Math.min(e.point.x, w - 260), y: Math.min(e.point.y, h - 90), lon: e.lngLat.lng, lat: e.lngLat.lat });
+    });
+    map.on("movestart", () => setCtxMenu(null));
 
     const ro = new ResizeObserver(() => map.resize());
     ro.observe(container.current);
@@ -1520,9 +1556,12 @@ export default function Globe({ window: win, live }: GlobeProps) {
     <div className="absolute inset-0">
       <div ref={container} className="h-full w-full" aria-label="Interactive globe of world events" />
       <CameraViewer />
+      <DropInPickHint />
+      {dropInView && mapObj && ready && <DropInHud map={mapObj} panelOpen={sidePanelOpen} />}
+      {ctxMenu && <DropInContextMenu {...ctxMenu} onClose={() => setCtxMenu(null)} />}
       {mapError && <div className="absolute inset-0 grid place-items-center text-sm text-muted">Map could not be initialised: {mapError}</div>}
       <div
-        className={`scroll-thin pointer-events-none absolute right-14 bottom-[118px] flex max-h-[calc(100%-230px)] flex-col items-end gap-2 overflow-y-auto ${sidePanelOpen || layersOpen ? "hidden" : ""}`}
+        className={`scroll-thin pointer-events-none absolute right-14 bottom-[118px] flex max-h-[calc(100%-230px)] flex-col items-end gap-2 overflow-y-auto ${sidePanelOpen || layersOpen || dropInView ? "hidden" : ""}`}
         data-legend-stack
       >
         {(mapStyle === "satellite" || showClouds) && (
@@ -1684,6 +1723,25 @@ export default function Globe({ window: win, live }: GlobeProps) {
       <div className="absolute right-3 bottom-[118px] flex flex-col overflow-hidden rounded-md glass">
         <MapButton
           title={
+            dropInView
+              ? "Exit the street-level view (Esc)"
+              : dropInPicking
+                ? "Cancel drop in (Esc)"
+                : "Drop in: pick a spot to fly down into a tilted 3D street-level view (or right-click the map)"
+          }
+          onClick={() => {
+            const ui = useUI.getState();
+            if (ui.dropInView) ui.exitDropIn();
+            else ui.setDropInPicking(!ui.dropInPicking);
+          }}
+          active={!!dropInView || dropInPicking}
+        >
+          <span className="inline-flex items-center justify-center">
+            <PersonPinIcon width={16} height={16} />
+          </span>
+        </MapButton>
+        <MapButton
+          title={
             layersOpen
               ? "Close the layers menu"
               : `Overlays: ships, aircraft, satellites, cameras, infrastructure…${activeOverlays ? ` (${activeOverlays} on)` : ""}`
@@ -1756,9 +1814,11 @@ export default function Globe({ window: win, live }: GlobeProps) {
           −
         </MapButton>
         <MapButton
-          title="Reset view"
+          title={dropInView ? "Exit to the globe" : "Reset view"}
           onClick={() =>
-            mapRef.current?.flyTo({
+            useUI.getState().dropInView
+              ? useUI.getState().exitDropIn()
+              : mapRef.current?.flyTo({
               center: HOME_VIEW.center,
               zoom: HOME_VIEW.zoom,
               pitch: 0,
