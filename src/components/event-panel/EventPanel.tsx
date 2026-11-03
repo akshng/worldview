@@ -101,6 +101,16 @@ export function EventPanel() {
     <div className="glass panel-in pointer-events-auto flex max-h-full w-[400px] max-w-[calc(100vw-24px)] flex-col self-start rounded-md shadow-2xl shadow-black/50">
       <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
         <span className="meta text-faint">Event</span>
+        <span className="flex-1" />
+        {ev && (
+          <button
+            onClick={() => useUI.getState().dropIn({ lon: ev.longitude, lat: ev.latitude })}
+            className="mr-1 rounded-md border border-line px-2 py-[3px] text-[11.5px] text-muted hover:border-line-strong hover:text-fg"
+            title="Fly down into a 3D street-level view of this place"
+          >
+            Drop in
+          </button>
+        )}
         <button onClick={close} className="rounded-md p-1.5 text-muted hover:bg-panel-hover hover:text-fg" aria-label="Close event details" title="Close (Esc)">
           <CloseIcon width={14} height={14} />
         </button>

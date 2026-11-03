@@ -36,13 +36,13 @@ function openEvent(id: string) {
 
 declare global {
   interface Window {
-    worldview?: { openEvent: (id: string) => void; openTicker: (s: string) => void; openPanel: (p: string) => void };
+    worldview?: { openEvent: (id: string) => void; openTicker: (s: string) => void; openPanel: (p: string) => void; dropIn: (lat: number, lon: number) => void };
   }
 }
 
 export function useAppBridge() {
   useEffect(() => {
-    window.worldview = { openEvent, openTicker, openPanel };
+    window.worldview = { openEvent, openTicker, openPanel, dropIn: (lat: number, lon: number) => useUI.getState().dropIn({ lat, lon }) };
     watchBrowserBattery();
     const q = new URLSearchParams(location.search);
     const ev = q.get("event");
