@@ -34,6 +34,8 @@ export const EventQuerySchema = z.object({
     .transform((a) => a as BBox)
     .optional(),
   q: z.string().trim().max(200).optional(),
+  /** Only events reported by one of these connectors (comma-separated ids). */
+  source: csv(z.string().regex(/^[a-z0-9-]{1,40}$/)).optional(),
   synthetic: z.enum(["include", "exclude", "only"]).optional(),
   sort: z.enum(["recent", "importance"]).default("recent"),
   limit: z.coerce.number().int().min(1).max(20000).default(500),
@@ -54,6 +56,7 @@ export function matchesQuery(e: WorldEvent, q: Partial<EventQuery>): boolean {
   if (q.type && q.type.length && !q.type.includes(e.type)) return false;
   if (q.status && q.status.length && !q.status.includes(e.status)) return false;
   if (q.country && e.country !== q.country) return false;
+  if (q.source && q.source.length && !e.sources.some((s) => q.source!.includes(s.dataSourceId))) return false;
   if (q.importance !== undefined && e.importanceScore < q.importance) return false;
   if (q.bbox && !bboxContains(q.bbox, e.latitude, e.longitude)) return false;
   if (q.synthetic === "exclude" && e.isSynthetic) return false;

@@ -22,6 +22,9 @@ export function useLiveData() {
   const customRange = useUI((s) => s.customRange);
   const span = useUI((s) => s.timelineSpan);
   const autoRefresh = useUI((s) => s.settings.autoRefresh);
+  // Plotting specific sources: ask the server for exactly those, so the 20k cap of
+  // most-recent events (mostly fire detections) can't crowd them out.
+  const sourceKey = useUI((s) => s.sourceFilter.slice().sort().join(","));
   const abortRef = useRef<AbortController | null>(null);
   const inFlight = useRef<Promise<void> | null>(null);
   const lastSilent = useRef(0);
@@ -46,7 +49,7 @@ export function useLiveData() {
       abortRef.current = ctrl;
       if (!opts.silent) useData.setState({ loading: true });
       const run = (async () => {
-        const res = await api.events({ from: fetchFrom(), limit: "20000", sort: "recent" }, ctrl.signal);
+        const res = await api.events({ from: fetchFrom(), limit: "20000", sort: "recent", ...(sourceKey ? { source: sourceKey } : {}) }, ctrl.signal);
         if (ctrl.signal.aborted) return;
         useData.setState({
           events: res.events,
@@ -70,7 +73,7 @@ export function useLiveData() {
         if (abortRef.current === ctrl) inFlight.current = null;
       }
     },
-    [fetchFrom],
+    [fetchFrom, sourceKey],
   );
 
   // Initial + whenever the span changes

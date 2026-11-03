@@ -132,6 +132,13 @@ interface UIState {
 
   // chrome
   sidebarCollapsed: boolean;
+  /** Plot only events from these sources (empty = every source). */
+  sourceFilter: string[];
+  toggleSource: (id: string) => void;
+  setSourceFilter: (ids: string[]) => void;
+  /** A set of events to plot on their own (e.g. the Analyst's citations); null = normal filters. */
+  plot: { ids: string[]; label: string } | null;
+  setPlot: (p: { ids: string[]; label: string } | null) => void;
   /** Which page of the app is showing ("world" = the globe dashboard). */
   view: AppView;
   setView: (v: AppView) => void;
@@ -254,6 +261,11 @@ export const useUI = create<UIState>()(
       flyTo: null,
       searchPin: null,
       sidebarCollapsed: false,
+      sourceFilter: [],
+      toggleSource: (id) => set((s) => ({ sourceFilter: s.sourceFilter.includes(id) ? s.sourceFilter.filter((x) => x !== id) : [...s.sourceFilter, id] })),
+      setSourceFilter: (sourceFilter) => set({ sourceFilter }),
+      plot: null,
+      setPlot: (plot) => set(plot ? { plot, view: "world" } : { plot: null }),
       view: "world",
       setView: (view) => set({ view }),
       searchOpen: false,
@@ -344,7 +356,7 @@ export const useUI = create<UIState>()(
         }
       }),
       // Only persist preferences, not transient selection state.
-      partialize: (s) => ({ settings: s.settings, sidebarCollapsed: s.sidebarCollapsed, feedSort: s.feedSort, mapMode: s.mapMode, view: s.view }),
+      partialize: (s) => ({ settings: s.settings, sidebarCollapsed: s.sidebarCollapsed, feedSort: s.feedSort, mapMode: s.mapMode, view: s.view, sourceFilter: s.sourceFilter }),
       // Apply default layers/range from saved settings on load.
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<UIState>;

@@ -271,9 +271,26 @@ function AnswerCard({ turn }: { turn: Turn }) {
       {turn.text && <AnswerText text={turn.text} citations={turn.citations} />}
       {turn.error && <p className="mt-1 text-[12px] text-danger">{turn.error}</p>}
 
+      {!turn.pending && <ShowOnMap citations={turn.citations} />}
       {turn.citations.length > 0 && <Sources citations={turn.citations} />}
       {!turn.pending && turn.text && <p className="meta mt-1.5 normal-case tracking-normal text-faint">AI-generated from the sources above · {ANALYST_DISCLAIMER}</p>}
     </div>
+  );
+}
+
+/** Plot every event the answer drew on, on its own, on the globe. */
+function ShowOnMap({ citations }: { citations: Citation[] }) {
+  const ids = [...new Set(citations.flatMap((c) => c.actions.flatMap((a) => (a.kind === "event" ? [a.id] : []))))];
+  if (!ids.length) return null;
+  const label = citations.find((c) => c.actions.some((a) => a.kind === "event"))?.call ?? "Analyst answer";
+  return (
+    <button
+      onClick={() => useUI.getState().setPlot({ ids, label: `from the Analyst (${label})` })}
+      className="mt-2 rounded-md border border-line px-2 py-1 text-[12px] text-accent hover:border-line-strong hover:bg-panel-hover"
+      title="Open the globe showing only these events"
+    >
+      Show {ids.length} on map
+    </button>
   );
 }
 

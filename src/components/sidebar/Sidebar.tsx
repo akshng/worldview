@@ -9,6 +9,7 @@ import { TIME_RANGES } from "@/lib/time";
 import { EVENT_CATEGORIES } from "@/types/events";
 import { ChevronLeftIcon, ChevronRightIcon } from "@/components/ui/icons";
 import { SectionTitle } from "@/components/ui/primitives";
+import { PlotPanel } from "./PlotPanel";
 
 
 
@@ -55,15 +56,16 @@ export function Sidebar() {
   const focus = MAP_MODES.find((m) => m.id === mapMode)?.categories ?? null;
 
   return (
-    <aside className="scroll-thin flex w-[232px] shrink-0 flex-col overflow-y-auto border-r border-line bg-bg">
+    <aside className="scroll-thin flex w-[260px] shrink-0 flex-col overflow-y-auto border-r border-line bg-bg">
       <div className="flex items-center justify-between px-4 pt-3 pb-1">
-        <span className="meta text-faint">Filters</span>
+        <span className="meta text-faint">Plot</span>
         <button onClick={() => setCollapsed(true)} className="rounded p-1 text-faint hover:bg-panel-hover hover:text-fg" title="Collapse sidebar" aria-label="Collapse sidebar">
           <ChevronLeftIcon width={14} height={14} />
         </button>
       </div>
+      <PlotPanel />
 
-      <section className="px-4 py-3">
+      <section className="border-t border-line px-4 py-3">
         <SectionTitle
           right={
             <span className="meta flex gap-2 text-faint">

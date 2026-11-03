@@ -289,7 +289,7 @@ export type EventSummary = Pick<
   | "isSynthetic"
   | "metrics"
   | "geoPrecision"
-> & { primarySource: string; area: AreaGeometry | null };
+> & { primarySource: string; area: AreaGeometry | null; /** every connector that reported it (for "plot by source") */ sourceIds?: string[] };
 
 export type EventRelationshipType =
   | "SAME_STORY"
@@ -329,5 +329,6 @@ export function toEventSummary(e: WorldEvent): EventSummary {
     geoPrecision: e.geoPrecision,
     area: e.geometry ?? null,
     primarySource: e.sources[0]?.sourceName ?? "Unknown",
+    sourceIds: [...new Set(e.sources.map((s) => s.dataSourceId))],
   };
 }

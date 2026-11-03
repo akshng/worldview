@@ -67,6 +67,9 @@ export function Dashboard() {
   const selectedTrack = useUI((s) => s.selectedTrack);
   const mapMode = useUI((s) => s.mapMode);
   const view = useUI((s) => s.view);
+  const sourceFilter = useUI((s) => s.sourceFilter);
+  const plot = useUI((s) => s.plot);
+  const visibleCount = useData((s) => s.visible.length);
   const now = useNow(30_000);
   const modeInfo = modeMeta(mapMode);
   // The globe's live layer only runs on the World page.
@@ -79,8 +82,10 @@ export function Dashboard() {
     const min = IMPORTANCE_FILTERS.find((f) => f.id === importance)?.min ?? 0;
     // Focus modes (earthquakes, fires, …) override the layer toggles.
     const cats = new Set(modeInfo.categories ?? categories);
-    useData.setState({ visible: filterEvents(events, { categories: cats, minImportance: min, window: win }) });
-  }, [events, categories, importance, win, modeInfo.categories]);
+    useData.setState({
+      visible: filterEvents(events, { categories: cats, minImportance: min, window: win, sources: new Set(sourceFilter), ids: plot ? new Set(plot.ids) : null }),
+    });
+  }, [events, categories, importance, win, modeInfo.categories, sourceFilter, plot]);
 
   // Esc closes the country / region panel (event and track panels handle their own Esc).
   useEffect(() => {
@@ -115,6 +120,20 @@ export function Dashboard() {
             <div className={`flex items-start overflow-hidden ${selectedEventId || selectedCountry || selectedRegion !== null || selectedTrack ? "max-w-[calc(100%-412px)]" : ""}`}>
               <StatsStrip />
             </div>
+            {(plot || sourceFilter.length > 0) && (
+              <div className="glass pointer-events-auto mt-2 flex items-center gap-3 self-start rounded-md px-3 py-1.5 text-[12.5px]">
+                <span className="text-accent">●</span>
+                <span>{plot ? `Plotting ${plot.ids.length} event${plot.ids.length === 1 ? "" : "s"}: ${plot.label}` : `Plotting ${sourceFilter.length} source${sourceFilter.length === 1 ? "" : "s"} only`}</span>
+                {visibleCount === 0 && !plot && range !== "7d" && (
+                  <button className="text-warn underline" onClick={() => useUI.getState().setRange("7d")} title="Nothing from these sources in the current time range">
+                    None in this time range · show 7 days
+                  </button>
+                )}
+                <button className="text-muted underline hover:text-fg" onClick={() => (plot ? useUI.getState().setPlot(null) : useUI.getState().setSourceFilter([]))}>
+                  Show everything
+                </button>
+              </div>
+            )}
             <div className="flex-1" />
             {!loading && events.length === 0 && (
               <div className="glass pointer-events-auto mx-auto mb-3 rounded-md px-4 py-2.5 text-center text-[12.5px] text-muted">
