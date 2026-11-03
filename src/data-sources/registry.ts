@@ -70,11 +70,21 @@ import { dojPressConnector } from "./doj-press";
 import { euCommissionConnector } from "./eu-commission";
 import { usEconomicReleasesConnector } from "./us-economic-releases";
 import { ifrcAppealsConnector } from "./ifrc-appeals";
+import { swpcAlertsConnector } from "./swpc-alerts";
+import { faaTfrConnector } from "./faa-tfr";
+import { riverFloodingConnector } from "./river-flooding";
+import { spcWatchesConnector } from "./spc-watches";
+import { geofonConnector } from "./geofon";
+import { cyberAdvisoriesConnector } from "./cyber-advisories";
+import { ukDefenceConnector } from "./uk-defence";
+import { femaDeclarationsConnector } from "./fema-declarations";
+import { sec13dConnector } from "./sec-13d";
 import { demoConnector } from "./demo";
 
 export const CONNECTORS = [
   usgsConnector,
   emscConnector,
+  geofonConnector,
   jmaQuakeConnector,
   bmkgConnector,
   geonetConnector,
@@ -83,17 +93,20 @@ export const CONNECTORS = [
   gdacsConnector,
   nhcConnector,
   spcReportsConnector,
+  spcWatchesConnector,
   weatherConnector,
   meteoalarmConnector,
   ecccConnector,
   auEmergencyConnector,
   hkoWarningsConnector,
   ukFloodsConnector,
+  riverFloodingConnector,
   eonetConnector,
   usgsVolcanoConnector,
   jmaVolcanoConnector,
   volcanicAshConnector,
   cemsConnector,
+  femaDeclarationsConnector,
   firmsConnector,
   nifcConnector,
   gdeltConnector,
@@ -102,13 +115,16 @@ export const CONNECTORS = [
   wikipediaEventsConnector,
   spaceConnector,
   fireballsConnector,
+  swpcAlertsConnector,
   nasaNewsConnector,
   tsunamiConnector,
   faaConnector,
+  faaTfrConnector,
   adsbEmergencyConnector,
   iodaConnector,
   cloudStatusConnector,
   appStatusConnector,
+  cyberAdvisoriesConnector,
   // ransomwareLiveConnector — off: the API answers browsers but returns 404 to WorldView's
   // honest User-Agent, and we don't disguise the client. Re-enable if that changes.
   hibpBreachesConnector,
@@ -129,6 +145,7 @@ export const CONNECTORS = [
   iaeaConnector,
   euCommissionConnector,
   defenseReleasesConnector,
+  ukDefenceConnector,
   dojPressConnector,
   tradePolicyConnector,
   ofacSanctionsConnector,
@@ -139,6 +156,7 @@ export const CONNECTORS = [
   marketRegulatorsConnector,
   secConnector,
   secInsiderBuysConnector,
+  sec13dConnector,
   secEnforcementConnector,
   nasdaqHaltsConnector,
   treasuryAuctionsConnector,
