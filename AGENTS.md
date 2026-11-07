@@ -7,3 +7,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
 This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
+
+# WorldView project guide
+
+Start with `HANDOFF.md`: what the app is, how to run it on any OS, the code map, the project rules
+(keyless data only, honest User-Agent and never getting around bot checks, facts vs. labelled AI,
+no personal info in git and credit "akshng" only, battery-conscious run-once jobs, tests/lint/build
+green) and how to add data sources, analyst tools and pages. Details are in `README.md` and `docs/`.

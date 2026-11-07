@@ -116,3 +116,27 @@ question ─▶ runAnalyst (agent.ts) ─▶ tools.ts (30 typed tools, ToolDeps)
 - Upstream text is stripped of HTML (`plainText`) and rendered as React text — no `dangerouslySetInnerHTML` anywhere. Map popups use `setDOMContent` with `textContent`.
 - Only `http(s)` URLs are stored (schema-enforced) and links open with `rel="noopener noreferrer nofollow"`.
 - Manual ingestion and `POST /api/ai/unload` are restricted to localhost or `ADMIN_TOKEN`.
+
+
+## 2026-11 additions (summary)
+
+- **App shell** — `src/components/layout/Dashboard.tsx` renders one page at a time from `useUI().view`
+  (`APP_VIEWS` in `src/lib/store/ui.ts`); panels render full-page via `usePageMode()`. The globe and its
+  live layers only mount on the World page.
+- **Plot anything** — `src/components/sidebar/PlotPanel.tsx`. Events carry `sourceIds`; a source
+  filter is applied client-side (`filterEvents`) and server-side (`/api/events?source=`) so the 20k
+  most-recent cap can't crowd plotted sources out. `plot` (a set of event ids) pins exactly what the
+  analyst cited.
+- **Drop in** — `src/components/globe/use-drop-in.ts` + `src/components/dropin/`: Mapzen/AWS terrain
+  (raster-dem + hillshade), OpenFreeMap building extrusions, sun light, sky; added on entry, removed on
+  exit. Patches MapLibre's high-pitch query scale (re-check on upgrades). `?dropin=lat,lon` links.
+- **Analyst** — 41 tools (`src/lib/analyst/tools.ts`): every event source (`search_events` `source`),
+  markets, SEC data, insiders, dividends, short volume, earnings calendar, Google News headlines, the
+  daily briefing, live tracking and infrastructure near a place (`world-data.ts`), stock ideas and
+  research. `router.ts` maps questions to tools for the local model (explanations → general knowledge,
+  free-form current questions → news + event search). Buy answers are assembled in code
+  (`ideas-answer.ts`, `src/lib/finance/research-take.ts`); the model writes only the comparison.
+- **Alerts & jobs** — Discord (`src/lib/notify/`), run-once jobs in `scripts/` (morning briefing,
+  after-close wrap/setups/scorecard/earnings, battery sentinel), macOS power watcher.
+- **Local AI** — Gemma 4 E2B (Apache-2.0) via node-llama-cpp with thinking off; unloads after 2 idle
+  minutes and never mid-request.

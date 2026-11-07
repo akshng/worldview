@@ -4,7 +4,9 @@
 
 Created by **[akshng](https://github.com/akshng)** · Open source under the [Apache License 2.0](LICENSE), built for students to learn from and use.
 
-WorldView is a local-first global intelligence dashboard: an interactive 3D globe of real-world events — earthquakes, disasters, severe weather, satellite fire detections, conflict/protest reporting, rocket launches — ingested from legitimate public feeds, normalised into one event model, deduplicated, scored, and traceable to their sources.
+WorldView is a local-first world-intelligence and markets terminal: an interactive 3D globe of real-world events from **78 free, public, keyless sources** (disasters, weather, conflict and news, central banks, sanctions, regulators, outages, cyber, aviation, space weather…), normalised into one event model, deduplicated, scored and traceable to their sources — plus market pages, country dossiers, a "plot anything" map, a Google-Earth-style 3D drop-in view and an on-device AI analyst that can answer any question.
+
+> **New machine or new coding agent? Start with [HANDOFF.md](HANDOFF.md)** — setup on Windows/Linux/macOS, the code map, project rules and how to extend it.
 
 > The working name lives in one place: `NEXT_PUBLIC_APP_NAME` (default `WorldView`, see `src/lib/config/app.ts`).
 
@@ -70,6 +72,8 @@ cp .env.example .env.local
 Secrets are read only on the server (`src/lib/env.ts`, guarded by `server-only`) and never sent to the browser.
 
 ## Data sources (V1)
+
+> This table lists the original sources; there are now 78. The complete, current list with caveats is in [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md).
 
 | Source | Categories | Refresh | Key |
 | --- | --- | --- | --- |
@@ -145,6 +149,10 @@ Details, terms and caveats: [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md).
 - Real areas (warning polygons, fire footprints), uncertainty rings by location precision, and location-correction notes
 - Source health and live-layer status in Settings → Data sources
 - Demo mode with clearly labelled simulated data
+
+## Windows and Linux
+
+Everything except the macOS extras runs anywhere Node.js 22+ runs: `npm install`, then `npm run dev` (or `npm run build && npm start`). The always-on service, battery mode, scheduled jobs' installers, Mac notifications and the native app are macOS-only; on Windows run the same jobs (`npm run briefing:morning`, `npm run close:run`, `npm run sentinel`) from Task Scheduler. See [HANDOFF.md](HANDOFF.md#whats-macos-only-and-what-to-use-instead).
 
 ## Run it as an always-on local app (macOS)
 
@@ -285,6 +293,7 @@ The full walkthrough is in [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md#adding-a-
 
 ## Documentation
 
+- [HANDOFF.md](HANDOFF.md) — start here: setup on any OS, code map, project rules, current state
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — system design, layers, extension points
 - [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md) — every connector, caveats, how to add one
 - [docs/EVENT_MODEL.md](docs/EVENT_MODEL.md) — schema, status rules, importance scoring, deduplication
