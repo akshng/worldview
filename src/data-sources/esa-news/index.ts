@@ -25,7 +25,7 @@ export const ESA_SITES: Array<{ re: RegExp; name: string; lat: number; lon: numb
   { re: /\bESTEC\b|\bNoordwijk\b/i, name: "ESA ESTEC, Noordwijk, Netherlands", lat: 52.2181, lon: 4.4199, country: "NL" },
   { re: /\bESRIN\b|\bFrascati\b/i, name: "ESA ESRIN, Frascati, Italy", lat: 41.8277, lon: 12.6744, country: "IT" },
   { re: /\bESAC\b|\bVillanueva de la Ca[nñ]ada\b/i, name: "ESA ESAC, Villanueva de la Cañada, Spain", lat: 40.4436, lon: -3.9525, country: "ES" },
-  { re: /\bKourou\b|\bEurope's Spaceport\b|\bGuiana Space Centre\b|\bAriane ?6\b.*\blaunch|\bVega[- ]C\b.*\blaunch/i, name: "Europe's Spaceport, Kourou, French Guiana", lat: 5.2394, lon: -52.7685, country: "GF" },
+  { re: /\bKourou\b|\bEurope's Spaceport\b|\bGuiana Space Centre\b|\bAriane ?6\b.*\blaunch|\bVega[- ]C\b.*\blaunch/i, name: "Europe's Spaceport, Kourou, French Guiana", lat: 5.2394, lon: -52.7685, country: "FR" }, // French Guiana is part of France in the app's country data
 ];
 
 export function esaSite(title: string): Located | null {

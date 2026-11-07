@@ -4,7 +4,7 @@
 
 Created by **[akshng](https://github.com/akshng)** · Open source under the [Apache License 2.0](LICENSE), built for students to learn from and use.
 
-WorldView is a local-first world-intelligence and markets terminal: an interactive 3D globe of real-world events from **78 free, public, keyless sources** (disasters, weather, conflict and news, central banks, sanctions, regulators, outages, cyber, aviation, space weather…), normalised into one event model, deduplicated, scored and traceable to their sources — plus market pages, country dossiers, a "plot anything" map, a Google-Earth-style 3D drop-in view and an on-device AI analyst that can answer any question.
+WorldView is a local-first world-intelligence and markets terminal: an interactive 3D globe of real-world events from **88 free, public, keyless sources** (disasters, weather, conflict and news, central banks, sanctions, regulators, outages, cyber, aviation, space weather…), normalised into one event model, deduplicated, scored and traceable to their sources — plus market pages, country dossiers, a "plot anything" map, a Google-Earth-style 3D drop-in view and an on-device AI analyst that can answer any question.
 
 > **New machine or new coding agent? Start with [HANDOFF.md](HANDOFF.md)** — setup on Windows/Linux/macOS, the code map, project rules and how to extend it.
 
@@ -73,7 +73,7 @@ Secrets are read only on the server (`src/lib/env.ts`, guarded by `server-only`)
 
 ## Data sources (V1)
 
-> This table lists the original sources; there are now 78. The complete, current list with caveats is in [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md).
+> This table lists the original sources; there are now 88. The complete, current list with caveats is in [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md).
 
 | Source | Categories | Refresh | Key |
 | --- | --- | --- | --- |

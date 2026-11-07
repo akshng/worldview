@@ -248,7 +248,7 @@ describe("agency feeds (batch 5)", () => {
   });
 
   it("esa-news: places at a named ESA site, else HQ; skips media notices", () => {
-    expect(esaSite("Ariane 6 launches Sentinel-1D from Kourou")?.country).toBe("GF");
+    expect(esaSite("Ariane 6 launches Sentinel-1D from Kourou")?.country).toBe("FR");
     const xml = rss([
       ["Euclid discovers new comet", "https://www.esa.int/a", "Fri, 06 Nov 2026 08:24:42 +0000"],
       ["ESOC flight controllers prepare for Hera arrival", "https://www.esa.int/b", "Thu, 05 Nov 2026 08:00:00 +0000"],

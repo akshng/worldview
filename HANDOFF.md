@@ -15,7 +15,7 @@ laid out, the rules the project follows, and what's left to do. Details live in 
 WorldView is a local "world intelligence + markets terminal": a 3D globe of live world events plus
 Bloomberg-style market pages and an AI analyst, built only from **free, public, keyless** data.
 
-- **78 data sources** feeding one event store: disasters, weather, conflict, news (42 outlets + GDELT),
+- **88 data sources** feeding one event store: disasters, weather, conflict, news (42 outlets + GDELT),
   official agencies (central banks, sanctions, SEC, DOJ, FDA, FEMA, UN, EU…), outages, cyber,
   aviation, space weather and more. Full list: `docs/DATA_SOURCES.md`.
 - **Pages** (left rail): World (globe), News, Countries, Markets, Charts, Analyst, Briefing, Planet, Energy,
