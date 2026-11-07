@@ -79,12 +79,25 @@ import { cyberAdvisoriesConnector } from "./cyber-advisories";
 import { ukDefenceConnector } from "./uk-defence";
 import { femaDeclarationsConnector } from "./fema-declarations";
 import { sec13dConnector } from "./sec-13d";
+import { ingvConnector } from "./ingv";
+import { ignSpainConnector } from "./ign-spain";
+import { nrcanQuakesConnector } from "./nrcan-quakes";
+import { inmetAlertsConnector } from "./inmet-alerts";
+import { effisBurntAreasConnector } from "./effis-burnt-areas";
+import { cneosCloseApproachesConnector } from "./cneos-close-approaches";
+import { panamaCanalConnector } from "./panama-canal";
+import { whoAfroConnector } from "./who-afro";
+import { esaNewsConnector } from "./esa-news";
+import { ecbStatisticsConnector } from "./ecb-statistics";
 import { demoConnector } from "./demo";
 
 export const CONNECTORS = [
   usgsConnector,
   emscConnector,
   geofonConnector,
+  ingvConnector,
+  ignSpainConnector,
+  nrcanQuakesConnector,
   jmaQuakeConnector,
   bmkgConnector,
   geonetConnector,
@@ -99,6 +112,7 @@ export const CONNECTORS = [
   ecccConnector,
   auEmergencyConnector,
   hkoWarningsConnector,
+  inmetAlertsConnector,
   ukFloodsConnector,
   riverFloodingConnector,
   eonetConnector,
@@ -109,17 +123,21 @@ export const CONNECTORS = [
   femaDeclarationsConnector,
   firmsConnector,
   nifcConnector,
+  effisBurntAreasConnector,
   gdeltConnector,
   gkgConnector,
   newsRssConnector,
   wikipediaEventsConnector,
   spaceConnector,
   fireballsConnector,
+  cneosCloseApproachesConnector,
   swpcAlertsConnector,
   nasaNewsConnector,
+  esaNewsConnector,
   tsunamiConnector,
   faaConnector,
   faaTfrConnector,
+  panamaCanalConnector,
   adsbEmergencyConnector,
   iodaConnector,
   cloudStatusConnector,
@@ -130,6 +148,7 @@ export const CONNECTORS = [
   hibpBreachesConnector,
   whoConnector,
   ecdcConnector,
+  whoAfroConnector,
   fdaRecallsConnector,
   cpscRecallsConnector,
   fdaMedwatchConnector,
@@ -151,6 +170,7 @@ export const CONNECTORS = [
   ofacSanctionsConnector,
   sanctionsNewsConnector,
   centralBanksConnector,
+  ecbStatisticsConnector,
   usEconomicReleasesConnector,
   eiaEnergyConnector,
   marketRegulatorsConnector,
