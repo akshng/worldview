@@ -15,6 +15,7 @@ export const NAV: Array<{ id: AppView; label: string; hint: string; icon: ReactN
   { id: "news", label: "News", hint: "Every event as a feed", icon: I(<><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 9h8M8 13h8M8 17h5" /></>) },
   { id: "countries", label: "Countries", hint: "Every country: profile, events, advisories", icon: I(<><path d="M4 21V4M4 4h11l-2 4 2 4H4" /></>) },
   { id: "markets", label: "Markets", hint: "Cross-asset markets, stocks, filings", icon: I(<path d="M4 18 9 12l4 3 7-9M15 6h5v5" />) },
+  { id: "charts", label: "Charts", hint: "Plot anything over time", icon: I(<><path d="M4 20V4M4 20h16" /><path d="M7 15l4-5 3 3 5-7" /></>) },
   { id: "analyst", label: "Analyst", hint: "Ask the AI analyst", icon: I(<path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8zM18 15l.9 2.1L21 18l-2.1.9L18 21l-.9-2.1L15 18l2.1-.9z" />) },
   { id: "briefing", label: "Briefing", hint: "Daily briefing", icon: I(<><path d="M6 3h9l3 3v15H6z" /><path d="M9 10h6M9 14h6M9 18h4" /></>) },
   { id: "planet", label: "Planet", hint: "Climate and space weather", icon: I(<><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></>) },

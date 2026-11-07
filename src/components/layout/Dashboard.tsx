@@ -13,6 +13,7 @@ import { visibleWindow } from "@/lib/time";
 import { NavRail } from "./NavRail";
 import { NewsPage } from "./NewsPage";
 import { CountriesPage } from "./CountriesPage";
+import { ChartsPage } from "@/components/charts/ChartsPage";
 import { SourcesPage } from "./SourcesPage";
 import { PageModeContext } from "./page-mode";
 import { TopBar } from "./TopBar";
@@ -162,6 +163,7 @@ export function Dashboard() {
             <PageModeContext.Provider value={true}>
               {view === "news" && <NewsPage />}
               {view === "countries" && <CountriesPage />}
+              {view === "charts" && <ChartsPage />}
               {view === "sources" && <SourcesPage />}
               {view === "markets" && <MarketsPanel />}
               {view === "analyst" && <AnalystPanel />}

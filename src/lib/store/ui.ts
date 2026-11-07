@@ -3,6 +3,7 @@
  * Client UI state. Settings are persisted to localStorage (per-browser
  * convenience only — nothing here is authoritative data).
  */
+import { DEFAULT_CHARTS } from "@/lib/charts/specs";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { EVENT_CATEGORIES, type EventCategory } from "@/types/events";
@@ -13,7 +14,7 @@ import type { HiresProviderId, SatSourceId } from "@/lib/imagery";
 import { INFRA_LAYER_IDS, type InfraLayerId } from "@/lib/infra/catalog";
 
 
-export const APP_VIEWS = ["world", "news", "countries", "markets", "analyst", "briefing", "planet", "energy", "security", "trends", "sources"] as const;
+export const APP_VIEWS = ["world", "news", "countries", "markets", "charts", "analyst", "briefing", "planet", "energy", "security", "trends", "sources"] as const;
 export type AppView = (typeof APP_VIEWS)[number];
 
 export type MapStyleId = "dark" | "satellite" | "night";
@@ -143,6 +144,9 @@ interface UIState {
 
   // chrome
   sidebarCollapsed: boolean;
+  /** Charts page: the user's charts, in order. */
+  charts: import("@/lib/charts/specs").ChartSpec[];
+  setCharts: (c: import("@/lib/charts/specs").ChartSpec[]) => void;
   /** Plot only events from these sources (empty = every source). */
   sourceFilter: string[];
   toggleSource: (id: string) => void;
@@ -279,6 +283,8 @@ export const useUI = create<UIState>()(
       dropInView: null,
       dropInPicking: false,
       sidebarCollapsed: false,
+      charts: DEFAULT_CHARTS,
+      setCharts: (charts) => set({ charts }),
       sourceFilter: [],
       toggleSource: (id) => set((s) => ({ sourceFilter: s.sourceFilter.includes(id) ? s.sourceFilter.filter((x) => x !== id) : [...s.sourceFilter, id] })),
       setSourceFilter: (sourceFilter) => set({ sourceFilter }),
@@ -380,7 +386,7 @@ export const useUI = create<UIState>()(
         }
       }),
       // Only persist preferences, not transient selection state.
-      partialize: (s) => ({ settings: s.settings, sidebarCollapsed: s.sidebarCollapsed, feedSort: s.feedSort, mapMode: s.mapMode, view: s.view, sourceFilter: s.sourceFilter }),
+      partialize: (s) => ({ settings: s.settings, sidebarCollapsed: s.sidebarCollapsed, feedSort: s.feedSort, mapMode: s.mapMode, view: s.view, sourceFilter: s.sourceFilter, charts: s.charts }),
       // Apply default layers/range from saved settings on load.
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<UIState>;

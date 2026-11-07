@@ -339,7 +339,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         view.addItem(.separator())
         view.addItem(item("Enter Full Screen", #selector(NSWindow.toggleFullScreen(_:)), "f", [.command, .control]))
         let go = NSMenu(title: "Go")
-        for (i, (title, panel)) in [("World", "world"), ("News", "news"), ("Countries", "countries"), ("Markets", "markets"), ("Analyst", "analyst"), ("Briefing", "briefing"), ("Planet", "planet"), ("Energy", "energy"), ("Security", "security"), ("Trends", "trends"), ("Sources", "sources")].enumerated() {
+        for (i, (title, panel)) in [("World", "world"), ("News", "news"), ("Countries", "countries"), ("Markets", "markets"), ("Charts", "charts"), ("Analyst", "analyst"), ("Briefing", "briefing"), ("Planet", "planet"), ("Energy", "energy"), ("Security", "security"), ("Trends", "trends"), ("Sources", "sources")].enumerated() {
             let it = item(title, #selector(goPanel(_:)), i < 9 ? "\(i + 1)" : "", target: self)
             it.representedObject = panel
             go.addItem(it)

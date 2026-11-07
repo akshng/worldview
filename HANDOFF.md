@@ -18,7 +18,7 @@ Bloomberg-style market pages and an AI analyst, built only from **free, public, 
 - **78 data sources** feeding one event store: disasters, weather, conflict, news (42 outlets + GDELT),
   official agencies (central banks, sanctions, SEC, DOJ, FDA, FEMA, UN, EU…), outages, cyber,
   aviation, space weather and more. Full list: `docs/DATA_SOURCES.md`.
-- **Pages** (left rail): World (globe), News, Countries, Markets, Analyst, Briefing, Planet, Energy,
+- **Pages** (left rail): World (globe), News, Countries, Markets, Charts, Analyst, Briefing, Planet, Energy,
   Security, Trends, Sources. The globe is only mounted on World.
 - **Plot anything**: searchable sidebar to put any source, live-tracking feed (ships, aircraft,
   military aircraft, satellites, ISS, aurora, cameras), infrastructure layer or map style on the globe.
@@ -175,7 +175,6 @@ Known caveats:
 Ideas for next steps:
 - More keyless sources (see the candidate lists in `docs/DATA_SOURCES.md`); NOAA SWPC is done.
 - Hosted/multi-user version (would need licensed market data — several free sources are personal-use).
-- Charts page: plot any metric over time (events per category/source, macro series, prices).
 - Better 3D only if a key is added (Cesium ion / Google Photorealistic 3D Tiles); keyless is near
   MapLibre's limit.
 - Windows-friendly scheduler script (Task Scheduler) mirroring `scripts/schedule-briefing.mjs`.
