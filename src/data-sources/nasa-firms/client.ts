@@ -1,9 +1,9 @@
 import { httpGet, type FetchContext } from "../types";
 import type { FirmsDetection, FirmsRaw } from "./types";
 
-const PRODUCT = "VIIRS_SNPP_NRT";
-/** Public 24 h global file — no key required. */
-const PUBLIC_24H = "https://firms.modaps.eosdis.nasa.gov/data/active_fire/suomi-npp-viirs-c2/csv/SUOMI_VIIRS_C2_Global_24h.csv";
+const PRODUCT = "VIIRS_NOAA20_NRT";
+/** Public 24 h global file — no key required. (NOAA-20 VIIRS: the S-NPP file went header-only in 2026-11.) */
+const PUBLIC_24H = "https://firms.modaps.eosdis.nasa.gov/data/active_fire/noaa-20-viirs-c2/csv/J1_VIIRS_C2_Global_24h.csv";
 /** Area API — requires a free MAP_KEY. Day range 1 = last 24 h. */
 const apiUrl = (key: string) => `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${encodeURIComponent(key)}/${PRODUCT}/world/1`;
 

@@ -5,6 +5,7 @@
  * candidate lookups. Swap for a PostgreSQL/PostGIS implementation of
  * `EventRepository` when multi-process or larger volumes are needed.
  */
+import { renameSync, writeFileSync } from "node:fs";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { EventRelationship, WorldEvent } from "@/types/events";
@@ -14,7 +15,10 @@ import type { EventRepository, IngestionRun } from "./types";
 
 const CELL = 1; // degrees
 const SNAPSHOT_VERSION = 1;
-const MAX_RUNS = 500;
+/** Ingestion runs kept per source (so 6 h / 24 h sources keep their history across restarts). */
+const RUNS_PER_SOURCE = 20;
+/** Snapshot debounce: the store is tens of MB, so write at most about every 30 s. */
+const SAVE_DEBOUNCE_MS = 30_000;
 
 interface Snapshot {
   version: number;
@@ -33,6 +37,8 @@ export class MemoryEventRepository implements EventRepository {
   private runs: IngestionRun[] = [];
   private _version = 0;
   private saveTimer: NodeJS.Timeout | null = null;
+  private flushing: Promise<void> | null = null;
+  private dirtyDuringFlush = false;
   private loaded: Promise<void> | null = null;
 
   constructor(private readonly snapshotFile: string | null) {}
@@ -66,11 +72,45 @@ export class MemoryEventRepository implements EventRepository {
     this.saveTimer = setTimeout(() => {
       this.saveTimer = null;
       void this.flush();
-    }, 5000);
+    }, SAVE_DEBOUNCE_MS);
     this.saveTimer.unref?.();
   }
 
-  async flush() {
+  /** Write the snapshot. Single-flight: overlapping calls wait for the write in progress, then write once more. */
+  async flush(): Promise<void> {
+    if (!this.snapshotFile) return;
+    if (this.flushing) {
+      this.dirtyDuringFlush = true;
+      return this.flushing;
+    }
+    if (this.saveTimer) {
+      clearTimeout(this.saveTimer);
+      this.saveTimer = null;
+    }
+    this.flushing = this.writeSnapshot().finally(() => {
+      this.flushing = null;
+    });
+    await this.flushing;
+    if (this.dirtyDuringFlush) {
+      this.dirtyDuringFlush = false;
+      await this.flush();
+    }
+  }
+
+  /** Synchronous write for shutdown signals (async work may not finish before exit). */
+  flushSync() {
+    if (!this.snapshotFile) return;
+    try {
+      const snap: Snapshot = { version: SNAPSHOT_VERSION, savedAt: new Date().toISOString(), events: [...this.events.values()], relationships: this.relationships, runs: this.runs };
+      const tmp = `${this.snapshotFile}.${process.pid}.tmp`;
+      writeFileSync(tmp, JSON.stringify(snap));
+      renameSync(tmp, this.snapshotFile);
+    } catch (err) {
+      console.warn("[repository] shutdown snapshot failed:", (err as Error).message);
+    }
+  }
+
+  private async writeSnapshot() {
     if (!this.snapshotFile) return;
     const snap: Snapshot = {
       version: SNAPSHOT_VERSION,
@@ -81,7 +121,8 @@ export class MemoryEventRepository implements EventRepository {
     };
     try {
       await fs.mkdir(path.dirname(this.snapshotFile), { recursive: true });
-      const tmp = `${this.snapshotFile}.tmp`;
+      // Per-process temp name: a run-once job and the server can't clobber each other's temp file.
+      const tmp = `${this.snapshotFile}.${process.pid}.tmp`;
       await fs.writeFile(tmp, JSON.stringify(snap));
       await fs.rename(tmp, this.snapshotFile);
     } catch (err) {
@@ -221,7 +262,11 @@ export class MemoryEventRepository implements EventRepository {
     const i = this.runs.findIndex((r) => r.id === run.id);
     if (i >= 0) this.runs[i] = run;
     else this.runs.push(run);
-    if (this.runs.length > MAX_RUNS) this.runs.splice(0, this.runs.length - MAX_RUNS);
+    const same = this.runs.filter((r) => r.dataSourceId === run.dataSourceId);
+    if (same.length > RUNS_PER_SOURCE) {
+      const drop = new Set(same.slice(0, same.length - RUNS_PER_SOURCE));
+      this.runs = this.runs.filter((r) => !drop.has(r));
+    }
     this.scheduleSave();
   }
 

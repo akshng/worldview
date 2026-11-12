@@ -229,6 +229,13 @@ export function ensureStarted() {
   const c = ctx();
   if (c.started) return;
   c.started = true;
+  // The battery watcher stops the server with SIGTERM several times a day: save the
+  // store first so the last ~30 s of ingested events aren't lost.
+  for (const sig of ["SIGTERM", "SIGINT"] as const) {
+    process.once(sig, () => {
+      void openRepo().then((r) => (r as { flushSync?: () => void }).flushSync?.()).finally(() => process.exit(0));
+    });
+  }
   if (!env().INGESTION_ENABLED) {
     console.info("[worldview] ingestion disabled (INGESTION_ENABLED=false)");
     return;

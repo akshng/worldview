@@ -77,7 +77,7 @@ Everything else has working defaults (see `.env.example`, every variable is docu
 
 ```bash
 npm run dev          # dev server (Turbopack) on :3000
-npm test             # vitest — 625 tests, all must pass
+npm test             # vitest — 645 tests, all must pass
 npm run lint         # eslint — 0 errors (3 known warnings)
 npx tsc --noEmit     # typecheck (run `npx next typegen` first on a fresh clone if route types are missing)
 npm run build        # production build — must say "Compiled successfully" with no "Type error"
@@ -171,7 +171,7 @@ tests/                    vitest suites
 
 ## 7. Current state (2026-11)
 
-Working and deployed on the owner's Mac: everything listed in section 1. 625 tests passing.
+Working and deployed on the owner's Mac: everything listed in section 1. 645 tests passing.
 
 Known caveats:
 - `src/components/globe/use-drop-in.ts` patches a MapLibre internal (feature-query scale at high

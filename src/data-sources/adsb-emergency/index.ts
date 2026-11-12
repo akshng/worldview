@@ -99,7 +99,8 @@ export const adsbEmergencyConnector: DataSourceConnector<AdsbRaw> = {
   attribution: "adsb.lol — Open Database License (ODbL)",
   sourceType: "COMMUNITY_DATABASE",
   categories: ["AVIATION"],
-  refreshIntervalMs: 2 * 60_000,
+  // adsb.lol rate-limits (HTTP 429) at 2 min with one request per squawk code.
+  refreshIntervalMs: 8 * 60_000,
   mode: "live",
   fetch: fetchAdsbEmergency,
   parse: parseAdsbEmergency,

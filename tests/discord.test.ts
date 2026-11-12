@@ -48,3 +48,11 @@ describe("watchlist earnings", () => {
     expect(parseNasdaqEarnings({ data: { rows: null } }, "x")).toEqual([]);
   });
 });
+
+describe("discord: untrusted text", () => {
+  it("escapes markdown so a headline can't become a masked link", async () => {
+    const { escapeMd, noLinks } = await import("@/lib/notify/discord");
+    expect(escapeMd("[Click](https://evil.example) *now*")).toBe("\\[Click\\]\\(https://evil.example\\) \\*now\\*");
+    expect(noLinks("See [this](https://evil.example) or https://x.example/a")).toBe("See this or [link removed]");
+  });
+});

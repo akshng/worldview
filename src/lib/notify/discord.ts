@@ -24,6 +24,15 @@ export function discordWebhook(e: Record<string, string | undefined> = process.e
   return u && /^https:\/\/(?:ptb\.|canary\.)?(?:discord|discordapp)\.com\/api\/webhooks\/\d+\/[\w-]+$/.test(u) ? u : null;
 }
 
+/** Third-party text (feed titles, AI output) in Discord: no markdown, no masked links. */
+export function escapeMd(s: string): string {
+  return s.replace(/[\\`*_~|[\]()<>#]/g, (c) => `\\${c}`);
+}
+/** AI text may use plain emphasis, but never links or raw URLs. */
+export function noLinks(s: string): string {
+  return s.replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/https?:\/\/\S+/g, "[link removed]");
+}
+
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
 
 /** Discord limits: content 2000, embed description 4096, field value 1024, 10 embeds. */
@@ -68,12 +77,12 @@ export function briefingEmbeds(b: DailyBriefing, markets: MarketLine[] = [], dat
   const top = b.topDevelopments.slice(0, 8).map((d) => {
     const where = d.event.countryName ?? d.event.locationName ?? "";
     const show = where && !d.event.title.toLowerCase().includes(where.toLowerCase());
-    return `• **${d.event.title}**${show ? ` — ${where}` : ""}`;
+    return `• **${escapeMd(d.event.title)}**${show ? ` — ${escapeMd(where)}` : ""}`;
   });
   const embeds: DiscordEmbed[] = [
     {
       title: `Morning briefing · ${day}`,
-      description: b.aiNarrative ? `${b.aiNarrative.text}\n\n*AI summary (${b.aiNarrative.model}) — interpretation, not verified fact.*` : "No AI summary today.",
+      description: b.aiNarrative ? `${noLinks(b.aiNarrative.text)}\n\n*AI summary (${b.aiNarrative.model}) — interpretation, not verified fact.*` : "No AI summary today.",
       timestamp: date.toISOString(),
     },
     { title: "Top developments", description: top.length ? top.join("\n") : "No major developments in the last 24 hours." },
@@ -113,7 +122,7 @@ export function alertEmbed(e: AlertEvent, aiNote?: { text: string; model: string
   return {
     title: `${TYPE_ICON[e.type] ?? "⚠️"} ${e.title}`,
     url: link?.sourceUrl ?? undefined,
-    description: `${clip(e.summary, 500)}${aiNote ? `\n\n**Why it may matter** — ${clip(aiNote.text, 1200)}\n*AI interpretation (${aiNote.model}), not verified fact.*` : ""}`,
+    description: `${escapeMd(clip(e.summary, 500))}${aiNote ? `\n\n**Why it may matter** — ${noLinks(clip(aiNote.text, 1200))}\n*AI interpretation (${aiNote.model}), not verified fact.*` : ""}`,
     color: 0xe5484d,
     fields: [
       { name: "Importance", value: `${Math.round(e.importanceScore)}/100`, inline: true },

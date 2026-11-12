@@ -29,7 +29,6 @@ import { federalRegisterConnector } from "./federal-register";
 import { travelAdvisoriesConnector } from "./travel-advisories";
 import { fcdoTravelConnector } from "./fcdo-travel";
 import { canadaTravelConnector } from "./canada-travel";
-import { smartravellerConnector } from "./smartraveller";
 import { cdcTravelConnector } from "./cdc-travel";
 import { adsbEmergencyConnector } from "./adsb-emergency";
 import { wikipediaEventsConnector } from "./wikipedia-events";
@@ -158,7 +157,8 @@ export const CONNECTORS = [
   travelAdvisoriesConnector,
   fcdoTravelConnector,
   canadaTravelConnector,
-  smartravellerConnector,
+  // smartravellerConnector — off: smartraveller.gov.au resets connections from automated
+  // clients (0 events ever). Kept in the codebase in case that changes.
   federalRegisterConnector,
   unPressConnector,
   iaeaConnector,

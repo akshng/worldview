@@ -36,6 +36,12 @@ export function parseSpc(raw: SpcRaw, ctx: ParseContext): ParseResult {
       const [time, mag, location, county, state, latS, lonS, ...rest] = line.split(",");
       const lat = Number(latS), lon = Number(lonS);
       const at = spcTime(day, time);
+      // Just after 12Z "today" still holds the previous convective day: a report that would land
+      // in the future is that day's report under the wrong date (and a duplicate). Skip it.
+      if (at && at.getTime() > ctx.now + 10 * 60_000) {
+        skipped++;
+        continue;
+      }
       if (!at || !Number.isFinite(lat) || !Number.isFinite(lon) || !state) {
         skipped++;
         continue;

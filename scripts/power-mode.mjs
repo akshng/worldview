@@ -15,6 +15,11 @@ import { existsSync, mkdirSync, rmSync, writeFileSync, utimesSync, closeSync, op
 import os from "node:os";
 import path from "node:path";
 
+if (process.platform !== "darwin") {
+  console.error("Battery mode uses macOS launchd and pmset. On Windows or Linux run the jobs from Task Scheduler / cron instead (see HANDOFF.md).");
+  process.exit(1);
+}
+
 const project = path.resolve(import.meta.dirname, "..");
 const target = `gui/${process.getuid()}`;
 const agents = path.join(os.homedir(), "Library", "LaunchAgents");

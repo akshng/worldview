@@ -44,7 +44,7 @@ export function parseGdacs(fc: GdacsCollection, ctx: ParseContext): ParseResult 
     if (p.eventtype === "WF" && sev?.severity && sev.severityunit === "ha") metrics.area_km2 = Math.round(sev.severity) / 100;
     const name = p.eventname?.trim();
     const countryName = p.country?.trim() || p.affectedcountries?.[0]?.countryname || null;
-    const title =
+    const fullTitle =
       p.eventtype === "EQ" && typeof metrics.magnitude === "number"
         ? `M ${(metrics.magnitude as number).toFixed(1)} earthquake — ${countryName ?? p.name}`
         : name
@@ -52,6 +52,7 @@ export function parseGdacs(fc: GdacsCollection, ctx: ParseContext): ParseResult 
           : p.eventtype === "WF" && typeof metrics.area_km2 === "number"
             ? `${plainText(p.name, 160)} (${Math.round((metrics.area_km2 as number) * 100).toLocaleString("en-US")} ha)`
             : plainText(p.name, 200);
+    const title = fullTitle.length > 300 ? `${fullTitle.slice(0, 297)}…` : fullTitle;
     const forecast = Date.parse(from) > now;
     candidates.push({
       type: t.type,
