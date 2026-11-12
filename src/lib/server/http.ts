@@ -59,10 +59,17 @@ export function handler<A extends unknown[]>(fn: (...args: A) => Promise<Respons
   };
 }
 
-/** Admin actions: require ADMIN_TOKEN when set, otherwise only loopback hosts. */
+/**
+ * Admin actions: require ADMIN_TOKEN when set; otherwise the request must come from this
+ * computer and not from another website. (req.url's host is the server's bind address,
+ * not the caller's, so the Host header and Fetch Metadata are what count. src/proxy.ts
+ * enforces the same rules for every /api route.)
+ */
 export function isAdminRequest(req: Request): boolean {
   const token = env().ADMIN_TOKEN;
   if (token) return req.headers.get("authorization") === `Bearer ${token}`;
-  const host = new URL(req.url).hostname;
-  return host === "localhost" || host === "127.0.0.1" || host === "[::1]" || host === "::1";
+  const host = req.headers.get("host") ?? "";
+  if (!/^(127\.0\.0\.1|localhost|\[::1\])(:\d{1,5})?$/i.test(host)) return false;
+  const site = req.headers.get("sec-fetch-site");
+  return !site || site === "same-origin" || site === "none";
 }

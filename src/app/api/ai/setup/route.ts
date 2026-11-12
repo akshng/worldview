@@ -1,5 +1,5 @@
 import { getLocalProvider } from "@/lib/ai";
-import { handler, json } from "@/lib/server/http";
+import { handler, isAdminRequest, json } from "@/lib/server/http";
 
 export const dynamic = "force-dynamic";
 
@@ -8,8 +8,7 @@ export const dynamic = "force-dynamic";
  * background. Progress is reported by GET /api/meta → ai.local.
  */
 export const POST = handler(async (req: Request) => {
-  const host = new URL(req.url).hostname;
-  if (!["localhost", "127.0.0.1", "::1", "[::1]"].includes(host)) return json({ error: "Forbidden" }, { status: 403 });
+  if (!isAdminRequest(req)) return json({ error: "Forbidden" }, { status: 403 });
   const local = getLocalProvider();
   if (!local) return json({ error: "The local AI provider is not active (AI_PROVIDER is not 'local')." }, { status: 409 });
   void local.ensureReady().catch(() => {});

@@ -142,6 +142,17 @@ tests/                    vitest suites
    facts. Where correctness matters (verdicts, track records, picks), compute it in code and let the
    model only phrase it (see `src/lib/analyst/ideas-answer.ts`, `src/lib/finance/research-take.ts`).
 
+### Security model (local app, no login)
+
+- `src/proxy.ts` guards every `/api` route: the `Host` must be a loopback name (blocks DNS
+  rebinding and other devices), and browser requests labelled `Sec-Fetch-Site: cross-site` /
+  `same-site` are refused (blocks other websites from posting to Discord, starting AI jobs or
+  changing the watchlist). The app sends `same-origin`; scripts and curl send nothing and pass.
+- `isAdminRequest` (`src/lib/server/http.ts`) applies the same rules (or `ADMIN_TOKEN` when set).
+  Don't use `req.url`'s hostname for trust: Next fills it from the bind address.
+- `npm run dev` / `npm start` bind to 127.0.0.1. `next/image` is disabled (unused).
+- Keep `npm audit --omit=dev` at 0 and Next.js patched.
+
 ## 6. How to extend it
 
 - **Add a data source:** create `src/data-sources/<id>/` implementing `DataSourceConnector`
