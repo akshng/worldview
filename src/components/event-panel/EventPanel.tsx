@@ -12,6 +12,10 @@ import { CloseIcon, ExternalIcon, SparkIcon } from "@/components/ui/icons";
 import { focusEvent } from "@/components/event-feed/EventFeed";
 import { ExposureChip } from "@/components/markets/MarketsPanel";
 import type { EventMetrics, WorldEvent } from "@/types/events";
+import { usgsEventIdFrom } from "@/lib/enrich/usgs";
+import { wantsWeather } from "@/lib/enrich/weather";
+import { ShakingImpact } from "./ShakingImpact";
+import { WeatherSection } from "./WeatherCard";
 
 const METRIC_LABELS: Record<string, string> = {
   magnitude: "Magnitude",
@@ -126,6 +130,7 @@ export function EventPanel() {
 
 function EventBody({ ev, related, exposure, showAI, developer }: { ev: WorldEvent; related: EventDetailResponse["related"]; exposure: EventDetailResponse["marketExposure"]; showAI: boolean; developer: boolean }) {
   const metrics = Object.entries(ev.metrics).filter(([, v]) => v !== null && v !== "" && v !== undefined);
+  const usgsId = ev.type === "EARTHQUAKE" && !ev.isSynthetic ? usgsEventIdFrom(ev.sources) : null;
   return (
     <>
       {/* Header */}
@@ -169,6 +174,12 @@ function EventBody({ ev, related, exposure, showAI, developer }: { ev: WorldEven
           </dl>
         )}
       </section>
+
+      {/* ENRICHMENTS — fetched only while this panel is open */}
+      {usgsId && <ShakingImpact key={ev.id} eventId={ev.id} usgsId={usgsId} />}
+      {wantsWeather(ev) && (
+        <WeatherSection lat={ev.latitude} lon={ev.longitude} marine={ev.type === "MARITIME"} flood={ev.type === "FLOOD"} />
+      )}
 
       {/* LOCATION */}
       <section className="border-t border-line px-4 py-3.5">
