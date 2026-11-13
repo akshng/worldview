@@ -56,6 +56,23 @@ export interface SourceHealth {
   nextRunAt: string | null;
   lastRun: IngestionRun | null;
   consecutiveFailures: number;
+  /** Health extras (optional: older servers don't send them) */
+  lastNonEmptyAt?: string | null;
+  records24h?: number;
+  anomaly?: SourceAnomaly | null;
+  anomalyNote?: string | null;
+}
+
+export type SourceAnomaly = "empty-streak" | "volume-drop" | "failing";
+
+/** GET /api/health (optional endpoint; fall back to /api/sources when missing). */
+export interface HealthResponse {
+  ok: boolean;
+  server?: { startedAt: string; uptimeS: number };
+  sources: { total: number; online: number; degraded: number; error: number; anomalies: Array<{ id: string; name: string; anomaly: SourceAnomaly | string; anomalyNote: string | null }> };
+  lastBriefingAt?: string | null;
+  lastBriefingLateMinutes?: number | null;
+  ai?: unknown;
 }
 
 export interface SourcesResponse {
@@ -267,6 +284,31 @@ export const api = {
     return body;
   },
   sources: (signal?: AbortSignal) => getJSON<SourcesResponse>("/api/sources", signal),
+  /** null when this server has no health endpoint yet */
+  async health(signal?: AbortSignal): Promise<HealthResponse | null> {
+    const res = await fetch("/api/health", { signal, cache: "no-store" });
+    if (res.status === 404) return null;
+    const body = await res.json().catch(() => null);
+    if (!body || typeof body !== "object" || !("sources" in body)) {
+      if (!res.ok) throw new Error(`Request failed (${res.status})`);
+      return null;
+    }
+    return body as HealthResponse;
+  },
+  digest: (since: number, signal?: AbortSignal) => getJSON<import("./digest").Digest>(`/api/digest?since=${encodeURIComponent(new Date(since).toISOString())}`, signal),
+  alertRules: (signal?: AbortSignal) => getJSON<{ rules: import("@/lib/notify/rules").AlertRule[]; discord: boolean; max: number }>("/api/alert-rules", signal),
+  async saveAlertRules(rules: import("@/lib/notify/rules").AlertRule[]) {
+    const res = await fetch("/api/alert-rules", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rules }) });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body?.details?.[0] ? `${body.details[0].path}: ${body.details[0].message}` : (body?.error ?? `Request failed (${res.status})`));
+    return body as { rules: import("@/lib/notify/rules").AlertRule[]; discord: boolean; max: number };
+  },
+  async testAlertRule(rule: import("@/lib/notify/rules").AlertRule) {
+    const res = await fetch("/api/alert-rules/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rule }) });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body?.details?.[0] ? body.details[0].message : (body?.error ?? `Request failed (${res.status})`));
+    return body as { total: number; matched: number; sample: Array<{ id: string; title: string; type: string; importanceScore: number; countryName: string | null; timestamp: string }> };
+  },
   meta: (signal?: AbortSignal) => getJSON<MetaResponse>("/api/meta", signal),
   /** Online place search (Photon by komoot, proxied + cached by our server) */
   geocode: (q: string, signal?: AbortSignal) => getJSON<GeocodeResponse>(`/api/geocode?q=${encodeURIComponent(q)}`, signal),

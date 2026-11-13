@@ -8,6 +8,7 @@ import clsx from "clsx";
 import { useEffect, useState } from "react";
 import { LineChart } from "./LineChart";
 import { api } from "@/lib/client/api";
+import { downloadText, exportName, seriesToCsv } from "@/lib/client/export";
 import { CATEGORY_LIST } from "@/lib/categories";
 import type { ChartSpec } from "@/lib/charts/specs";
 import { useUI } from "@/lib/store/ui";
@@ -70,6 +71,15 @@ function ChartCard({ spec, onRemove }: { spec: ChartSpec; onRemove: () => void }
           <div className="mt-0.5 text-[12px] text-muted">{d && "latest" in d ? d.latest : " "}</div>
         </div>
         <div className="flex shrink-0 gap-1">
+          {d && "points" in d && d.points.length > 0 && (
+            <button
+              onClick={() => downloadText(exportName(spec.title, "csv"), "text/csv", seriesToCsv(d.points, { xIsTime: spec.kind !== "macro", name: spec.kind === "events" ? "events" : spec.kind === "price" ? "price" : "value" }))}
+              className="rounded border border-line px-1.5 py-0.5 text-[11px] text-muted hover:text-fg"
+              title="Download this series as CSV"
+            >
+              Export
+            </button>
+          )}
           {spec.kind === "events" && (
             <button onClick={showOnMap} className="rounded border border-line px-1.5 py-0.5 text-[11px] text-muted hover:text-fg" title="Open these events on the globe">
               Map

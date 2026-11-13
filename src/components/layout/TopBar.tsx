@@ -7,11 +7,14 @@ import { TIME_RANGES, formatClock } from "@/lib/time";
 import { useNow } from "@/lib/client/use-now";
 import { IconButton } from "@/components/ui/primitives";
 import { SearchIcon, SettingsIcon } from "@/components/ui/icons";
+import { HealthDot } from "./HealthDot";
 
 export function TopBar() {
   const range = useUI((s) => s.range);
   const setRange = useUI((s) => s.setRange);
   const cursor = useUI((s) => s.timelineCursor);
+  const replayPlaying = useUI((s) => s.replayPlaying);
+  const replaySpeed = useUI((s) => s.replaySpeed);
   const autoRefresh = useUI((s) => s.settings.autoRefresh);
   const setSearchOpen = useUI((s) => s.setSearchOpen);
   const openSettings = useUI((s) => s.openSettings);
@@ -21,7 +24,11 @@ export function TopBar() {
 
   const status =
     cursor !== null
-      ? { label: `REPLAY ${formatClock(cursor)}`, color: "var(--warn)", pulse: false }
+      ? {
+          label: `REPLAY ${now - cursor > 20 * 3_600_000 ? `${new Date(cursor).toLocaleDateString([], { weekday: "short" })} ` : ""}${formatClock(cursor)}${replayPlaying ? ` ▶ ${replaySpeed}×` : ""}`,
+          color: "var(--warn)",
+          pulse: false,
+        }
       : autoRefresh
         ? { label: "LIVE", color: "var(--live)", pulse: true }
         : { label: "PAUSED", color: "var(--text-muted)", pulse: false };
@@ -80,6 +87,7 @@ export function TopBar() {
           <span className="flex-1">Search</span>
           <kbd className="meta rounded border border-line px-1 text-faint">⌘K</kbd>
         </button>
+        <HealthDot />
         <IconButton onClick={() => openSettings()} title="Settings" aria-label="Settings">
           <SettingsIcon />
         </IconButton>
