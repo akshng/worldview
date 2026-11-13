@@ -24,6 +24,12 @@ export function guardDecision(h: { host: string | null; secFetchSite: string | n
 }
 
 export function proxy(req: NextRequest) {
+  // Malformed percent-encoding would otherwise crash route matching with a 500.
+  try {
+    decodeURIComponent(req.nextUrl.pathname);
+  } catch {
+    return NextResponse.json({ error: "Malformed URL encoding" }, { status: 400 });
+  }
   const reason = guardDecision({ host: req.headers.get("host"), secFetchSite: req.headers.get("sec-fetch-site"), origin: req.headers.get("origin") });
   if (reason) return NextResponse.json({ error: reason }, { status: 403 });
   return NextResponse.next();
