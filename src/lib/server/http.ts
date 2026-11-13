@@ -52,7 +52,9 @@ export async function maybeCompress(req: unknown, res: Response): Promise<Respon
 export function handler<A extends unknown[]>(fn: (...args: A) => Promise<Response>) {
   return async (...args: A) => {
     try {
-      return await maybeCompress(args[0], await fn(...args));
+      // Next.js compresses responses itself (since 16.4 also for route handlers);
+      // compressing here too made large JSON double-gzipped and unreadable in browsers.
+      return await fn(...args);
     } catch (err) {
       return serverError(err);
     }
