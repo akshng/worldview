@@ -77,7 +77,7 @@ Everything else has working defaults (see `.env.example`, every variable is docu
 
 ```bash
 npm run dev          # dev server (Turbopack) on :3000
-npm test             # vitest — 645 tests, all must pass
+npm test             # vitest — 753 tests, all must pass
 npm run lint         # eslint — 0 errors (3 known warnings)
 npx tsc --noEmit     # typecheck (run `npx next typegen` first on a fresh clone if route types are missing)
 npm run build        # production build — must say "Compiled successfully" with no "Type error"
@@ -148,6 +148,11 @@ tests/                    vitest suites
    facts. Where correctness matters (verdicts, track records, picks), compute it in code and let the
    model only phrase it (see `src/lib/analyst/ideas-answer.ts`, `src/lib/finance/research-take.ts`).
 
+### Health and diagnostics
+
+- `GET /api/health`: server uptime, source counts by status, anomalies (empty streaks, volume drops, repeated failures), last briefing time and lateness, AI status. The top-bar dot and the Sources page use it. Logs in `.data/` are timestamped and rotate at 5 MB.
+- The event store (`.data/live-store.json`) is snapshot format v2 (compact); always read it through `MemoryEventRepository`.
+
 ### Security model (local app, no login)
 
 - `src/proxy.ts` guards every `/api` route: the `Host` must be a loopback name (blocks DNS
@@ -184,7 +189,7 @@ tests/                    vitest suites
 
 ## 7. Current state (2026-11)
 
-Working and deployed on the owner's Mac: everything listed in section 1. 645 tests passing.
+Working and deployed on the owner's Mac: everything listed in section 1. 753 tests passing.
 
 Known caveats:
 - `src/components/globe/use-drop-in.ts` patches a MapLibre internal (feature-query scale at high
