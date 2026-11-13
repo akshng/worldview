@@ -169,7 +169,7 @@ export class PostgresEventRepository implements EventRepository {
   }
 
   async prune(beforeMs: number) {
-    const r = await this.db.query<{ id: string }>(`DELETE FROM events WHERE GREATEST(ts, updated_at) < $1 RETURNING id`, [new Date(beforeMs).toISOString()]);
+    const r = await this.db.query<{ id: string }>(`DELETE FROM events WHERE GREATEST(ts, COALESCE((doc->>'lastEvidenceAt')::timestamptz, updated_at)) < $1 RETURNING id`, [new Date(beforeMs).toISOString()]);
     if (r.rows.length) this.bump();
     return r.rows.length;
   }

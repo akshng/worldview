@@ -14,8 +14,11 @@ import {
   type EventCategory,
   type WorldEvent,
 } from "@/types/events";
-import { createEvent, mergeCandidate, type GeoEnrichment } from "@/lib/events/build";
+import { createEvent, mergeCandidate, mergeSeries, type GeoEnrichment } from "@/lib/events/build";
 import { findBestMatch, ruleFor, type Comparable } from "@/lib/deduplication/similarity";
+import { findStoryMatch, NEWS_SOURCE_TYPES, SERIES_LOOKBACK_MS, seriesTouch, STORY_COUNTRY_RADIUS_KM, STORY_RADIUS_KM, STORY_WINDOW_MS } from "./story";
+
+export { findStoryMatch, normalizeHeadline, seriesTouch } from "./story";
 import { describeNearest, getCountry, reverseGeocode } from "@/lib/geo/gazetteer";
 import { countryFromPlaceText, placesInText } from "@/lib/geo/headline-places";
 import { normalizeLon, oceanName } from "@/lib/geo/math";
@@ -190,7 +193,10 @@ export async function ingestCandidates(
     // 1. Same source record seen before → update in place.
     const existing = await repo.findBySourceRecord(c.source.id);
     if (existing) {
-      const { event, changed } = mergeCandidate(existing, c, now);
+      // A series event spans several records: compare against this record's own time, keep the series start.
+      const base = existing.seriesKey ? { ...existing, timestamp: c.timestamp } : existing;
+      const { event, changed } = mergeCandidate(base, c, now);
+      if (existing.seriesKey && existing.timestamp < event.timestamp) event.timestamp = existing.timestamp;
       if (changed) {
         await repo.save(event);
         stats.updated++;
@@ -225,9 +231,29 @@ export async function ingestCandidates(
       continue;
     }
 
+    const t = Date.parse(c.timestamp);
+
+    // 1c. Another record of the same warning series (time slice, reissue) → one event spanning the period.
+    if (c.seriesKey) {
+      const near = await repo.findNear({ lat: c.latitude, lon: c.longitude, radiusKm: 25, fromMs: t - SERIES_LOOKBACK_MS, toMs: t + SERIES_LOOKBACK_MS });
+      const series = near
+        .filter((e) => e.seriesKey === c.seriesKey && seriesTouch(e, c))
+        .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))[0];
+      if (series) {
+        const { event, changed } = mergeSeries(series, c, now);
+        if (changed) {
+          await repo.save(event);
+          stats.updated++;
+          touched.push(event);
+        } else {
+          stats.unchanged++;
+        }
+        continue;
+      }
+    }
+
     // 2. Deduplicate against nearby events of the same type.
     const rule = ruleFor(c.type);
-    const t = Date.parse(c.timestamp);
     const pool = await repo.findNear({
       lat: c.latitude,
       lon: c.longitude,
@@ -257,8 +283,32 @@ export async function ingestCandidates(
       continue;
     }
 
-    // 3. New event.
+    // 2b. The same story from another outlet or feed (identical / near-identical headline).
     const geo = enrichGeo(c);
+    if (NEWS_SOURCE_TYPES.has(c.source.sourceType)) {
+      const country = c.country ?? geo.country;
+      const storyPool = await repo.findNear({
+        lat: c.latitude,
+        lon: c.longitude,
+        radiusKm: country ? STORY_COUNTRY_RADIUS_KM : STORY_RADIUS_KM,
+        fromMs: t - STORY_WINDOW_MS,
+        toMs: t + STORY_WINDOW_MS,
+      });
+      const story = findStoryMatch(c, country, storyPool);
+      if (story) {
+        const { event, changed } = mergeCandidate(story, c, now);
+        if (changed) {
+          await repo.save(event);
+          stats.deduplicated++;
+          touched.push(event);
+        } else {
+          stats.unchanged++;
+        }
+        continue;
+      }
+    }
+
+    // 3. New event.
     const event = createEvent(c, { ...geo, note: refined.note ?? geo.note }, now);
     await repo.save(event); // persist first: relationships reference it
     if (await linkRelated(repo, event, now)) await repo.save(event);

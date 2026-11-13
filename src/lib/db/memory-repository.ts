@@ -10,11 +10,16 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { EventRelationship, WorldEvent } from "@/types/events";
 import { matchesQuery, sortEvents, type EventQuery } from "@/lib/events/query";
+import { recompute } from "@/lib/events/build";
+import { migrateLegacyEvent, retentionTime } from "@/lib/events/compact";
+import { collapseDuplicates } from "@/lib/ingestion/collapse";
+import { decodeEvent, encodeEvent, StringTable } from "./snapshot-codec";
 import { gridKey, haversineKm } from "@/lib/geo/math";
 import type { EventRepository, IngestionRun } from "./types";
 
 const CELL = 1; // degrees
-const SNAPSHOT_VERSION = 1;
+/** 2 = compact event encoding (snapshot-codec.ts). Version 1 snapshots are migrated on load. */
+const SNAPSHOT_VERSION = 2;
 /** Ingestion runs kept per source (so 6 h / 24 h sources keep their history across restarts). */
 const RUNS_PER_SOURCE = 20;
 /** Snapshot debounce: the store is tens of MB, so write at most about every 30 s. */
@@ -23,9 +28,38 @@ const SAVE_DEBOUNCE_MS = 30_000;
 interface Snapshot {
   version: number;
   savedAt: string;
-  events: WorldEvent[];
+  events: unknown[];
+  /** Shared strings referenced by index from events (version 2). */
+  strings?: string[];
   relationships: EventRelationship[];
   runs: IngestionRun[];
+}
+
+/** Snapshot form: compact, lossless encoding; scores are recomputed on load. */
+function snapshotOf(events: Iterable<WorldEvent>, relationships: EventRelationship[], runs: IngestionRun[]): Snapshot {
+  const table = new StringTable();
+  const encoded = [...events].map((e) => encodeEvent(e, table));
+  return { version: SNAPSHOT_VERSION, savedAt: new Date().toISOString(), strings: table.strings, events: encoded, relationships, runs };
+}
+
+/**
+ * Bring a loaded snapshot up to date: apply the store caps (sources, timeline, raw
+ * data), backfill outlet counts / evidence times, rescore, and collapse duplicates
+ * stored by older versions (warning series, identical headlines across feeds).
+ */
+export function migrateSnapshot(input: WorldEvent[], rels: EventRelationship[], now = Date.now()): { events: WorldEvent[]; relationships: EventRelationship[] } {
+  const { events, remap } = collapseDuplicates(input.map((e) => recompute(migrateLegacyEvent(e), now)), now);
+  if (!remap.size) return { events, relationships: rels };
+  const seen = new Set<string>();
+  const relationships: EventRelationship[] = [];
+  for (const r of rels) {
+    const from = remap.get(r.fromEventId) ?? r.fromEventId, to = remap.get(r.toEventId) ?? r.toEventId;
+    const key = [r.type, ...[from, to].sort()].join("|");
+    if (from === to || seen.has(key)) continue;
+    seen.add(key);
+    relationships.push(from === r.fromEventId && to === r.toEventId ? r : { ...r, fromEventId: from, toEventId: to });
+  }
+  return { events, relationships };
 }
 
 export class MemoryEventRepository implements EventRepository {
@@ -54,9 +88,12 @@ export class MemoryEventRepository implements EventRepository {
     try {
       const raw = await fs.readFile(this.snapshotFile, "utf8");
       const snap = JSON.parse(raw) as Snapshot;
-      if (snap.version !== SNAPSHOT_VERSION) return;
-      for (const e of snap.events) this.index(e);
-      this.relationships = snap.relationships ?? [];
+      if (snap.version !== SNAPSHOT_VERSION && snap.version !== 1) return;
+      const table = new StringTable(snap.strings ?? []);
+      const stored = snap.version === 1 ? (snap.events as WorldEvent[]) : (snap.events as Record<string, unknown>[]).map((o) => decodeEvent(o, table));
+      const { events, relationships } = migrateSnapshot(stored, snap.relationships ?? []);
+      for (const e of events) this.index(e);
+      this.relationships = relationships;
       this.runs = snap.runs ?? [];
       this._version++;
     } catch (err) {
@@ -101,7 +138,7 @@ export class MemoryEventRepository implements EventRepository {
   flushSync() {
     if (!this.snapshotFile) return;
     try {
-      const snap: Snapshot = { version: SNAPSHOT_VERSION, savedAt: new Date().toISOString(), events: [...this.events.values()], relationships: this.relationships, runs: this.runs };
+      const snap = snapshotOf(this.events.values(), this.relationships, this.runs);
       const tmp = `${this.snapshotFile}.${process.pid}.tmp`;
       writeFileSync(tmp, JSON.stringify(snap));
       renameSync(tmp, this.snapshotFile);
@@ -112,13 +149,7 @@ export class MemoryEventRepository implements EventRepository {
 
   private async writeSnapshot() {
     if (!this.snapshotFile) return;
-    const snap: Snapshot = {
-      version: SNAPSHOT_VERSION,
-      savedAt: new Date().toISOString(),
-      events: [...this.events.values()],
-      relationships: this.relationships,
-      runs: this.runs,
-    };
+    const snap = snapshotOf(this.events.values(), this.relationships, this.runs);
     try {
       await fs.mkdir(path.dirname(this.snapshotFile), { recursive: true });
       // Per-process temp name: a run-once job and the server can't clobber each other's temp file.
@@ -216,8 +247,8 @@ export class MemoryEventRepository implements EventRepository {
   async prune(beforeMs: number) {
     let n = 0;
     for (const e of [...this.events.values()]) {
-      const latest = Math.max(Date.parse(e.timestamp), Date.parse(e.updatedAt));
-      if (latest < beforeMs) {
+      // Retention follows the last distinct new evidence, not every merge touch.
+      if (retentionTime(e) < beforeMs) {
         this.unindex(e);
         n++;
       }

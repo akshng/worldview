@@ -2,9 +2,12 @@
  * Pure functions that turn candidates into WorldEvents and merge further
  * candidates (from the same or other sources) into existing events.
  */
-import type { EventCandidate, EventSource, SourceAssertion, TimelineEntry, WorldEvent } from "@/types/events";
+import type { EventCandidate, TimelineEntry, WorldEvent } from "@/types/events";
 import { calculateImportance } from "@/lib/scoring/importance";
-import { deriveConfidence, deriveStatus, independentPublisherCount } from "./status";
+import { deriveConfidence, deriveStatus, independentPublisherCount, publisherKey } from "./status";
+import { authorityOf, sourceKeys, trimEvent, wasSeen } from "./compact";
+
+export { authorityOf };
 
 export interface GeoEnrichment {
   country: string | null;
@@ -14,19 +17,6 @@ export interface GeoEnrichment {
   fallbackLocationName: string | null;
   /** Explanation when the pipeline refined the location */
   note?: { method: string; detail: string } | null;
-}
-
-const AUTHORITY: Record<SourceAssertion, number> = {
-  OFFICIAL_FINAL: 6,
-  OFFICIAL_PRELIMINARY: 5,
-  MEASUREMENT: 4,
-  SCHEDULED: 3,
-  MEDIA_REPORT: 2,
-  SYNTHETIC: 0,
-};
-
-export function authorityOf(s: EventSource): number {
-  return AUTHORITY[s.assertion];
 }
 
 let counter = 0;
@@ -82,6 +72,8 @@ export function createEvent(c: EventCandidate, geo: GeoEnrichment, now = Date.no
     aiInterpretation: null,
     isSynthetic: c.isSynthetic,
     rawData: c.rawData === undefined ? {} : { [c.source.id]: c.rawData },
+    lastEvidenceAt: nowIso,
+    seriesKey: c.seriesKey ?? null,
   };
   return recompute(event, now);
 }
@@ -126,8 +118,8 @@ export function mergeCandidate(event: WorldEvent, c: EventCandidate, now = Date.
       next.timeline.push({ at: nowIso, kind: "UPDATE", label: describeUpdate(event, c), sourceId: c.source.id });
       kind = "updated";
     }
-  } else if (c.source.sourceUrl && event.sources.some((s) => s.sourceUrl === c.source.sourceUrl)) {
-    // Same article/record already attached under another id — nothing new.
+  } else if ((c.source.sourceUrl && event.sources.some((s) => s.sourceUrl === c.source.sourceUrl)) || wasSeen(event, c.source)) {
+    // Same article/record already attached under another id, or attached before and trimmed — nothing new.
     return { event, changed: false, kind: "unchanged" };
   } else {
     next.sources.push(c.source);
@@ -170,14 +162,98 @@ export function mergeCandidate(event: WorldEvent, c: EventCandidate, now = Date.
 
   if (c.rawData !== undefined) next.rawData[c.source.id] = c.rawData;
   if (kind !== "unchanged") next.updatedAt = nowIso;
+  // Retention follows distinct new evidence: a material update/confirmation or a new outlet —
+  // not another copy of the story from an outlet already counted.
+  if (kind === "updated" || (kind === "corroborated" && isNewPublisher(event, c))) next.lastEvidenceAt = nowIso;
   next.timeline.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
   return { event: recompute(next, now), changed: kind !== "unchanged", kind };
 }
 
-/** Recompute derived fields: status, confidence, source count, importance. */
-export function recompute(e: WorldEvent, now = Date.now()): WorldEvent {
+function isNewPublisher(event: WorldEvent, c: EventCandidate): boolean {
+  const k = publisherKey(c.source);
+  return !(event.publisherKeys ?? []).includes(k) && !event.sources.some((s) => publisherKey(s) === k);
+}
+
+/**
+ * Merge another stored event (a duplicate) into `target`: sources, timeline, entities,
+ * counts and seen keys are combined; the more authoritative primary wins.
+ */
+export function absorbEvent(target: WorldEvent, other: WorldEvent, now = Date.now()): WorldEvent {
+  const [a, b] = authorityOf(other.sources[0] ?? target.sources[0]) > authorityOf(target.sources[0] ?? other.sources[0]) ? [other, target] : [target, other];
+  const ids = new Set(a.sources.map((s) => s.id));
+  const urls = new Set(a.sources.map((s) => s.sourceUrl).filter(Boolean));
+  const extra = b.sources.filter((s) => !ids.has(s.id) && !(s.sourceUrl && urls.has(s.sourceUrl)));
+  const merged: WorldEvent = {
+    ...a,
+    id: target.id,
+    createdAt: target.createdAt < other.createdAt ? target.createdAt : other.createdAt,
+    updatedAt: target.updatedAt > other.updatedAt ? target.updatedAt : other.updatedAt,
+    lastEvidenceAt: [target.lastEvidenceAt ?? target.updatedAt, other.lastEvidenceAt ?? other.updatedAt].sort().at(-1),
+    sources: [...a.sources, ...extra],
+    timeline: [...a.timeline, ...b.timeline.filter((t) => !t.sourceId || !ids.has(t.sourceId))].sort((x, y) => Date.parse(x.at) - Date.parse(y.at)),
+    entities: dedupeEntities([...a.entities, ...b.entities]),
+    relatedEventIds: [...new Set([...a.relatedEventIds, ...b.relatedEventIds])].filter((id) => id !== target.id && id !== other.id),
+    metrics: { ...b.metrics, ...a.metrics },
+    rawData: { ...b.rawData, ...a.rawData },
+    outletCount: Math.max(a.outletCount ?? 0, b.outletCount ?? 0),
+    publisherKeys: [...new Set([...(a.publisherKeys ?? []), ...(b.publisherKeys ?? [])])],
+    seenSourceKeys: [...new Set([...(a.seenSourceKeys ?? []), ...(b.seenSourceKeys ?? [])])],
+    sourcesOmitted: (a.sourcesOmitted ?? 0) + (b.sourcesOmitted ?? 0),
+    timelineOmitted: (a.timelineOmitted ?? 0) + (b.timelineOmitted ?? 0),
+    seriesKey: a.seriesKey ?? b.seriesKey ?? null,
+    aiInterpretation: a.aiInterpretation ?? b.aiInterpretation,
+  };
+  return recompute(merged, now);
+}
+
+/**
+ * Merge a record of the same warning series (seriesKey): the event spans the union of
+ * the periods; the newest record of that feed becomes the listed source and earlier
+ * slices are counted (sourcesOmitted) and remembered, so re-polls of them change nothing.
+ */
+export function mergeSeries(event: WorldEvent, c: EventCandidate, now = Date.now()): { event: WorldEvent; changed: boolean } {
+  const nowIso = new Date(now).toISOString();
+  const known = event.sources.some((s) => s.id === c.source.id) || wasSeen(event, c.source);
+  const start = c.timestamp < event.timestamp ? c.timestamp : event.timestamp;
+  const end = event.resolvedAt && c.resolvedAt ? (c.resolvedAt > event.resolvedAt ? c.resolvedAt : event.resolvedAt) : (event.resolvedAt ?? c.resolvedAt);
+  if (known && start === event.timestamp && end === event.resolvedAt) return { event, changed: false };
+  const next: WorldEvent = { ...event, sources: [...event.sources], timeline: [...event.timeline], metrics: { ...event.metrics }, rawData: { ...event.rawData } };
+  const extended = end !== event.resolvedAt;
+  if (!known) {
+    const replaced = next.sources.filter((s) => s.dataSourceId === c.source.dataSourceId);
+    const others = next.sources.filter((s) => s.dataSourceId !== c.source.dataSourceId);
+    next.sources = others.length && authorityOf(others[0]) > authorityOf(c.source) ? [others[0], c.source, ...others.slice(1)] : [c.source, ...others];
+    for (const s of replaced) delete next.rawData[s.id];
+    next.sourcesOmitted = (event.sourcesOmitted ?? 0) + replaced.length;
+    next.seenSourceKeys = [...new Set([...(event.seenSourceKeys ?? []), ...replaced.flatMap(sourceKeys)])];
+    if (c.rawData !== undefined) next.rawData[c.source.id] = c.rawData;
+    // Text comes from the record with the latest end (its "valid until" matches the event).
+    if (!event.resolvedAt || !c.resolvedAt || c.resolvedAt >= event.resolvedAt) {
+      next.title = c.title;
+      next.summary = c.summary;
+      next.description = c.description ?? event.description;
+      if (c.geometry) next.geometry = c.geometry;
+      next.metrics = { ...event.metrics, ...c.metrics };
+    }
+    next.timeline.push({ at: c.source.publishedAt ?? nowIso, kind: "UPDATE", label: `${c.source.sourceName}: warning ${extended ? "extended" : "reissued"}`, sourceId: c.source.id });
+  } else if (extended) {
+    next.timeline.push({ at: nowIso, kind: "UPDATE", label: `${c.source.sourceName}: warning period extended`, sourceId: c.source.id });
+  }
+  next.timestamp = start;
+  next.resolvedAt = end;
+  if (next.resolvedAt && Date.parse(next.resolvedAt) > now) next.timeline = next.timeline.filter((t) => t.kind !== "RESOLVED");
+  else if (next.resolvedAt && !next.timeline.some((t) => t.kind === "RESOLVED")) next.timeline.push({ at: next.resolvedAt, kind: "RESOLVED", label: `Marked ended by ${c.source.sourceName}`, sourceId: c.source.id });
+  next.updatedAt = nowIso;
+  next.lastEvidenceAt = nowIso;
+  next.timeline.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+  return { event: recompute(next, now), changed: true };
+}
+
+/** Recompute derived fields: status, confidence, source count, outlet count, importance. Applies the store caps. */
+export function recompute(input: WorldEvent, now = Date.now()): WorldEvent {
+  const e = trimEvent(input);
   const status = deriveStatus(e.sources, e.resolvedAt, now);
-  const independentSources = independentPublisherCount(e.sources);
+  const independentSources = Math.max(e.outletCount ?? 0, independentPublisherCount(e.sources));
   const { score, factors } = calculateImportance(
     {
       type: e.type,
@@ -194,7 +270,7 @@ export function recompute(e: WorldEvent, now = Date.now()): WorldEvent {
   return {
     ...e,
     status,
-    sourceCount: e.sources.length,
+    sourceCount: e.sources.length + (e.sourcesOmitted ?? 0),
     confidenceScore: deriveConfidence(e.sources, e.geoPrecision),
     importanceScore: score,
     importanceFactors: factors,

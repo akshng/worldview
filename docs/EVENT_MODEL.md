@@ -23,16 +23,22 @@ Defined with zod in `src/types/events.ts` (runtime validation + TypeScript types
 | `importanceScore` | 0–100 | See below |
 | `importanceFactors` | `{factor, points, detail}[]` | Explains the score |
 | `confidenceScore` | 0–1 | Strongest assertion + corroboration × geo precision |
-| `sourceCount` | int | Number of supporting source records |
-| `sources` | `EventSource[]` | Primary (most authoritative) first |
+| `sourceCount` | int | Number of supporting source records ever attached (includes trimmed ones) |
+| `outletCount` | int | Distinct outlets/publishers (URL hostnames) corroborating the event, over all sources ever attached — for "8 outlets". Also on `EventSummary`. |
+| `sources` | `EventSource[]` | Primary (most authoritative) first; capped at 12 (see Store caps) |
+| `sourcesOmitted` | int? | Source records attached but no longer listed (`sourceCount − sources.length`): "and 230 more" |
 | `entities` | `{type, name, code}[]` | Actors, organisations, countries, vehicles |
 | `relatedEventIds` | string[] | Graph edges (also stored as `EventRelationship`) |
 | `status` | `UNVERIFIED \| REPORTED \| PARTIALLY_CONFIRMED \| CONFIRMED \| RESOLVED` | Derived, see below |
 | `metrics` | record | Type-specific scalars: `magnitude`, `depth_km`, `alert_level`, `frp_total_mw`, `wind_kts`, `num_articles`, … |
-| `timeline` | `{at, kind, label, sourceId}[]` | `INITIAL_REPORT`, `OFFICIAL_CONFIRMATION`, `UPDATE`, `SOURCE_ADDED`, `RESOLVED` |
+| `timeline` | `{at, kind, label, sourceId}[]` | `INITIAL_REPORT`, `OFFICIAL_CONFIRMATION`, `UPDATE`, `SOURCE_ADDED`, `RESOLVED`; capped at 20 |
+| `timelineOmitted` | int? | Timeline entries dropped by the cap |
+| `lastEvidenceAt` | ISO? | Last distinct new evidence (new outlet, material update, confirmation, series extension). Drives retention. |
+| `seriesKey` | string \| null | Warning series (NWS reissues for one polygon, MeteoAlarm time slices) — see Deduplication |
 | `aiInterpretation` | `{text, provider, model, generatedAt}` \| null | **Separate from facts. Never merged into `summary`.** |
 | `isSynthetic` | boolean | True only for demo-mode data |
-| `rawData` | record | Trimmed upstream records keyed by source id (`/api/events/:id?raw=1`) |
+| `rawData` | record | Trimmed upstream records keyed by source id (`/api/events/:id?raw=1`): primary + latest official/scientific source only, ≤ ~600 chars each; not kept for news sources |
+| `publisherKeys`, `seenSourceKeys` | string[]? | Internal bookkeeping: outlets seen (so `outletCount` survives trimming) and short hashes of trimmed source ids/URLs (never re-attached) |
 
 ## EventSource
 
@@ -110,6 +116,22 @@ A match ≥ 0.55 merges the candidate into the existing event as an additional s
 - The same article URL is never attached twice.
 - Records that **supersede** earlier ones (e.g. NWS alert updates referencing the previous message) update the original event in place.
 - The most authoritative source becomes primary and supplies title/coordinates/metrics; others only fill gaps.
+
+Further rules:
+
+- **Warning series** (`seriesKey`): NWS alerts use the VTEC event tracking number (`office.phenomena.significance.ETN.year`) as the source record id, so updates, extensions and cancellations of one warning update the same event; reissues under a new tracking number for the same polygon (`nws:<event>@lat,lon`) and MeteoAlarm time slices / language variants of one warning (`country:type:level:areas`) carry a series key. A record whose period overlaps or comes within 12 h of a stored event with the same key updates that event: the event spans the union of the periods, the newest record is the listed source and earlier slices are counted in `sourcesOmitted`.
+- **Same story across feeds**: a news record with an identical (normalised) or near-identical headline (≥ 0.8 similarity, ≥ 5 words) about the same country (or within 800 km when a country is unknown), within 36 h, joins that event regardless of how each feed categorised it — one story carries every outlet.
+
+## Store caps and retention (`src/lib/events/compact.ts`)
+
+- Sources: the primary, the first report, the latest report, then the most authoritative and **distinct publishers**, up to 12. `sourceCount`, `outletCount` and the corroboration score keep counting everything.
+- Timeline: the first entry, the latest key entries (updates, confirmations, end) and the latest entries, up to 20.
+- Retention (`RETENTION_DAYS`, default 8): an event is pruned when both its `timestamp` and `lastEvidenceAt` are older — another copy of a story from an outlet already counted does not keep it alive.
+- The JSON snapshot (memory repository, version 2) uses a lossless compact encoding (`src/lib/db/snapshot-codec.ts`); scores are recomputed on load. Version-1 snapshots are migrated on load: caps applied, `outletCount`/`lastEvidenceAt` backfilled, duplicate warning slices and identical cross-feed headlines collapsed (`src/lib/ingestion/collapse.ts`).
+
+## News classification (`src/data-sources/news-classify.ts`)
+
+News RSS headlines and GKG articles share context rules on top of keyword lists: figurative uses are removed first ("war on poverty", "price war", "heart attack", "legal battle", "strike a deal", "landslide victory", "storm of criticism"); unambiguous armed-conflict vocabulary decides CONFLICT; "war" alone counts unless it is background ("amid the war") or the headline is about elections; attack/strike words need violent context, a party to a conflict or a target place, and are ignored as political rhetoric ("tour", "critics", "slams"); killings and shootings without armed actors are `NEWS / crime / public safety`; labour strikes are `PROTEST / strike`; industrial and transport accidents are `DISASTER / accident`. `tests/fixtures/headlines.ts` (~230 labelled headlines) measures precision/recall for CONFLICT, PROTEST and DISASTER (`tests/classifier.test.ts`).
 
 ## Relationships (event graph)
 

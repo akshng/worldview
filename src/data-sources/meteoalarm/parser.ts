@@ -8,6 +8,7 @@ import type { EventCandidateInput, EventCategory } from "@/types/events";
 import { AIRPORTS, CITIES, getCountry, regionsInText } from "@/lib/geo/gazetteer";
 import { plainText, safeUrl, type ParseContext, type ParseResult } from "../types";
 import type { MaInfo, MeteoAlarmRaw } from "./types";
+import { meteoAlarmSeriesKey } from "@/lib/events/series";
 
 const TYPES: Record<string, { type: EventCategory; subtype: string; label: string }> = {
   "1": { type: "WEATHER", subtype: "wind", label: "wind" },
@@ -93,6 +94,7 @@ export function parseMeteoAlarm(raw: MeteoAlarmRaw, ctx: ParseContext): ParseRes
         timestamp: new Date(onset).toISOString(),
         resolvedAt: new Date(expires).toISOString(),
         metrics: { alert_level: color.toLowerCase(), severity: info.severity ?? null, areas: areas.length },
+        seriesKey: meteoAlarmSeriesKey(c.iso2, param(info, "awareness_type"), level, areas),
         entities: info.senderName ? [{ type: "ORGANIZATION", name: info.senderName, code: null }] : [],
         source: {
           id: `meteoalarm:${w.alert.identifier}`,
