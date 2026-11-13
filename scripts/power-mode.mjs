@@ -117,7 +117,8 @@ mkdirSync(agents, { recursive: true });
 agent("com.worldview.power", ["/bin/sh", path.join(project, "scripts", "power-watch.sh")], 120, path.join(data, "power.log"));
 agent(
   "com.worldview.sentinel",
-  [process.execPath, path.join(project, "node_modules", "tsx", "dist", "cli.mjs"), "scripts/sentinel.ts"],
+  // caffeinate -i: hold a no-idle-sleep power assertion only while the sentinel runs.
+  ["/usr/bin/caffeinate", "-i", process.execPath, path.join(project, "node_modules", "tsx", "dist", "cli.mjs"), "scripts/sentinel.ts"],
   900,
   path.join(data, "sentinel.log"),
   { NODE_OPTIONS: "--conditions=react-server" },

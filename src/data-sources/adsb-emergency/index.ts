@@ -32,7 +32,9 @@ export const SQUAWKS: Record<string, string> = { "7700": "general emergency", "7
 export async function fetchAdsbEmergency(ctx: FetchContext): Promise<AdsbRaw> {
   const aircraft: AdsbAircraft[] = [];
   let now = ctx.now;
-  for (const code of Object.keys(SQUAWKS)) {
+  for (const [i, code] of Object.keys(SQUAWKS).entries()) {
+    // adsb.lol answers back-to-back requests with 429: space the three lookups a little.
+    if (i > 0) await new Promise((r) => setTimeout(r, 1_100));
     const j = (await (await httpGet(`https://api.adsb.lol/v2/sqk/${code}`, ctx)).json()) as { ac?: AdsbAircraft[]; now?: number };
     if (typeof j.now === "number") now = j.now;
     aircraft.push(...(j.ac ?? []));

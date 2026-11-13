@@ -5,9 +5,12 @@
  *   npm run briefing:schedule -- 6:45      # custom time (24h, local)
  *   npm run briefing:unschedule
  *
- * launchd runs the job at that time; if the Mac is asleep it runs on wake.
- * The job exits (and unloads the AI model) when it finishes. Logs go to
- * .data/briefings/morning.log.
+ *   npm run close:schedule                 # after-close job: hourly slots around 16:30 New York
+ *
+ * launchd runs the job at that time; if the Mac is asleep it runs on wake. The job runs
+ * under `caffeinate -i`, so the Mac can't idle-sleep mid-run (e.g. while the AI writes),
+ * and exits (unloading the AI model) when it finishes. Logs go to
+ * .data/briefings/morning.log / market-close.log (rotated at 5 MB by the server).
  */
 import { execFileSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync, existsSync } from "node:fs";
@@ -44,22 +47,33 @@ if (remove) {
   process.exit(0);
 }
 
-/** Local wall-clock time of 16:45 in New York today (the close job runs after the US close). */
-function nyCloseLocal() {
+/**
+ * After-close slots. A single local time frozen at install drifts by an hour whenever
+ * New York and this machine change daylight-saving time on different dates (or you
+ * travel), and weekday numbers shift for timezones where 16:45 New York is past local
+ * midnight. Instead the job runs every day at :35 past each hour from one hour before to
+ * three hours after "16:30 New York" in local time (5 runs). The close jobs themselves
+ * (src/lib/notify/discord-server.ts, watch.ts) only act on New York weekdays after 16:20 and
+ * record what they did per New York date, so the early or repeated runs exit in seconds
+ * having done nothing, and a ±1 h DST shift still leaves at least three slots after the
+ * close. caffeinate keeps the Mac awake until the run finishes.
+ */
+function closeSlotsLocal() {
   const now = new Date();
   const parts = (tz) => Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(now).map((p) => [p.type, Number(p.value) % 24]));
   const ny = parts("America/New_York");
   const here = parts(Intl.DateTimeFormat().resolvedOptions().timeZone);
   const offset = here.hour * 60 + here.minute - (ny.hour * 60 + ny.minute);
-  const m = (((16 * 60 + 45 + offset) % 1440) + 1440) % 1440;
-  return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
+  const base = Math.floor(((((16 * 60 + 30 + offset) % 1440) + 1440) % 1440) / 60);
+  return [-1, 0, 1, 2, 3].map((d) => (((base + d) % 24) + 24) % 24);
 }
-const arg = process.argv.slice(2).find((a) => /^\d{1,2}:\d{2}$/.test(a)) ?? (close ? nyCloseLocal() : "7:30");
-const [hour, minute] = arg.split(":").map(Number);
-if (hour > 23 || minute > 59) {
+const arg = process.argv.slice(2).find((a) => /^\d{1,2}:\d{2}$/.test(a)) ?? (close ? null : "7:30");
+const [hour, minute] = arg ? arg.split(":").map(Number) : [null, null];
+if (arg && (hour > 23 || minute > 59)) {
   console.error(`Invalid time "${arg}" — use HH:MM (24h).`);
   process.exit(1);
 }
+const closeHours = close && !arg ? closeSlotsLocal() : null;
 
 const logDir = path.join(project, ".data", "briefings");
 mkdirSync(logDir, { recursive: true });
@@ -76,6 +90,8 @@ writeFileSync(
   <key>Label</key><string>${LABEL}</string>
   <key>ProgramArguments</key>
   <array>
+    <string>/usr/bin/caffeinate</string>
+    <string>-i</string>
     <string>${esc(process.execPath)}</string>
     <string>${esc(tsxCli)}</string>
     <string>${SCRIPT}</string>
@@ -88,7 +104,9 @@ writeFileSync(
   </dict>
   <key>StartCalendarInterval</key>
   ${
-    close
+    closeHours
+      ? `<array>${closeHours.map((h) => `<dict><key>Hour</key><integer>${h}</integer><key>Minute</key><integer>35</integer></dict>`).join("")}</array>`
+      : close
       ? `<array>${[1, 2, 3, 4, 5].map((d) => `<dict><key>Weekday</key><integer>${d}</integer><key>Hour</key><integer>${hour}</integer><key>Minute</key><integer>${minute}</integer></dict>`).join("")}</array>`
       : `<dict>
     <key>Hour</key><integer>${hour}</integer>
@@ -106,7 +124,9 @@ writeFileSync(
 
 bootout();
 execFileSync("launchctl", ["bootstrap", `gui/${uid}`, plist]);
-console.log(`${WHAT} scheduled ${close ? "weekdays" : "daily"} at ${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")} (local time).`);
+const hhmm = (h, m) => `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+if (closeHours) console.log(`${WHAT} scheduled daily at ${closeHours.map((h) => hhmm(h, 35)).join(", ")} (local time); it acts once per New York weekday after 16:20 New York.`);
+else console.log(`${WHAT} scheduled ${close ? "weekdays" : "daily"} at ${hhmm(hour, minute)} (local time).`);
 console.log(`  job:  ${plist}`);
 console.log(`  log:  ${path.join(logDir, LOG)}`);
 console.log(`Run it now with: launchctl kickstart gui/${uid}/${LABEL}`);

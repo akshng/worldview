@@ -34,7 +34,16 @@ type Runtime = {
 };
 
 const g = globalThis as unknown as {
-  __worldviewLocalAI?: { status: LocalModelState; runtime: Promise<Runtime> | null; queue: Promise<unknown>; idleTimer: NodeJS.Timeout | null; busy: number; unloadWhenIdle?: boolean };
+  __worldviewLocalAI?: {
+    status: LocalModelState;
+    runtime: Promise<Runtime> | null;
+    queue: Promise<unknown>;
+    idleTimer: NodeJS.Timeout | null;
+    busy: number;
+    unloadWhenIdle?: boolean;
+    /** Set while unload() is freeing the previous model; a new load waits for it. */
+    disposing?: Promise<void> | null;
+  };
 };
 const shared = (g.__worldviewLocalAI ??= { status: { state: "not-downloaded" }, runtime: null, queue: Promise.resolve(), idleTimer: null, busy: 0 });
 
@@ -77,6 +86,8 @@ export class LocalProvider implements AIProvider {
    * Free the model's memory/GPU. It reloads automatically on the next AI request.
    * If a request is running or queued, the unload happens as soon as the last one
    * finishes — disposing mid-request crashes it ("Object is disposed").
+   * Disposal runs through the same queue as requests, and a load waits for a disposal in
+   * progress, so a new 3 GB model never loads while the old one is still being freed.
    */
   async unload(): Promise<boolean> {
     if (shared.idleTimer) clearTimeout(shared.idleTimer);
@@ -89,15 +100,25 @@ export class LocalProvider implements AIProvider {
     const pending = shared.runtime;
     if (!pending) return false;
     shared.runtime = null;
+    const dispose: Promise<void> = shared.queue.then(async () => {
+      try {
+        const rt = await pending;
+        await rt.context.dispose();
+        await rt.model.dispose();
+        await rt.llama.dispose();
+      } catch {
+        /* already gone */
+      }
+      // Only report "unloaded" if nothing started loading again meanwhile.
+      if (!shared.runtime) shared.status = { state: this.isDownloaded() ? "downloaded" : "not-downloaded" };
+    });
+    shared.queue = dispose.catch(() => undefined);
+    shared.disposing = dispose;
     try {
-      const rt = await pending;
-      await rt.context.dispose();
-      await rt.model.dispose();
-      await rt.llama.dispose();
-    } catch {
-      /* already gone */
+      await dispose;
+    } finally {
+      if (shared.disposing === dispose) shared.disposing = null;
     }
-    shared.status = { state: this.isDownloaded() ? "downloaded" : "not-downloaded" };
     return true;
   }
 
@@ -130,7 +151,9 @@ export class LocalProvider implements AIProvider {
   /** Download (if needed) and load the model. Safe to call repeatedly. */
   ensureReady(): Promise<Runtime> {
     if (!shared.runtime) {
+      const disposing = shared.disposing;
       shared.runtime = (async () => {
+        if (disposing) await disposing.catch(() => undefined);
         const { getLlama, resolveModelFile } = await import("node-llama-cpp");
         const modelPath = await resolveModelFile(this.modelUri, {
           directory: this.modelsDir,

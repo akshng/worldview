@@ -1,12 +1,12 @@
+import { globalLru } from "@/lib/server/lru";
 import { httpGet, type FetchContext } from "../types";
 import type { SecCompany, SecFilingEntry, SecRaw } from "./types";
 
 const FEED = "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=8-K&count=100&output=atom";
 const MAX_LOOKUPS_PER_RUN = 60;
 
-// Company profiles rarely change; cache them for the life of the process.
-const g = globalThis as unknown as { __worldviewSecCompanies?: Map<string, SecCompany | null> };
-const companyCache = (g.__worldviewSecCompanies ??= new Map());
+// Company profiles rarely change; cache them for the life of the process (bounded LRU).
+const companyCache = globalLru<string, SecCompany | null>("__worldviewSecCompanies", 5000);
 
 const tag = (b: string, n: string) => b.match(new RegExp(`<${n}[^>]*>([\\s\\S]*?)</${n}>`))?.[1]?.trim() ?? "";
 const decode = (s: string) => s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&").replace(/&quot;/g, '"');
@@ -54,7 +54,7 @@ export async function fetchSec(ctx: FetchContext): Promise<SecRaw> {
     } catch {
       companyCache.set(e.cik, null);
     }
-    await new Promise((r) => setTimeout(r, 120)); // SEC fair-access: ≤10 requests/second
+    // SEC fair access (≤ 8 req/s, Retry-After) is enforced by httpGet's shared SEC gate.
   }
   const companies: Record<string, SecCompany> = {};
   for (const e of entries) {

@@ -6,6 +6,7 @@
  */
 import "server-only";
 import { userAgent } from "@/lib/env";
+import { secGateFetch } from "./sec-http";
 import { splitDisplayName } from "./ipos";
 
 export interface EarningsRelease {
@@ -71,9 +72,9 @@ export async function getEarningsReleases(days = 7): Promise<EarningsFeed> {
   const all: Hit[] = [];
   // Peak earnings weeks bring several hundred filings; 5 pages of 100 covers them.
   for (let page = 0; page < 5; page++) {
-    const res = await fetch(
+    const res = await secGateFetch(
       `https://efts.sec.gov/LATEST/search-index?forms=8-K&q=%22Item%202.02%22&dateRange=custom&startdt=${from}&enddt=${to}&from=${page * 100}`,
-      { headers: { "User-Agent": userAgent(), Accept: "application/json" }, signal: AbortSignal.timeout(20_000), cache: "no-store" },
+      { headers: { "User-Agent": userAgent(), Accept: "application/json" }, signal: AbortSignal.timeout(20_000) },
     );
     if (!res.ok) {
       if (page > 0) break; // keep what we have

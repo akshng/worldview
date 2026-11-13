@@ -5,6 +5,7 @@
  */
 import "server-only";
 import { userAgent } from "@/lib/env";
+import { secGateFetch } from "./sec-http";
 
 export interface Registration {
   company: string;
@@ -61,10 +62,9 @@ export async function getRegistrations(): Promise<Registration[]> {
   const start = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
   const all: Hit[] = [];
   for (const from of [0, 100]) {
-    const res = await fetch(`https://efts.sec.gov/LATEST/search-index?forms=S-1,F-1&dateRange=custom&startdt=${start}&enddt=${end}&from=${from}`, {
+    const res = await secGateFetch(`https://efts.sec.gov/LATEST/search-index?forms=S-1,F-1&dateRange=custom&startdt=${start}&enddt=${end}&from=${from}`, {
       headers: { "User-Agent": userAgent(), Accept: "application/json" },
       signal: AbortSignal.timeout(20_000),
-      cache: "no-store",
     });
     if (!res.ok) {
       if (from > 0) break; // keep the first page

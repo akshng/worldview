@@ -6,7 +6,7 @@
  * information-table XML. Requires WORLDVIEW_CONTACT (www.sec.gov/Archives rejects
  * clients without a contact in the User-Agent).
  *
- * SEC fair access: every request goes through one throttle (≤ 8 req/s). Caching:
+ * SEC fair access: every request goes through the shared SEC gate (./sec-http.ts, ≤ 8 req/s). Caching:
  *  - parsed filings are immutable → DATA_DIR/13f/filing-<accession>.json, kept forever
  *  - submissions and company_tickers.json → memory + DATA_DIR/13f/, 24 h
  *  - computed manager holdings → memory, 24 h (served stale while refreshing)
@@ -16,6 +16,7 @@ import "server-only";
 import path from "node:path";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { env, userAgent } from "@/lib/env";
+import { secGateFetch } from "./sec-http";
 import {
   TRACKED_MANAGERS,
   THIRTEENF_CAVEATS,
@@ -45,7 +46,6 @@ import {
 
 const DAY = 24 * 3_600_000;
 const RETRY_ERROR_MS = 15 * 60_000;
-const MIN_GAP_MS = 125; // ≤ 8 requests per second across all 13F traffic
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -69,22 +69,12 @@ export class ContactMissingError extends Error {
   }
 }
 
-/** Rate-limited SEC fetch shared by 13F and insider (Form 4) lookups. */
+/** SEC fetch for 13F and insider (Form 4) lookups, through the shared SEC fair-access gate (./sec-http.ts). */
 export async function secFetch(url: string): Promise<Response> {
   if (!env().WORLDVIEW_CONTACT) throw new ContactMissingError();
-  for (let attempt = 0; ; attempt++) {
-    const now = Date.now();
-    const slot = Math.max(now, st.nextSlot);
-    st.nextSlot = slot + MIN_GAP_MS;
-    if (slot > now) await sleep(slot - now);
-    const res = await fetch(url, { headers: { "User-Agent": userAgent(), "Accept-Encoding": "gzip, deflate" }, signal: AbortSignal.timeout(120_000), cache: "no-store" });
-    if ((res.status === 429 || res.status === 503) && attempt < 2) {
-      await sleep(2000 * (attempt + 1));
-      continue;
-    }
-    if (!res.ok) throw new Error(`SEC HTTP ${res.status} for ${new URL(url).pathname}`);
-    return res;
-  }
+  const res = await secGateFetch(url, { headers: { "User-Agent": userAgent(), "Accept-Encoding": "gzip, deflate" }, signal: AbortSignal.timeout(120_000) });
+  if (!res.ok) throw new Error(`SEC HTTP ${res.status} for ${new URL(url).pathname}`);
+  return res;
 }
 
 // ── Disk cache ──────────────────────────────────────────────────────────────
