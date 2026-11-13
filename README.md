@@ -181,6 +181,13 @@ WorldView then runs as a production server at http://localhost:3000 (bound to th
 - **INF** — strategic infrastructure panel: subsea cables and landing points, power plants by fuel, nuclear plants, oil & gas pipelines, LNG terminals, ports, data centres, military bases (OpenStreetMap, WRI Global Power Plant Database, NGA World Port Index — static extracts loaded only when toggled) and 13 maritime chokepoints with a monitor of nearby WorldView events and a disruption score. Sources and licences: [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md#strategic-infrastructure-srclibinfra-npm-run-geoinfra).
 - **Zoom in** past continent level and the map switches from countries to states/provinces — hover to highlight, click for that region's events.
 
+## Event enrichments
+
+Fetched only while an event panel or the drop-in view is open — nothing at startup.
+
+- **Shaking & impact** (earthquakes from USGS): PAGER alert level, most likely estimated fatalities and losses (with probability), population exposed per intensity, ShakeMap peak intensity, "Did You Feel It?" reports and the tsunami flag (explained as not a warning), each linking to its USGS page. **Show shaking on map** draws the ShakeMap intensity contours on the globe; they disappear when the event is closed. Nothing is shown when USGS has no products for the event.
+- **Weather here** (weather, flood, fire, maritime and disaster events, and any event at an exact or city-level location; also a one-line readout in the drop-in HUD): current conditions, next 24 h (temperature range, rain, gusts, 3-hourly strip), waves near the coast and modelled river discharge for floods. Weather data by [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0, free for non-commercial use).
+
 ## Morning briefing
 
 A once-a-day job refreshes every active source, builds the daily briefing, has the AI (local Gemma 4 by default) write the summary, saves it to `DATA_DIR/briefings/YYYY-MM-DD.json`, unloads the model and exits — nothing stays running. The app shows it as "Morning briefing · <time>".
@@ -290,6 +297,9 @@ The full walkthrough is in [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md#adding-a-
 | `GET /api/layers` | Live layer status |
 | `GET /api/layers/:id` | Cached live layer snapshot (`weather-radar`, `aviation`, `maritime`, `military-aircraft`, `satellites`, …) |
 | `GET /api/meta` | Mode and AI availability (no secrets) |
+| `GET /api/enrich/earthquake?id=` | USGS ShakeMap / PAGER / DYFI context for a USGS event id (cached 10 min) |
+| `GET /api/enrich/earthquake/shakemap?id=` | ShakeMap intensity (MMI) contours as GeoJSON for the globe overlay (cached 30 min) |
+| `GET /api/enrich/weather?lat=&lon=` | Open-Meteo current + next 24 h at a point (snapped to 0.05°, cached 20 min); sea state near sea level or with `marine=1`, river discharge with `flood=1`; 400 on bad coordinates |
 
 ## Documentation
 
@@ -302,7 +312,7 @@ The full walkthrough is in [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md#adding-a-
 
 ## Attribution
 
-Basemap © [OpenFreeMap](https://openfreemap.org), [OpenMapTiles](https://openmaptiles.org), [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors. Imagery: NASA GIBS. Reference geography: Natural Earth (public domain). Country profiles: World Bank (CC BY 4.0), IMF, Eurostat, OECD, FRED and Wikidata (CC0). Event data © its respective publishers, linked from every event.
+Basemap © [OpenFreeMap](https://openfreemap.org), [OpenMapTiles](https://openmaptiles.org), [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors. Imagery: NASA GIBS. Weather data by [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0). Earthquake ShakeMap/PAGER/DYFI: USGS (public domain). Reference geography: Natural Earth (public domain). Country profiles: World Bank (CC BY 4.0), IMF, Eurostat, OECD, FRED and Wikidata (CC0). Event data © its respective publishers, linked from every event.
 
 ## License & credit
 

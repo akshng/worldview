@@ -10,6 +10,7 @@ import { idleOnBattery, onBattery } from "@/lib/client/power";
 import { TERRAIN_EXAGGERATION } from "@/components/globe/style";
 import { DROP_MAX_PITCH, formatCoords, formatElevation, nearestLocalPlace, normalizeBearing, orbitStep } from "./logic";
 import { DropInPhotos } from "./DropInPhotos";
+import { WeatherLine } from "@/components/event-panel/WeatherCard";
 
 interface Reverse {
   near: string | null;
@@ -147,6 +148,7 @@ export function DropInHud({ map, panelOpen = false }: { map: MlMap; panelOpen?: 
               {here ? formatCoords(here.lat, here.lon) : formatCoords(view.lat, view.lon)}
               {here?.elev ? ` · ground ${here.elev} above sea level` : ""}
             </div>
+            <WeatherLine lat={view.lat} lon={view.lon} />
           </div>
           <button
             onClick={() => useUI.getState().exitDropIn()}

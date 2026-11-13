@@ -166,6 +166,12 @@ tests/                    vitest suites
 - **Add a page:** add the id to `APP_VIEWS` in `src/lib/store/ui.ts`, an entry in
   `src/components/layout/NavRail.tsx`, and render it in `Dashboard.tsx` inside the page area.
   Existing panels render as pages via `usePageMode()`.
+- **Event enrichments** (`src/lib/enrich/`, routes under `src/app/api/enrich/`): on-demand context for
+  an open event — USGS ShakeMap/PAGER/DYFI (`usgs.ts` parsers, `ShakingImpact.tsx`, globe overlay
+  `ShakeMapOverlay.tsx` driven by `useShakeOverlay` in `client.ts`) and Open-Meteo point weather
+  (`weather.ts`, `WeatherCard.tsx`, also in the drop-in HUD). `server.ts` has the TTL cache (negative
+  results cached 2 min) and the honest fetcher; product URLs are only followed on earthquake.usgs.gov.
+  Add a new enrichment the same way: pure parser + tests, cached server route, lazy client hook.
 - **Add a map overlay:** live layers live in `src/layers/` (provider + `/api/layers/[id]`); toggles
   go in `PlotPanel.tsx`.
 

@@ -103,6 +103,7 @@ import { CATEGORIES } from "@/lib/categories";
 import { relativeTime } from "@/lib/time";
 import { useDropIn } from "./use-drop-in";
 import { DropInContextMenu, DropInHud, DropInPickHint, PersonPinIcon } from "@/components/dropin/DropInHud";
+import { ShakeMapOverlay } from "./ShakeMapOverlay";
 import type { EventCategory } from "@/types/events";
 
 export const HOME_VIEW = { center: [-30, 26] as [number, number], zoom: 2.05 };
@@ -1558,6 +1559,7 @@ export default function Globe({ window: win, live }: GlobeProps) {
       <CameraViewer />
       <DropInPickHint />
       {dropInView && mapObj && ready && <DropInHud map={mapObj} panelOpen={sidePanelOpen} />}
+      {mapObj && ready && <ShakeMapOverlay map={mapObj} />}
       {ctxMenu && <DropInContextMenu {...ctxMenu} onClose={() => setCtxMenu(null)} />}
       {mapError && <div className="absolute inset-0 grid place-items-center text-sm text-muted">Map could not be initialised: {mapError}</div>}
       <div
