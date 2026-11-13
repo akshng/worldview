@@ -1,0 +1,22 @@
+# gitleaks configuration: the default rule set plus allowlisted, obviously fake test values.
+# Run locally: gitleaks git -v   (gitleaks detect -v on versions before 8.19)
+title = "WorldView gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Fake fixtures, documentation placeholders and bundled open datasets"
+regexes = [
+  # tests/discord.test.ts: fake Discord webhook URLs that test URL validation
+  '''https://discord\.com/api/webhooks/123/abc-DEF_9''',
+  '''https://evil\.example/api/webhooks/1/x''',
+]
+paths = [
+  # Placeholders only; real values go in .env.local (git-ignored)
+  '''(^|/)\.env\.example$''',
+  # Lockfile integrity hashes
+  '''(^|/)package-lock\.json$''',
+  # Bundled open datasets (Natural Earth, OpenStreetMap, WRI): names and coordinates, no secrets
+  '''^public/geo/''',
+]

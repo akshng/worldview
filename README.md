@@ -152,7 +152,7 @@ Details, terms and caveats: [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md).
 
 ## Windows and Linux
 
-Everything except the macOS extras runs anywhere Node.js 22+ runs: `npm install`, then `npm run dev` (or `npm run build && npm start`). The always-on service, battery mode, scheduled jobs' installers, Mac notifications and the native app are macOS-only; on Windows run the same jobs (`npm run briefing:morning`, `npm run close:run`, `npm run sentinel`) from Task Scheduler. See [HANDOFF.md](HANDOFF.md#whats-macos-only-and-what-to-use-instead).
+Everything except the macOS extras runs anywhere Node.js 22+ runs: `npm install`, then `npm run dev` (or `npm run build && npm start`). The always-on service, battery mode, Mac notifications and the native app are macOS-only. On Windows, `npm run windows:schedule` installs the morning briefing (daily 07:30, or `npm run windows:schedule -- 06:45`) and the after-close job (weekdays, hourly 13:00–18:00 local; the job checks New York time and runs once per trading day) in Task Scheduler for your user, no admin needed; add `-- --sentinel` for the 15-minute sentinel, `npm run windows:unschedule` removes them, and logs go to `.data\*.log`. The tasks run on battery and catch up after sleep. On Linux use cron. See [HANDOFF.md](HANDOFF.md#whats-macos-only-and-what-to-use-instead).
 
 ## Run it as an always-on local app (macOS)
 
@@ -253,6 +253,7 @@ The full walkthrough is in [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md#adding-a-
 | `npm run service:install` / `service:restart` / `service:uninstall` | Always-on production server on localhost:3000 (macOS LaunchAgent; build first) |
 | `npm run briefing:morning` | Prepare today's morning briefing once, then exit |
 | `npm run briefing:schedule` / `briefing:unschedule` | Install / remove the daily job (macOS LaunchAgent, default 07:30) |
+| `npm run windows:schedule` / `windows:unschedule` | Install / remove the morning briefing, after-close job and (with `-- --sentinel`) sentinel in Windows Task Scheduler |
 | `npm run geo:build` | Rebuild bundled Natural Earth geography |
 
 ## API
@@ -290,6 +291,10 @@ The full walkthrough is in [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md#adding-a-
 | `GET /api/layers` | Live layer status |
 | `GET /api/layers/:id` | Cached live layer snapshot (`weather-radar`, `aviation`, `maritime`, `military-aircraft`, `satellites`, …) |
 | `GET /api/meta` | Mode and AI availability (no secrets) |
+
+## Contributing, CI and security
+
+Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for setup, the checks and the project rules. GitHub Actions runs typecheck, lint, tests and build on Ubuntu and Windows (Node 22 and 24) with no secrets, plus `npm audit` on production dependencies, gitleaks secret scanning and a personal-information check; Dependabot keeps npm packages and Actions up to date. Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
 
 ## Documentation
 
