@@ -18,6 +18,8 @@ export interface NwsAlertProperties {
   senderName: string;
   messageType: string;
   status: string;
+  /** CAP parameters; VTEC e.g. "/O.EXT.KPSR.FL.W.0012.000000T0000Z-261106T0300Z/" */
+  parameters?: Record<string, string[] | undefined>;
   references?: Array<{ "@id": string; identifier: string; sender: string; sent: string }>;
 }
 

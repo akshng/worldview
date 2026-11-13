@@ -1,13 +1,12 @@
 import { unzipSync, strFromU8 } from "fflate";
-import { httpGet, SourceHttpError, type FetchContext } from "../types";
+import { httpGet, type FetchContext } from "../types";
+import { fetchSlots, parseStamp, slotPlan, stamp } from "../gdelt/slots";
 import type { GkgArticle, GkgLocation, GkgRaw } from "./types";
 
 const BASE = "https://data.gdeltproject.org/gdeltv2/";
 const BACKFILL_FILES = 4;
 const MAX_FILES = 4;
 
-const stamp = (t: number) => new Date(t).toISOString().replace(/[-:T]/g, "").slice(0, 14);
-const parseStamp = (s: string) => Date.UTC(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8), +s.slice(8, 10), +s.slice(10, 12), +s.slice(12, 14));
 
 /** Parse V2Locations: "type#name#fips#adm1#adm2#lat#lon#featureid#offset;…" (aggregated by place). */
 export function parseLocations(field: string): GkgLocation[] {
@@ -52,21 +51,17 @@ export async function fetchGkg(ctx: FetchContext): Promise<GkgRaw> {
   const index = await (await httpGet(`${BASE}lastupdate.txt`, ctx, { accept: "text/plain" })).text();
   const latest = index.split("\n").find((l) => l.includes(".gkg.csv.zip"))?.match(/(\d{14})\.gkg\.csv\.zip/)?.[1];
   if (!latest) throw new Error("GDELT lastupdate.txt did not list a GKG file");
-  const latestMs = parseStamp(latest);
-  const since = ctx.lastSuccessAt ? ctx.lastSuccessAt - 15 * 60_000 : latestMs - BACKFILL_FILES * 15 * 60_000;
-  const files: GkgRaw["files"] = [];
-  for (let t = latestMs, n = 0; t > since && n < MAX_FILES; t -= 15 * 60_000, n++) {
-    const url = `${BASE}${stamp(t)}.gkg.csv.zip`;
-    try {
-      const buf = new Uint8Array(await (await httpGet(url, ctx, { accept: "application/zip" })).arrayBuffer());
+  const plan = slotPlan(parseStamp(latest), ctx.lastSuccessAt, { backfill: BACKFILL_FILES, max: MAX_FILES });
+  const files: GkgRaw["files"] = await fetchSlots(
+    plan,
+    (t) => `${BASE}${stamp(t)}.gkg.csv.zip`,
+    (buf, url) => {
       const entries = unzipSync(buf);
       const name = Object.keys(entries)[0];
-      if (name) files.push({ url, articles: parseGkg(strFromU8(entries[name])) });
-    } catch (err) {
-      // The newest slot is sometimes listed before it is published; skip missing slots.
-      if (!(err instanceof SourceHttpError && err.status === 404)) throw err;
-    }
-  }
-  if (!files.length) throw new Error("No GKG files available yet");
+      return name ? { url, articles: parseGkg(strFromU8(entries[name])) } : null;
+    },
+    ctx,
+    "GKG",
+  );
   return { files };
 }

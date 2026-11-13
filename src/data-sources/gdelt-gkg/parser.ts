@@ -13,6 +13,7 @@ import type { EventCandidateInput, EventCategory } from "@/types/events";
 import { placesInText } from "@/lib/geo/headline-places";
 import { headlineSimilarity, tokenize } from "@/lib/deduplication/similarity";
 import { safeUrl, type ParseContext, type ParseResult } from "../types";
+import { conflictSignal, withoutFigurative, withoutFigurativeProtest } from "../news-classify";
 import type { GkgArticle, GkgRaw } from "./types";
 
 const MAX_PER_RUN = 150;
@@ -41,7 +42,7 @@ export const THEME_RULES: ThemeRule[] = [
   { category: "HEALTH", subtype: "disease", weight: 0.7, match: starts("TAX_DISEASE", "HEALTH_PANDEMIC", "EPIDEMIC"), title: /\b(outbreaks?|virus\w*|disease|infections?|epidemic|pandemic|cholera|ebola|measles|dengue|mpox|flu|influenza|plague|vaccin\w*|covid|polio|malaria|anthrax|tuberculosis)\b/i },
   { category: "PROTEST", subtype: "protest", weight: 0.7, match: has("PROTEST", "VIOLENT_UNREST", "UNREST_CRACKDOWN"), title: /\b(protests?|protesters?|demonstrat\w+|rall(?:y|ies)|marche?s?|riots?|unrest|crackdown|sit-in)\b/i },
   { category: "PROTEST", subtype: "strike", weight: 0.55, match: has("STRIKE"), title: /\b(strikes?|walkouts?|stoppage)\b/i },
-  { category: "POLITICS", subtype: "election", weight: 0.65, match: has("ELECTION", "ELECTION_FRAUD"), title: /\b(elections?|vot(?:e|es|ing|ers)|ballots?|polls?|candidates?|campaign|referendum|elected|runoff)\b/i },
+  { category: "POLITICS", subtype: "election", weight: 0.65, match: has("ELECTION", "ELECTION_FRAUD"), title: /\b(elections?|midterms?|vot(?:e|es|ing|ers)|ballots?|polls?|candidates?|campaign|referendum|elected|runoff)\b/i },
   { category: "POLITICS", subtype: "sanctions", weight: 0.65, match: has("SANCTIONS"), title: /\b(sanctions?|embargo|tariffs?|export controls?)\b/i },
   { category: "POLITICS", subtype: "government", weight: 0.5, match: has("LEGISLATION", "VETO", "CONSTITUTIONAL", "TAKE_OFFICE", "RESIGNATION", "NEGOTIATIONS", "IMPEACHMENT"), title: /\b(parliament|congress|senate|ministers?|president|prime minister|government|bill|law|cabinet|resign\w*|impeach\w*|supreme court|chancellor|premier|governor|veto|treaty|talks|summit|coalition)\b/i },
   { category: "MARKETS", subtype: "markets", weight: 0.6, match: (t) => ["ECON_STOCKMARKET", "ECON_INFLATION", "ECON_OILPRICE", "ECON_BITCOIN", "ECON_INTEREST_RATES", "ECON_CENTRALBANK", "FUELPRICES"].includes(t) || t.startsWith("ECON_WORLDCURRENCIES"), title: /\b(stocks?|shares|markets?|index|indices|inflation|rates?|yields?|bonds?|oil|crude|gold|bitcoin|crypto\w*|currenc(?:y|ies)|dollar|euro|yen|rupee|fed|central bank|nasdaq|dow|s&p)\b/i },
@@ -53,9 +54,25 @@ export const THEME_RULES: ThemeRule[] = [
 /** Natural-hazard coverage comes from official sources; news about them is skipped here. */
 const SKIP = (t: string) => t.startsWith("NATURAL_DISASTER");
 
+/** Killings and shootings without armed-conflict actors (see news-classify.ts). */
+export const CRIME_RULE: ThemeRule = { category: "NEWS", subtype: "crime / public safety", weight: 0.4, match: () => false, title: /./ };
+
 export function classifyThemes(themes: string[], title: string): ThemeRule | null {
   if (themes.some(SKIP)) return null;
-  for (const r of THEME_RULES) if (themes.some(r.match) && r.title.test(title)) return r;
+  let signal: ReturnType<typeof conflictSignal> | null = null;
+  for (const r of THEME_RULES) {
+    if (!themes.some(r.match)) continue;
+    if (r.category === "CONFLICT") {
+      // Headline evidence after figurative uses are removed, then the context rules decide.
+      if (!r.title.test(withoutFigurative(title))) continue;
+      signal ??= conflictSignal(title);
+      if (signal.kind === "crime") return CRIME_RULE;
+      if (signal.kind !== "conflict") continue;
+      return r;
+    }
+    if (r.category === "PROTEST" && !r.title.test(withoutFigurativeProtest(title))) continue;
+    if (r.title.test(title)) return r;
+  }
   return null;
 }
 
@@ -198,7 +215,7 @@ export function parseGkgArticles(raw: GkgRaw, ctx: ParseContext): ParseResult {
         assertion: "MEDIA_REPORT",
         credibility: null,
       },
-      rawData: { themes: c.a.themes.slice(0, 20), locations: c.a.locations.slice(0, 5), source: c.a.source },
+      rawData: { themes: c.a.themes.slice(0, 10), locations: c.a.locations.slice(0, 3), source: c.a.source },
     };
   });
   return { candidates, skipped };

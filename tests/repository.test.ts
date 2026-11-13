@@ -122,8 +122,9 @@ describe.each(impls)("EventRepository contract — %s", (_name, factory) => {
   });
 
   it("prunes old events and removes events by source", async () => {
-    // Pruning uses the later of event time and last update.
-    await repo.save({ ...(await repo.get("b2"))!, updatedAt: iso(30 * 3_600_000) });
+    // Pruning uses the later of event time and the last distinct new evidence — a recent
+    // merge touch (updatedAt) alone does not keep an event alive.
+    await repo.save({ ...(await repo.get("b2"))!, updatedAt: iso(0), lastEvidenceAt: iso(30 * 3_600_000) });
     const removed = await repo.prune(NOW - 24 * 3_600_000);
     expect(removed).toBe(1); // the 30 h-old fire
     expect(await repo.get("b2")).toBeNull();

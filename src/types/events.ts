@@ -220,6 +220,12 @@ export const EventCandidateSchema = z.object({
    * in place instead of creating a duplicate.
    */
   supersedes: z.array(z.string()).default([]),
+  /**
+   * Records of one ongoing warning/alert series share this key (e.g. MeteoAlarm time
+   * slices of the same warning, NWS reissues for the same polygon). Consecutive or
+   * overlapping records with the same key update one event spanning the whole period.
+   */
+  seriesKey: z.string().nullable().default(null),
   /** Trimmed raw upstream record, for traceability/debugging */
   rawData: z.unknown().optional(),
   isSynthetic: z.boolean().default(false),
@@ -263,8 +269,25 @@ export const WorldEventSchema = z.object({
   /** ai_interpretation – separate from facts, nullable until generated */
   aiInterpretation: AIInterpretationSchema.nullable(),
   isSynthetic: z.boolean(),
-  /** Raw upstream records keyed by source id */
+  /** Raw upstream records keyed by source id (only for sources still listed, size-capped) */
   rawData: z.record(z.string(), z.unknown()),
+  /**
+   * Distinct outlets/publishers (URL hostnames) that reported this event, counted over
+   * every source ever attached — including sources trimmed from `sources`. "8 outlets".
+   */
+  outletCount: z.number().int().min(0).optional(),
+  /** Source records attached over time but no longer listed in `sources` (store cap). sourceCount includes them. */
+  sourcesOmitted: z.number().int().min(0).optional(),
+  /** Timeline entries dropped by the store cap (the first, key and latest entries are kept). */
+  timelineOmitted: z.number().int().min(0).optional(),
+  /** Internal: publisher keys seen (capped), so `outletCount` survives source trimming. */
+  publisherKeys: z.array(z.string()).optional(),
+  /** Internal: short hashes of trimmed/replaced source ids and URLs, so they are never re-attached. */
+  seenSourceKeys: z.array(z.string()).optional(),
+  /** Last time distinct new evidence arrived (new outlet, material update, confirmation). Drives retention. */
+  lastEvidenceAt: z.string().datetime().optional(),
+  /** Series key, see EventCandidate.seriesKey */
+  seriesKey: z.string().nullable().optional(),
 });
 export type WorldEvent = z.infer<typeof WorldEventSchema>;
 
@@ -289,7 +312,14 @@ export type EventSummary = Pick<
   | "isSynthetic"
   | "metrics"
   | "geoPrecision"
-> & { primarySource: string; area: AreaGeometry | null; /** every connector that reported it (for "plot by source") */ sourceIds?: string[] };
+> & {
+  primarySource: string;
+  area: AreaGeometry | null;
+  /** every connector that reported it (for "plot by source") */
+  sourceIds?: string[];
+  /** Distinct outlets/publishers corroborating the story (≥ 1), e.g. "8 outlets". */
+  outletCount?: number;
+};
 
 export type EventRelationshipType =
   | "SAME_STORY"
@@ -330,5 +360,6 @@ export function toEventSummary(e: WorldEvent): EventSummary {
     area: e.geometry ?? null,
     primarySource: e.sources[0]?.sourceName ?? "Unknown",
     sourceIds: [...new Set(e.sources.map((s) => s.dataSourceId))],
+    outletCount: e.outletCount ?? Math.min(e.sourceCount, Math.max(1, e.sources.length)),
   };
 }
