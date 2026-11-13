@@ -39,6 +39,7 @@ import { AnalystPanel } from "@/components/analyst/AnalystPanel";
 import { Toasts, useAlertChecker } from "@/components/markets/Alerts";
 import { modeMeta } from "@/lib/map-modes";
 import { useLiveLayer } from "@/lib/client/use-live-layer";
+import { SinceLastVisit } from "@/components/digest/SinceLastVisit";
 
 // WebGL map is client-only.
 const Globe = dynamic(() => import("@/components/globe/Globe"), {
@@ -176,6 +177,7 @@ export function Dashboard() {
           </main>
         )}
       </div>
+      <SinceLastVisit />
       <SearchPalette />
       <SettingsModal />
       <InstrumentDetail />

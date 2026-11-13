@@ -8,7 +8,7 @@ import "server-only";
 import { env } from "@/lib/env";
 import { loadWatchlist } from "@/lib/server/watchlist";
 import { discordWebhook, sendDiscord, type DiscordEmbed } from "./discord";
-import { load, nyClock, save } from "./discord-server";
+import { load, nyClock, update } from "./discord-server";
 
 export async function watchMoves(now = Date.now()): Promise<string> {
   if (!discordWebhook()) return "watchlist: no webhook";
@@ -36,8 +36,7 @@ export async function watchMoves(now = Date.now()): Promise<string> {
     color: h.changePct > 0 ? 0x2e9e6b : 0xe5484d,
   }));
   await sendDiscord(`**[WorldView]** 👀 Watchlist ${hits.length === 1 ? "move" : "moves"}`, embeds);
-  const after = (await load()) ?? state;
-  await save({ ...after, watchMoves: { ...(after.watchMoves ?? {}), ...Object.fromEntries(hits.map((h) => [h.symbol, { date: ny.date, level: h.level }])) } });
+  await update((s) => ({ ...s, watchMoves: { ...(s.watchMoves ?? {}), ...Object.fromEntries(hits.map((h) => [h.symbol, { date: ny.date, level: h.level }])) } }));
   return `watchlist: alerted ${hits.map((h) => h.symbol).join(", ")}`;
 }
 
@@ -68,5 +67,5 @@ export async function watchEarnings(now = Date.now()) {
       },
     ]);
   }
-  await save({ ...((await load()) ?? prev), lastEarnings: ny.date });
+  await update((s) => ({ ...s, lastEarnings: ny.date }));
 }

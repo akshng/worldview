@@ -20,6 +20,8 @@ export type AppView = (typeof APP_VIEWS)[number];
 export type MapStyleId = "dark" | "satellite" | "night";
 export type MapMode = import("@/lib/map-modes").MapModeId;
 export type FeedSort = "recent" | "importance";
+export const REPLAY_SPEEDS = [1, 4, 16] as const;
+export type ReplaySpeed = (typeof REPLAY_SPEEDS)[number];
 
 export interface Settings {
   mapStyle: MapStyleId;
@@ -117,6 +119,10 @@ interface UIState {
   timelineSpan: "24h" | "7d";
   /** null = following "now" (live). A number = replay cursor (ms epoch). */
   timelineCursor: number | null;
+  /** Replay playback: the cursor advances on its own (see components/timeline/use-replay.ts) */
+  replayPlaying: boolean;
+  /** Replay speed: hours of event time per second of playback */
+  replaySpeed: ReplaySpeed;
   mapMode: MapMode;
   feedSort: FeedSort;
   /** Weather radar playback: index into frames (null = latest) */
@@ -172,7 +178,7 @@ interface UIState {
   instrument: string | null;
   toasts: Toast[];
   settingsOpen: boolean;
-  settingsTab: "general" | "map" | "sources" | "about";
+  settingsTab: "general" | "map" | "alerts" | "sources" | "about";
 
   settings: Settings;
 
@@ -184,6 +190,8 @@ interface UIState {
   setImportance: (i: ImportanceFilterId) => void;
   setTimelineSpan: (s: "24h" | "7d") => void;
   setTimelineCursor: (t: number | null) => void;
+  setReplayPlaying: (v: boolean) => void;
+  setReplaySpeed: (v: ReplaySpeed) => void;
   setMapMode: (m: MapMode) => void;
   setFeedSort: (s: FeedSort) => void;
   setRadarFrame: (i: number | null) => void;
@@ -267,6 +275,8 @@ export const useUI = create<UIState>()(
       importance: "all",
       timelineSpan: "24h",
       timelineCursor: null,
+      replayPlaying: false,
+      replaySpeed: 4,
       mapMode: "events",
       feedSort: "recent",
       radarFrame: null,
@@ -314,13 +324,17 @@ export const useUI = create<UIState>()(
         set(() => ({
           range,
           timelineCursor: null,
+          replayPlaying: false,
           ...(range === "7d" ? { timelineSpan: "7d" as const } : {}),
         })),
-      setCustomRange: (customRange) => set({ customRange, range: customRange ? "custom" : "24h", timelineCursor: null }),
+      setCustomRange: (customRange) => set({ customRange, range: customRange ? "custom" : "24h", timelineCursor: null, replayPlaying: false }),
       setImportance: (importance) => set({ importance }),
       setTimelineSpan: (timelineSpan) =>
-        set((s) => ({ timelineSpan, timelineCursor: null, range: timelineSpan === "24h" && s.range === "7d" ? "24h" : s.range })),
-      setTimelineCursor: (timelineCursor) => set({ timelineCursor }),
+        set((s) => ({ timelineSpan, timelineCursor: null, replayPlaying: false, range: timelineSpan === "24h" && s.range === "7d" ? "24h" : s.range })),
+      // Back to live also stops playback.
+      setTimelineCursor: (timelineCursor) => set(timelineCursor === null ? { timelineCursor, replayPlaying: false } : { timelineCursor }),
+      setReplayPlaying: (replayPlaying) => set({ replayPlaying }),
+      setReplaySpeed: (replaySpeed) => set({ replaySpeed }),
       setMapMode: (mapMode) => set({ mapMode, radarPlaying: false, radarFrame: null }),
       setFeedSort: (feedSort) => set({ feedSort }),
       setRadarFrame: (radarFrame) => set({ radarFrame }),
@@ -386,7 +400,7 @@ export const useUI = create<UIState>()(
         }
       }),
       // Only persist preferences, not transient selection state.
-      partialize: (s) => ({ settings: s.settings, sidebarCollapsed: s.sidebarCollapsed, feedSort: s.feedSort, mapMode: s.mapMode, view: s.view, sourceFilter: s.sourceFilter, charts: s.charts }),
+      partialize: (s) => ({ settings: s.settings, sidebarCollapsed: s.sidebarCollapsed, feedSort: s.feedSort, mapMode: s.mapMode, view: s.view, sourceFilter: s.sourceFilter, charts: s.charts, replaySpeed: s.replaySpeed }),
       // Apply default layers/range from saved settings on load.
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<UIState>;
@@ -399,11 +413,13 @@ export const useUI = create<UIState>()(
         const valid = settings.defaultCategories.filter((c) => (EVENT_CATEGORIES as readonly string[]).includes(c));
         const mapMode = (MAP_MODE_IDS as readonly string[]).includes(String(p.mapMode)) ? p.mapMode! : "events";
         const view = (APP_VIEWS as readonly string[]).includes(String(p.view)) ? p.view! : "world";
+        const replaySpeed = (REPLAY_SPEEDS as readonly number[]).includes(Number(p.replaySpeed)) ? p.replaySpeed! : current.replaySpeed;
         return {
           ...current,
           ...p,
           view,
           mapMode,
+          replaySpeed,
           settings,
           categories: valid.length ? valid : [...EVENT_CATEGORIES],
           range: settings.defaultRange,

@@ -189,3 +189,19 @@ Ideas for next steps:
 - Better 3D only if a key is added (Cesium ion / Google Photorealistic 3D Tiles); keyless is near
   MapLibre's limit.
 - Windows-friendly scheduler script (Task Scheduler) mirroring `scripts/schedule-briefing.mjs`.
+
+### Alerts, digest, export, replay, health (2026-11)
+
+- Alert rules: pure logic in `src/lib/notify/rules.ts` (schema, matching, per-tick selection),
+  storage + posting in `rules-server.ts`, UI in `src/components/settings/AlertRules.tsx`, API in
+  `src/app/api/alert-rules/`. Called from `discordTick` and `runSentinel`. Dedupe keys live in
+  `discord-state.json` → `ruleAlerted`.
+- `discord-state.json` is now written atomically (temp file + rename) and every read-modify-write
+  goes through `update()` in `discord-server.ts` (one queue per process). Use `update()`, not
+  `load()` + `save()`, after any slow step.
+- Digest: `src/lib/client/digest.ts`, `src/app/api/digest/route.ts`,
+  `src/components/digest/SinceLastVisit.tsx`. Export: `src/lib/client/export.ts`,
+  `src/components/event-feed/ExportMenu.tsx`. Replay: `src/components/timeline/use-replay.ts`
+  (store: `replayPlaying`, `replaySpeed`). Health: `src/lib/client/health.ts`,
+  `src/components/layout/HealthDot.tsx`, upgraded `SourcesList` in `SettingsModal.tsx`.
+

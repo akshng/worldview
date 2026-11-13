@@ -223,6 +223,14 @@ If the app server is already running (`WORLDVIEW_URL`), the job uses its API ins
 
 **Battery mode** (`npm run power:install`). Plugged in, the server runs as usual. On battery it stops once no tab has been open for 10 minutes, and a **sentinel** runs every 15 minutes instead: under a second of CPU to check USGS, GDACS and tsunami feeds plus S&P 500 / VIX during market hours, using the same importance rules. Only when something crosses the bar does it load the AI, write a note, post to Discord and unload it. `npm run app` opens WorldView on battery; `npm run power:uninstall` returns to always-on. Logs: `.data/power.log`, `.data/sentinel.log`.
 
+## Alert rules, digest, export, replay and health
+
+- **Alert rules → Discord** (Settings → Alerts): rules such as "earthquakes in Japan", "anything from OFAC mentioning Iran" or "importance ≥ 80". Filters: types, countries (ISO-2), sources, keywords (title or summary), minimum importance; every filter you set must match, any value within a filter matches. Rules are stored in `DATA_DIR/alert-rules.json` (`GET/POST /api/alert-rules`, local only) and checked every 2 minutes by the server and every 15 minutes by the battery sentinel. New matches post as **[WorldView] 🔔 rule name** with one embed per event (third-party text escaped); each event is posted once per rule, at most 6 per check, and only events first seen after the rule was saved. **Test** shows how many of the last 24 h's events match (`POST /api/alert-rules/test`) and never posts. Needs `DISCORD_WEBHOOK_URL`.
+- **Since you last looked**: when the app opens, or World/News comes back after ≥ 2 h away, a dismissible card lists new high-importance events by category, the top 5 (click to open), notable watchlist moves today (click to open the ticker) and newly posted stock setups (`GET /api/digest?since=`). The last-visit time stays in this browser (localStorage).
+- **Export**: "Export" in the feed header (World and News) downloads the events currently shown, after filters, as CSV or GeoJSON (id, time, title, type, importance, status, country, lat, lon, primary source, url when known). Each Charts card has "Export" (CSV of its series). Everything is generated in the browser.
+- **7-day replay**: the timeline's **▶ Replay** plays the last 7 days at 1×, 4× or 16× (hours of event time per second) with a sliding window (the selected range, 24 h by default); drag the timeline to scrub, **Live** or **Esc** returns to live. Paused while the page is hidden, fewer updates on battery.
+- **Source health**: the Sources page shows status, last success, last run with data, records in 24 h and anomaly badges (empty streak, volume drop, failing) when the server reports them, with "Problems only" and "Problems first". The top-bar **Health** dot (green / amber / red) uses `/api/health` when available, otherwise `/api/sources`; click it for the Sources page.
+
 ## How ingestion works
 
 ```

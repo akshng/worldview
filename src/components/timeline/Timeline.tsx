@@ -5,7 +5,8 @@
  */
 import clsx from "clsx";
 import { useCallback, useMemo, useRef } from "react";
-import { useUI } from "@/lib/store/ui";
+import { REPLAY_SPEEDS, useUI } from "@/lib/store/ui";
+import { startReplay, useReplay } from "./use-replay";
 import { useData } from "@/lib/client/data-store";
 import { useNow } from "@/lib/client/use-now";
 import { formatClock, rangeMs } from "@/lib/time";
@@ -20,6 +21,11 @@ export function Timeline() {
   const events = useData((s) => s.events);
   const now = useNow(30_000);
   const track = useRef<HTMLDivElement>(null);
+  const playing = useUI((s) => s.replayPlaying);
+  const speed = useUI((s) => s.replaySpeed);
+  const setSpeed = useUI((s) => s.setReplaySpeed);
+  const setPlaying = useUI((s) => s.setReplayPlaying);
+  useReplay();
 
   const spanMs = rangeMs(span);
   const start = now - spanMs;
@@ -84,16 +90,45 @@ export function Timeline() {
 
   return (
     <div className="glass pointer-events-auto flex h-[72px] items-stretch rounded-md">
-      <div className="flex w-[92px] shrink-0 flex-col justify-center gap-1 border-r border-line px-3">
-        <button
-          onClick={() => setCursor(null)}
-          className={clsx("meta flex items-center gap-1.5 text-left", cursor === null ? "text-live" : "text-muted hover:text-fg")}
-          title="Return to live"
-        >
-          <span className={clsx("h-1.5 w-1.5 rounded-full", cursor === null ? "bg-live" : "bg-faint")} />
-          {cursor === null ? "Live" : "Go live"}
-        </button>
-        <div className="meta tabular text-faint normal-case">{cursor === null ? "Now" : formatClock(cursor)}</div>
+      <div className="flex w-[176px] shrink-0 flex-col justify-center gap-1.5 border-r border-line px-2.5">
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => (playing ? setPlaying(false) : startReplay())}
+            className={clsx("meta flex items-center gap-1 rounded border px-1.5 py-[3px] leading-none", playing ? "border-warn/50 text-warn" : "border-line text-muted hover:text-fg")}
+            title={playing ? "Pause replay" : "Replay the last 7 days (Esc returns to live)"}
+            aria-label={playing ? "Pause replay" : "Play replay"}
+          >
+            <span aria-hidden>{playing ? "❚❚" : "▶"}</span>
+            {playing ? "Pause" : "Replay"}
+          </button>
+          <div className="flex rounded border border-line p-[1px]" role="radiogroup" aria-label="Replay speed">
+            {REPLAY_SPEEDS.map((v) => (
+              <button
+                key={v}
+                role="radio"
+                aria-checked={speed === v}
+                onClick={() => setSpeed(v)}
+                title={`${v} hour${v === 1 ? "" : "s"} per second`}
+                className={clsx("meta rounded-[3px] px-1 py-[2px] leading-none normal-case", speed === v ? "bg-panel-hover text-fg" : "text-faint hover:text-muted")}
+              >
+                {v}×
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setCursor(null)}
+            className={clsx("meta flex items-center gap-1.5 text-left", cursor === null ? "text-live" : "text-muted hover:text-fg")}
+            title="Return to live (Esc)"
+          >
+            <span className={clsx("h-1.5 w-1.5 rounded-full", cursor === null ? "bg-live" : "bg-faint")} />
+            Live
+          </button>
+          <span className={clsx("meta tabular normal-case", cursor === null ? "text-faint" : "text-warn")} aria-live="off">
+            {cursor === null ? "Now" : `${new Date(cursor).toLocaleDateString([], { weekday: "short", day: "numeric" })} ${formatClock(cursor)}`}
+          </span>
+        </div>
       </div>
 
       <div className="relative flex-1 px-3 pt-2 pb-5">

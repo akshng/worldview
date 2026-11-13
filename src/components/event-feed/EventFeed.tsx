@@ -9,6 +9,7 @@ import { recencyKey } from "@/lib/events/query";
 import { useNow } from "@/lib/client/use-now";
 import { CategoryLabel, ImportanceMeter, SimulatedBadge } from "@/components/ui/primitives";
 import type { EventSummary } from "@/types/events";
+import { ExportMenu } from "./ExportMenu";
 
 const ROW_H = 98;
 
@@ -48,12 +49,15 @@ export function EventFeed({ wide = false }: { wide?: boolean } = {}) {
           <span className="meta text-fg">Live feed</span>
           <span className="meta tabular text-faint">{items.length.toLocaleString("en-US")}</span>
         </div>
+        <div className="flex items-center gap-2">
+        <ExportMenu events={items} label={wide ? "news" : "world-feed"} />
         <div className="flex rounded border border-line p-[2px]">
           {(["recent", "importance"] as const).map((s) => (
             <button key={s} onClick={() => setSort(s)} className={clsx("meta rounded-[3px] px-2 py-0.5", sort === s ? "bg-panel-hover text-fg" : "text-faint hover:text-muted")}>
               {s === "recent" ? "Latest" : "Important"}
             </button>
           ))}
+        </div>
         </div>
       </div>
 

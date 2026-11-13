@@ -9,10 +9,13 @@ import { APP_NAME, APP_TAGLINE, AUTHOR_NAME, AUTHOR_URL } from "@/lib/config/app
 import { TIME_RANGES, formatUtc, relativeTime } from "@/lib/time";
 import { CloseIcon, ExternalIcon } from "@/components/ui/icons";
 import { SafeLink } from "@/components/ui/primitives";
+import { ANOMALY_LABEL, isProblem, sortSources, summarizeHealth } from "@/lib/client/health";
+import { AlertRules } from "./AlertRules";
 
 const TABS = [
   { id: "general", label: "General" },
   { id: "map", label: "Map" },
+  { id: "alerts", label: "Alerts" },
   { id: "sources", label: "Data sources" },
   { id: "about", label: "About" },
 ] as const;
@@ -53,6 +56,7 @@ export function SettingsModal() {
           <div className="scroll-thin flex-1 overflow-y-auto px-5 py-4">
             {tab === "general" && <General />}
             {tab === "map" && <MapSettings />}
+            {tab === "alerts" && <AlertRules />}
             {tab === "sources" && <Sources />}
             {tab === "about" && <About />}
           </div>
@@ -246,6 +250,8 @@ function Sources() {
   const [data, setData] = useState<SourcesResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [running, setRunning] = useState<string | null>(null);
+  const [problemsOnly, setProblemsOnly] = useState(false);
+  const [problemsFirst, setProblemsFirst] = useState(true);
 
   const load = useCallback(() => {
     api.sources().then(setData).catch((e) => setErr(e.message));
@@ -270,6 +276,10 @@ function Sources() {
 
   if (err && !data) return <p className="text-[12.5px] text-danger">{err}</p>;
   if (!data) return <p className="text-[12.5px] text-muted">Loading…</p>;
+  const summary = summarizeHealth(null, data.sources);
+  const problemCount = data.sources.filter(isProblem).length;
+  const shown = sortSources(problemsOnly ? data.sources.filter(isProblem) : data.sources, problemsFirst);
+  const dash = (v: string | null | undefined) => (v ? relativeTime(v) : "—");
 
   return (
     <div>
@@ -278,19 +288,39 @@ function Sources() {
         <span>{data.eventCount.toLocaleString("en-US")} events stored</span>
         <span className="text-faint">· repository: {data.repository}</span>
       </div>
+      <div className="mb-3 flex flex-wrap items-center gap-3 text-[12px]">
+        <span className="text-muted">{summary.text}</span>
+        <div className="ml-auto flex rounded border border-line p-[2px]" role="radiogroup" aria-label="Show sources">
+          {([false, true] as const).map((v) => (
+            <button key={String(v)} role="radio" aria-checked={problemsOnly === v} onClick={() => setProblemsOnly(v)} className={clsx("meta rounded-[3px] px-2 py-0.5", problemsOnly === v ? "bg-panel-hover text-fg" : "text-faint hover:text-muted")}>
+              {v ? `Problems only (${problemCount})` : `All (${data.sources.length})`}
+            </button>
+          ))}
+        </div>
+        <label className="flex items-center gap-1.5 text-faint">
+          <input type="checkbox" checked={problemsFirst} onChange={(e) => setProblemsFirst(e.target.checked)} className="accent-[var(--accent)]" />
+          Problems first
+        </label>
+      </div>
       <table className="w-full text-left text-[12.5px]">
         <thead>
           <tr className="meta text-faint">
             <th className="py-2 font-normal">Source</th>
             <th className="font-normal">Status</th>
             <th className="font-normal">Last success</th>
-            <th className="font-normal">Last attempt</th>
-            <th className="text-right font-normal">Received</th>
+            <th className="font-normal" title="Last run that returned any records">Last data</th>
+            <th className="text-right font-normal" title="Records received in the last 24 hours">24 h</th>
+            <th className="text-right font-normal" title="Records in the last run">Last run</th>
             <th />
           </tr>
         </thead>
         <tbody>
-          {data.sources.map((s) => (
+          {shown.length === 0 && (
+            <tr className="border-t border-line">
+              <td colSpan={7} className="py-6 text-center text-faint">No problems right now.</td>
+            </tr>
+          )}
+          {shown.map((s) => (
             <tr key={s.id} className="border-t border-line align-top">
               <td className="py-2.5 pr-3">
                 <div className="flex items-center gap-1.5 font-medium">
@@ -305,16 +335,26 @@ function Sources() {
                     {s.disabledReason ?? s.lastRun?.errors[0]}
                   </div>
                 )}
+                {s.anomalyNote && <div className="mt-1 max-w-[300px] text-[11px] leading-snug text-warn">{s.anomalyNote}</div>}
               </td>
               <td className="pr-3 pt-2.5">
                 <span className="meta inline-flex items-center gap-1.5" style={{ color: STATUS_COLOR[s.status] }}>
                   <span className="h-1.5 w-1.5 rounded-full" style={{ background: STATUS_COLOR[s.status] }} />
                   {s.status}
                 </span>
+                {s.anomaly && (
+                  <div
+                    className={clsx("meta mt-1 inline-block rounded-sm px-1.5 py-[1px] normal-case tracking-normal", s.anomaly === "failing" ? "bg-danger/15 text-danger" : "bg-warn/15 text-warn")}
+                    title={s.anomalyNote ?? undefined}
+                  >
+                    {ANOMALY_LABEL[s.anomaly] ?? s.anomaly}
+                  </div>
+                )}
                 <div className="meta mt-1 normal-case tracking-normal text-faint">every {Math.round(s.refreshIntervalMs / 60_000)} min</div>
               </td>
-              <td className="pr-3 pt-2.5 text-muted">{s.lastSuccessAt ? relativeTime(s.lastSuccessAt) : "—"}</td>
-              <td className="pr-3 pt-2.5 text-muted">{s.lastAttemptAt ? relativeTime(s.lastAttemptAt) : "—"}</td>
+              <td className="pr-3 pt-2.5 text-muted" title={s.lastAttemptAt ? `Last attempt ${relativeTime(s.lastAttemptAt)}` : undefined}>{dash(s.lastSuccessAt)}</td>
+              <td className="pr-3 pt-2.5 text-muted">{dash(s.lastNonEmptyAt)}</td>
+              <td className="tabular pr-1 pt-2.5 text-right text-muted">{typeof s.records24h === "number" ? s.records24h.toLocaleString("en-US") : "—"}</td>
               <td className="tabular pt-2.5 text-right text-muted">{s.lastRun ? s.lastRun.recordsReceived.toLocaleString("en-US") : "—"}</td>
               <td className="pt-2 pl-3 text-right">
                 <button

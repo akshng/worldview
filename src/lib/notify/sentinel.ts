@@ -12,7 +12,7 @@ import { EventCandidateSchema, type WorldEvent } from "@/types/events";
 import { enrichGeo, normalizeCandidate } from "@/lib/ingestion/pipeline";
 import { createEvent, recompute } from "@/lib/events/build";
 import { alertEmbed, discordWebhook, sendDiscord, type DiscordEmbed } from "./discord";
-import { load, nyClock, save } from "./discord-server";
+import { load, nyClock, update } from "./discord-server";
 
 const FEEDS = ["usgs", "gdacs", "tsunami"];
 const WINDOW_MS = 6 * 3_600_000;
@@ -64,7 +64,8 @@ export async function runSentinel(now = Date.now()): Promise<string[]> {
   const seen = new Set(state.alerted);
   const min = env().DISCORD_ALERT_MIN_IMPORTANCE - SINGLE_SOURCE_ALLOWANCE;
 
-  const events = (await candidateEvents(now))
+  const candidates = await candidateEvents(now);
+  const events = candidates
     .filter((e) => e.status !== "RESOLVED" && e.importanceScore >= min && now - Date.parse(e.timestamp) < WINDOW_MS)
     .filter((e) => !e.sources.some((s) => seen.has(s.id)))
     .sort((a, b) => b.importanceScore - a.importanceScore)
@@ -74,6 +75,11 @@ export async function runSentinel(now = Date.now()): Promise<string[]> {
   log.push(`checked ${FEEDS.join(", ")} + markets: ${events.length} event(s), ${shocks.length} market shock(s) over the bar`);
   const { watchMoves } = await import("./watch");
   log.push(await watchMoves(now).catch((e) => `watchlist failed: ${e instanceof Error ? e.message : e}`));
+  // User alert rules: cheap (no AI), deduped against the server's posts by source record.
+  const { postRuleAlerts } = await import("./rules-server");
+  // Their "first seen" is now, so gate new rules on the event time instead (as the server would have).
+  const recent = candidates.filter((e) => now - Date.parse(e.timestamp) < WINDOW_MS).map((e) => ({ ...e, createdAt: e.timestamp }));
+  log.push(await postRuleAlerts(recent).catch((e) => `alert rules failed: ${e instanceof Error ? e.message : e}`));
   if (!events.length && !shocks.length) return log;
 
   // Something tripped — only now wake the AI, then put it straight back to sleep.
@@ -109,12 +115,11 @@ export async function runSentinel(now = Date.now()): Promise<string[]> {
   }
   const parts = [events.length ? `${events.length} major event${events.length > 1 ? "s" : ""}` : "", shocks.length ? "big market move" : ""].filter(Boolean).join(" + ");
   await sendDiscord(`**[WorldView]** 🚨 ${parts}`, embeds);
-  const after = (await load()) ?? state;
-  await save({
+  await update((after) => ({
     ...after,
     alerted: [...after.alerted, ...events.flatMap((e) => e.sources.map((s) => s.id))],
     shocks: { ...(after.shocks ?? {}), ...Object.fromEntries(shocks.map((s) => [s.kind, ny.date])) },
-  });
+  }));
   log.push(`posted: ${parts}`);
   return log;
 }
