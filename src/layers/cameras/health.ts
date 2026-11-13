@@ -19,6 +19,8 @@ interface HealthState {
   version: number;
   timer: ReturnType<typeof setTimeout> | null;
   running: boolean;
+  /** The last round was skipped because every probe failed (offline). */
+  skipped?: boolean;
 }
 const g = globalThis as unknown as { __worldviewCamHealth?: HealthState };
 const state: HealthState = (g.__worldviewCamHealth ??= { health: {}, version: 0, timer: null, running: false });
@@ -131,12 +133,26 @@ export async function runProbes(targets: ProbeTarget[], check: (t: ProbeTarget) 
   return results;
 }
 
-/** One sampling round over the current rows. */
+/** True when there were probes and none succeeded (the network, not the cameras, is down). */
+export function allFailed(results: ProbeResult[]): boolean {
+  return results.length > 0 && results.every((r) => !r.ok);
+}
+
+/** One sampling round over the current rows. Skipped (previous health kept) when every probe fails. */
 export async function sampleCameraHealth(targets: ProbeTarget[], userAgent: string): Promise<Record<string, SourceHealth>> {
   if (state.running) return state.health;
   state.running = true;
   try {
-    const health = summarizeProbes(await runProbes(targets, (t) => probe(t, userAgent)), new Date().toISOString());
+    const results = await runProbes(targets, (t) => probe(t, userAgent));
+    if (allFailed(results)) {
+      // Every probe across every operator failing means we're offline (or just woke from
+      // sleep), not that ~30 agencies died at once: keep the previous health, retry later.
+      console.info(`[cameras] liveness round skipped: all ${results.length} probes failed (offline?)`);
+      state.skipped = true;
+      return state.health;
+    }
+    const health = summarizeProbes(results, new Date().toISOString());
+    state.skipped = false;
     state.health = health;
     state.version++;
     const line = Object.entries(health)
@@ -155,7 +171,8 @@ export function startCameraHealth(targets: () => ProbeTarget[] | null, userAgent
   const round = async () => {
     const t = targets();
     if (t?.length) await sampleCameraHealth(t, userAgent).catch((e) => console.warn("[cameras] liveness sampling failed", e));
-    state.timer = setTimeout(round, t?.length ? HEALTH_INTERVAL_MS : 60_000);
+    // Offline round (all probes failed): try again in 5 min instead of waiting 30.
+    state.timer = setTimeout(round, !t?.length ? 60_000 : state.skipped ? 5 * 60_000 : HEALTH_INTERVAL_MS);
     state.timer.unref?.();
   };
   state.timer = setTimeout(round, firstDelayMs);

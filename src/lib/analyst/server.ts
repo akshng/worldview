@@ -27,12 +27,19 @@ export const localMode = (): "agent" | "routed" => env().ANALYST_LOCAL_MODE;
 const MAX_WAITING = 2;
 const RATE_WINDOW_MS = 10 * 60_000;
 const RATE_MAX = 12;
+const MAX_KEYS = 256;
 
 const g = globalThis as unknown as { __worldviewAnalyst?: { tail: Promise<unknown>; waiting: number; running: boolean; hits: Map<string, number[]> } };
 const state = (g.__worldviewAnalyst ??= { tail: Promise.resolve(), waiting: 0, running: false, hits: new Map() });
 
-export function clientKey(req: Request): string {
-  return req.headers.get("x-forwarded-for")?.split(",")[0].trim() || new URL(req.url).hostname;
+/**
+ * Rate-limit bucket for a request: always the one local key. The server binds to 127.0.0.1
+ * with no proxy in front, so X-Forwarded-For is caller-controlled (trusting it would let a
+ * client mint fresh buckets) and req.url's host is the bind address, not the caller.
+ */
+export function clientKey(req?: Request): string {
+  void req;
+  return "local";
 }
 
 /** Returns seconds to wait when over the limit, else null (and records the hit). */
@@ -40,7 +47,10 @@ export function rateLimit(key: string, now = Date.now()): number | null {
   const hits = (state.hits.get(key) ?? []).filter((t: number) => now - t < RATE_WINDOW_MS);
   if (hits.length >= RATE_MAX) return Math.ceil((hits[0] + RATE_WINDOW_MS - now) / 1000);
   hits.push(now);
+  // Bounded even if a caller passes arbitrary keys: drop the oldest bucket beyond the cap.
+  state.hits.delete(key);
   state.hits.set(key, hits);
+  while (state.hits.size > MAX_KEYS) state.hits.delete(state.hits.keys().next().value!);
   return null;
 }
 

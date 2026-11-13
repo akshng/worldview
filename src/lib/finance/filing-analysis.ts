@@ -14,6 +14,7 @@ import "server-only";
 import path from "node:path";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { env, userAgent } from "@/lib/env";
+import { secGateFetch } from "./sec-http";
 import { getAIProvider } from "@/lib/ai";
 import { FILING_SECTION_TITLES } from "@/lib/ai/prompts";
 import type { FilingFactForAI } from "@/lib/ai/types";
@@ -362,7 +363,7 @@ async function runJob(job: Job, ticker: string, accession: string) {
     if (!TEN_K.test(report.form)) throw new Error(`${report.form} analysis isn't supported yet (10-K only).`);
 
     step("Reading XBRL financial data…");
-    const res = await fetch(`https://data.sec.gov/api/xbrl/companyfacts/CIK${profile.cik}.json`, { headers: secHeaders("application/json"), signal: AbortSignal.timeout(30_000), cache: "no-store" });
+    const res = await secGateFetch(`https://data.sec.gov/api/xbrl/companyfacts/CIK${profile.cik}.json`, { headers: secHeaders("application/json"), signal: AbortSignal.timeout(30_000) });
     if (!res.ok) throw new Error(`SEC company facts HTTP ${res.status}`);
     const facts = computeFilingFacts((await res.json()) as CompanyFacts, accession, report.period);
 
@@ -373,7 +374,7 @@ async function runJob(job: Job, ticker: string, accession: string) {
     } else {
       step("Reading the filing…");
       try {
-        const doc = await fetch(report.url, { headers: secHeaders("text/html"), signal: AbortSignal.timeout(60_000), cache: "no-store" });
+        const doc = await secGateFetch(report.url, { headers: secHeaders("text/html"), signal: AbortSignal.timeout(60_000) });
         if (!doc.ok) throw new Error(`HTTP ${doc.status}`);
         step("Finding Business, Risk Factors and MD&A…");
         text = extractSections(htmlToText(await doc.text()));

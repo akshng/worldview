@@ -5,7 +5,8 @@
  *   npm run service:uninstall
  *
  * Re-run `npm run build` then `npm run service:restart` after pulling changes.
- * Logs: .data/server.log
+ * Logs: .data/server.log — lines are timestamped, and the server rotates it (and the job
+ * logs) at 5 MB keeping two old copies, at start and hourly (src/lib/server/logs.ts).
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";

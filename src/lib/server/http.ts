@@ -73,3 +73,15 @@ export function isAdminRequest(req: Request): boolean {
   const site = req.headers.get("sec-fetch-site");
   return !site || site === "same-origin" || site === "none";
 }
+
+/**
+ * decodeURIComponent for a route param, or null when the percent-encoding is malformed
+ * (e.g. "%E0%A4%A"), so routes answer 400 instead of throwing a URIError (500).
+ */
+export function decodeParam(raw: string): string | null {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return null;
+  }
+}

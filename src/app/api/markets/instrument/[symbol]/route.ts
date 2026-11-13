@@ -5,7 +5,7 @@ import { SYMBOL_PATTERN } from "@/lib/finance/instruments";
 import { companyProfile } from "@/lib/finance/company";
 import { getRepository } from "@/lib/server/context";
 import { toEventSummary } from "@/types/events";
-import { badRequest, handler, json } from "@/lib/server/http";
+import { badRequest, decodeParam, handler, json } from "@/lib/server/http";
 
 export const dynamic = "force-dynamic";
 
@@ -17,8 +17,8 @@ const Range = z.enum(Object.keys(HISTORY_RANGES) as [HistoryRange, ...HistoryRan
  * and WorldView events about the company.
  */
 export const GET = handler(async (req: Request, ctx: RouteContext<"/api/markets/instrument/[symbol]">) => {
-  const symbol = decodeURIComponent((await ctx.params).symbol).toUpperCase();
-  if (!SYMBOL_PATTERN.test(symbol)) return badRequest("Invalid symbol");
+  const symbol = decodeParam((await ctx.params).symbol)?.toUpperCase();
+  if (!symbol || !SYMBOL_PATTERN.test(symbol)) return badRequest("Invalid symbol");
   const range = Range.safeParse(new URL(req.url).searchParams.get("range") ?? undefined);
   if (!range.success) return badRequest(range.error);
 

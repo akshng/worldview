@@ -3,13 +3,14 @@ import "server-only";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { env } from "@/lib/env";
+import { globalLru } from "@/lib/server/lru";
 import { cikForTicker } from "./company";
 import { secFetch } from "./thirteenf-service";
 import { parseForm4, summarizeInsiders, type InsiderSummary, type InsiderTrade } from "./insiders";
 
 const MAX_FILINGS = 30;
-const g = globalThis as unknown as { __worldviewInsiders?: Map<string, { at: number; v: Promise<InsiderSummary | null> }> };
-const mem = (g.__worldviewInsiders ??= new Map());
+/** ticker|days → summary; bounded (keys come from user input). */
+const mem = globalLru<string, { at: number; v: Promise<InsiderSummary | null> }>("__worldviewInsiders", 300);
 const dir = () => path.resolve(process.cwd(), env().DATA_DIR, "insiders");
 
 async function filingTrades(cik: string, acc: string, doc: string, filed: string): Promise<InsiderTrade[]> {

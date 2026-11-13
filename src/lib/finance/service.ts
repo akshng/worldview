@@ -1,5 +1,6 @@
 /** Cached market snapshot + on-demand quotes. Each upstream is cached so polling never hammers it. */
 import "server-only";
+import { globalLru } from "@/lib/server/lru";
 import { INSTRUMENTS, SYMBOL_PATTERN } from "./instruments";
 import { coinbaseQuote, treasuryCurve, treasuryQuotes, yahooHistory, yahooQuote, type HistoryRange, type PriceHistory, type YieldCurve } from "./providers";
 import type { MarketSnapshot, Quote } from "./types";
@@ -8,8 +9,11 @@ const QUOTE_TTL = 3 * 60_000;
 const TREASURY_TTL = 6 * 3_600_000;
 
 type Entry<T> = { at: number; value: T | null; pending: Promise<T> | null };
-const g = globalThis as unknown as { __worldviewMarkets?: { quotes: Map<string, Entry<Quote>>; treasury: Entry<Quote[]> } };
-const cache = (g.__worldviewMarkets ??= { quotes: new Map(), treasury: { at: 0, value: null, pending: null } });
+const g = globalThis as unknown as { __worldviewMarkets?: { treasury: Entry<Quote[]> } };
+const cache = (g.__worldviewMarkets ??= { treasury: { at: 0, value: null, pending: null } });
+/** Symbol-keyed caches are bounded LRUs: symbols come from user input. */
+const quotes = globalLru<string, Entry<Quote>>("__worldviewQuoteCache", 1000);
+const historyCache = globalLru<string, Entry<PriceHistory>>("__worldviewHistoryCache", 400);
 
 async function cached<T>(e: Entry<T>, ttl: number, load: () => Promise<T>): Promise<T> {
   if (e.value && Date.now() - e.at < ttl) return e.value;
@@ -39,8 +43,8 @@ function failed(symbol: string, name: string, group: Quote["group"], err: unknow
 export async function getQuote(symbol: string, group: Quote["group"] = "watchlist", name: string | null = null): Promise<Quote> {
   if (!SYMBOL_PATTERN.test(symbol)) return failed(symbol, symbol, group, new Error("Invalid symbol"));
   const inst = INSTRUMENTS.find((i) => i.symbol === symbol);
-  let e = cache.quotes.get(symbol);
-  if (!e) cache.quotes.set(symbol, (e = { at: 0, value: null, pending: null }));
+  let e = quotes.get(symbol);
+  if (!e) quotes.set(symbol, (e = { at: 0, value: null, pending: null }));
   try {
     const q = await cached(e, QUOTE_TTL, () =>
       inst?.provider === "coinbase" ? coinbaseQuote(symbol, inst.name) : yahooQuote(symbol, inst?.name ?? name, inst?.group ?? group),
@@ -89,7 +93,6 @@ export async function countryIndexChanges(): Promise<Array<{ country: string; sy
   return withCountry.map((i, k) => ({ country: i.country!, symbol: i.symbol, name: i.name, changePct: quotes[k].changePct, asOf: quotes[k].asOf }));
 }
 
-const historyCache = new Map<string, Entry<PriceHistory>>();
 export async function getHistory(symbol: string, range: HistoryRange): Promise<PriceHistory> {
   const key = `${symbol}|${range}`;
   let e = historyCache.get(key);

@@ -5,6 +5,8 @@
  */
 import "server-only";
 import { userAgent } from "@/lib/env";
+import { globalLru } from "@/lib/server/lru";
+import { secGateFetch } from "./sec-http";
 
 export interface CompanyFiling {
   form: string;
@@ -101,13 +103,15 @@ export interface QuarterValue {
 
 const headers = () => ({ "User-Agent": userAgent(), Accept: "application/json" });
 const getJson = async (u: string) => {
-  const r = await fetch(u, { headers: headers(), signal: AbortSignal.timeout(30_000), cache: "no-store" });
+  const r = await secGateFetch(u, { headers: headers(), signal: AbortSignal.timeout(30_000) });
   if (!r.ok) throw new Error(`SEC HTTP ${r.status}`);
   return r.json();
 };
 
-const g = globalThis as unknown as { __worldviewSec?: { tickers: Map<string, string> | null; tickersAt: number; profiles: Map<string, { at: number; p: CompanyProfile }> } };
-const cache = (g.__worldviewSec ??= { tickers: null, tickersAt: 0, profiles: new Map() });
+const g = globalThis as unknown as { __worldviewSec?: { tickers: Map<string, string> | null; tickersAt: number } };
+const cache = (g.__worldviewSec ??= { tickers: null, tickersAt: 0 });
+/** Profiles (incl. XBRL fundamentals) are ~50 KB each: keep the most recent 200. */
+const profiles = globalLru<string, { at: number; p: CompanyProfile }>("__worldviewSecProfiles", 200);
 
 export async function cikForTicker(ticker: string): Promise<string | null> {
   if (!cache.tickers || Date.now() - cache.tickersAt > 24 * 3_600_000) {
@@ -196,7 +200,7 @@ export function quarterlyHistory(rows: FactRow[], max = 12): QuarterValue[] {
 export async function companyProfile(ticker: string): Promise<CompanyProfile | null> {
   const cik = await cikForTicker(ticker);
   if (!cik) return null;
-  const hit = cache.profiles.get(cik);
+  const hit = profiles.get(cik);
   if (hit && Date.now() - hit.at < 3_600_000) return hit.p;
 
   const [sub, facts] = await Promise.all([
@@ -269,6 +273,6 @@ export async function companyProfile(ticker: string): Promise<CompanyProfile | n
     revenueHistory,
     secUrl: `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${cik}`,
   };
-  cache.profiles.set(cik, { at: Date.now(), p });
+  profiles.set(cik, { at: Date.now(), p });
   return p;
 }

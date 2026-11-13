@@ -11,7 +11,7 @@
 import type { EventCandidateInput } from "@/types/events";
 import { locateAddress } from "@/lib/geo/gazetteer";
 import { decodeXmlText } from "../news-rss/client";
-import { httpGet, plainText, safeUrl, type DataSourceConnector, type FetchContext, type ParseContext, type ParseResult } from "../types";
+import { SourceHttpError, httpGet, plainText, safeUrl, type DataSourceConnector, type FetchContext, type ParseContext, type ParseResult } from "../types";
 import { HQ, clip, isoOrNull, makeSource } from "../official-common";
 
 export interface Form4Entry {
@@ -91,8 +91,9 @@ export async function fetchSecInsider(ctx: FetchContext): Promise<SecInsiderRaw>
       filingCache.set(e.accession, xml && purchasesIn(xml).length ? { ...e, city, state, xml } : null);
     } catch (err) {
       if (ctx.signal.aborted) throw err;
+      if (err instanceof SourceHttpError && err.status === 429) break; // SEC asked us to wait: stop, keep what we have
     }
-    await new Promise((r) => setTimeout(r, 150)); // SEC fair access: ≤ 10 requests/second
+    // SEC fair access (≤ 8 req/s, Retry-After) is enforced by httpGet's shared SEC gate.
   }
   // Every run re-emits the purchases still inside the age window (stable ids: no duplicates).
   const filings: Form4Filing[] = [];

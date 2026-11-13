@@ -10,6 +10,8 @@
  * and is registered in src/data-sources/registry.ts. See docs/DATA_SOURCES.md.
  */
 import type { EventCandidateInput, EventCategory, SourceType } from "@/types/events";
+import { SecRateLimitedError, isSecUrl, secGateFetch } from "@/lib/finance/sec-http";
+import { parseRetryAfter } from "@/lib/server/retry-after";
 
 export interface FetchContext {
   signal: AbortSignal;
@@ -59,26 +61,42 @@ export class SourceHttpError extends Error {
   constructor(
     public readonly status: number,
     message: string,
+    /** From the upstream's Retry-After (429/503): the scheduler waits at least this long before the next run. */
+    public readonly retryAfterMs: number | null = null,
   ) {
     super(message);
   }
 }
 
-/** Shared fetch helper with timeout-aware signal, UA header and status checking. */
+/**
+ * Shared fetch helper with timeout-aware signal, UA header and status checking.
+ * Requests to *.sec.gov go through the shared SEC fair-access gate (src/lib/finance/sec-http.ts).
+ * A 429/503 throws SourceHttpError with `retryAfterMs` from the Retry-After header.
+ */
 export async function httpGet(
   url: string,
   ctx: Pick<FetchContext, "signal" | "userAgent">,
   init: { accept?: string; headers?: Record<string, string> } = {},
 ): Promise<Response> {
-  const res = await fetch(url, {
-    signal: ctx.signal,
-    headers: { "User-Agent": ctx.userAgent, Accept: init.accept ?? "application/json", ...init.headers },
-    cache: "no-store",
-  });
+  const headers = { "User-Agent": ctx.userAgent, Accept: init.accept ?? "application/json", ...init.headers };
+  let res: Response;
+  if (isSecUrl(url)) {
+    try {
+      res = await secGateFetch(url, { headers, signal: ctx.signal });
+    } catch (err) {
+      if (err instanceof SecRateLimitedError) throw new SourceHttpError(429, `HTTP 429 rate limited (SEC fair access) — retry in ${Math.ceil(err.retryAfterMs / 1000)} s`, err.retryAfterMs);
+      throw err;
+    }
+  } else {
+    res = await fetch(url, { signal: ctx.signal, headers, cache: "no-store" });
+  }
   if (!res.ok) {
+    await res.body?.cancel().catch(() => {});
+    const retryAfterMs = res.status === 429 || res.status === 503 ? parseRetryAfter(res.headers.get("retry-after")) : null;
     const hint =
       res.status === 429 ? "rate limited" : res.status === 401 || res.status === 403 ? "unauthorised — check API key" : res.statusText;
-    throw new SourceHttpError(res.status, `HTTP ${res.status} ${hint}`.trim());
+    const wait = retryAfterMs !== null ? ` — retry after ${Math.ceil(retryAfterMs / 1000)} s` : "";
+    throw new SourceHttpError(res.status, `HTTP ${res.status} ${hint}${wait}`.trim(), retryAfterMs);
   }
   return res;
 }
