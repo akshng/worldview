@@ -68,7 +68,7 @@ Everything else has working defaults (see `.env.example`, every variable is docu
 | macOS feature | Files | On Windows / Linux |
 |---|---|---|
 | Always-on service (LaunchAgent) | `scripts/local-service.mjs` | Run `npm run build && npm start` under a process manager (e.g. `pm2`, a Windows service via NSSM, or systemd on Linux). |
-| Morning briefing / after-close jobs / battery sentinel schedules | `scripts/schedule-briefing.mjs`, `scripts/power-mode.mjs` | The jobs themselves are cross-platform: `npm run briefing:morning`, `npm run close:run`, `npm run sentinel`. Schedule them with **Windows Task Scheduler** (daily 07:30, weekdays after the US close, every 15 min) or cron. |
+| Morning briefing / after-close jobs / battery sentinel schedules | `scripts/schedule-briefing.mjs`, `scripts/power-mode.mjs` | The jobs themselves are cross-platform (`npm run briefing:morning`, `npm run close:run`, `npm run sentinel`). **Windows:** `npm run windows:schedule` installs them in Task Scheduler for your user, no admin (`-- 06:45` for another briefing time, `-- --sentinel` to add the 15-minute sentinel; `npm run windows:unschedule` removes them; logs in `.data\*.log`). **Linux:** cron. |
 | Battery mode / power watcher | `scripts/power-watch.sh` | Not needed on a desktop PC. The page itself still slows down on battery in Chrome (Battery API). |
 | Native app + menu-bar ticker | `mac/`, `npm run mac:build` | Use the browser (or install it as a PWA from Chrome/Edge). |
 | Mac notifications | `src/lib/notify/mac.ts` | Off automatically elsewhere; use Discord alerts. |
@@ -82,6 +82,12 @@ npm run lint         # eslint — 0 errors (3 known warnings)
 npx tsc --noEmit     # typecheck (run `npx next typegen` first on a fresh clone if route types are missing)
 npm run build        # production build — must say "Compiled successfully" with no "Type error"
 ```
+
+CI (`.github/workflows/ci.yml`) runs typegen, typecheck, lint, tests and build on Ubuntu and Windows
+with Node 22 and 24, without `.env.local` or secrets. `.github/workflows/security.yml` runs
+`npm audit --omit=dev --audit-level=high`, gitleaks (`.gitleaks.toml`) and
+`.github/scripts/check-personal-info.mjs`; Dependabot proposes npm and Actions updates weekly.
+Contribution rules: `CONTRIBUTING.md`; vulnerability reports: `SECURITY.md`.
 
 Before finishing any change: **typecheck, lint, tests and build all green.** Only restart a running
 production server after a successful build (a failed build + restart leaves no server).
@@ -152,6 +158,7 @@ tests/                    vitest suites
   Don't use `req.url`'s hostname for trust: Next fills it from the bind address.
 - `npm run dev` / `npm start` bind to 127.0.0.1. `next/image` is disabled (unused).
 - Keep `npm audit --omit=dev` at 0 and Next.js patched.
+- Vulnerability reports go through GitHub private vulnerability reporting (see `SECURITY.md`).
 
 ## 6. How to extend it
 
@@ -188,4 +195,3 @@ Ideas for next steps:
 - Hosted/multi-user version (would need licensed market data — several free sources are personal-use).
 - Better 3D only if a key is added (Cesium ion / Google Photorealistic 3D Tiles); keyless is near
   MapLibre's limit.
-- Windows-friendly scheduler script (Task Scheduler) mirroring `scripts/schedule-briefing.mjs`.

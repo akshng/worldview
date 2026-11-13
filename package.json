@@ -34,6 +34,8 @@
     "close:run": "node --conditions=react-server --import tsx scripts/market-close.ts",
     "close:schedule": "node scripts/schedule-briefing.mjs --close",
     "close:unschedule": "node scripts/schedule-briefing.mjs --close --remove",
+    "windows:schedule": "node scripts/schedule-windows.mjs install",
+    "windows:unschedule": "node scripts/schedule-windows.mjs remove",
     "sentinel": "node --conditions=react-server --import tsx scripts/sentinel.ts",
     "power:install": "node scripts/power-mode.mjs install",
     "power:uninstall": "node scripts/power-mode.mjs uninstall",
