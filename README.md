@@ -6,7 +6,7 @@ Created by **[akshng](https://github.com/akshng)** · Open source under the [Apa
 
 WorldView is a local-first world-intelligence and markets terminal: an interactive 3D globe of real-world events from **88 free, public, keyless sources** (disasters, weather, conflict and news, central banks, sanctions, regulators, outages, cyber, aviation, space weather…), normalised into one event model, deduplicated, scored and traceable to their sources — plus market pages, country dossiers, a "plot anything" map, a Google-Earth-style 3D drop-in view and an on-device AI analyst that can answer any question.
 
-> **New machine or new coding agent? Start with [HANDOFF.md](HANDOFF.md)** — setup on Windows/Linux/macOS, the code map, project rules and how to extend it.
+> **Just want to run it? See [SETUP.md](SETUP.md).** New machine or new coding agent? Start with [HANDOFF.md](HANDOFF.md) — setup on Windows/Linux/macOS, the code map, project rules and how to extend it.
 
 > The working name lives in one place: `NEXT_PUBLIC_APP_NAME` (default `WorldView`, see `src/lib/config/app.ts`).
 
