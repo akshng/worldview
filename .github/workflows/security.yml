@@ -36,6 +36,11 @@ jobs:
     name: gitleaks (full history)
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # The action lists a pull request's commits through the API, so it needs read access
+    # to pull requests (Dependabot's token has none otherwise).
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@v5
         with:
