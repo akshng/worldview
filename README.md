@@ -6,6 +6,22 @@ Created by **[akshng](https://github.com/akshng)** · Open source under the [Apa
 
 WorldView is a local-first world-intelligence and markets terminal: an interactive 3D globe of real-world events from **88 free, public, keyless sources** (disasters, weather, conflict and news, central banks, sanctions, regulators, outages, cyber, aviation, space weather…), normalised into one event model, deduplicated, scored and traceable to their sources — plus market pages, country dossiers, a "plot anything" map, a Google-Earth-style 3D drop-in view and an on-device AI analyst that can answer any question.
 
+![WorldView: live events on a 3D globe, with the layer list and live feed](docs/screenshots/globe.jpg)
+
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/dropin.jpg" alt="3D drop-in view of Lower Manhattan with weather and nearby street photos"><br><sub><b>Drop in</b> anywhere in 3D, with local weather and nearby photos</sub></td>
+<td width="50%"><img src="docs/screenshots/news.jpg" alt="News page with an event opened: sources, location and timeline"><br><sub><b>News</b>: every event traced to its sources, with a timeline</sub></td>
+</tr>
+<tr>
+<td><img src="docs/screenshots/markets.jpg" alt="Markets page: world equity indices with sparklines, watchlist and US movers"><br><sub><b>Markets</b>: world indices, watchlist, movers and earnings</sub></td>
+<td><img src="docs/screenshots/ticker.jpg" alt="Apple stock page: price chart, SEC financials, short volume and 13F holders"><br><sub><b>Any ticker</b>: price, SEC financials, short volume, fund holders, insider trades</sub></td>
+</tr>
+<tr>
+<td colspan="2"><img src="docs/screenshots/charts.jpg" alt="Charts page plotting earthquakes and conflict events per day, the S&amp;P 500 and Brent crude"><br><sub><b>Charts</b>: plot any event type, source, country, ticker or economic indicator over time</sub></td>
+</tr>
+</table>
+
 > **Just want to run it? See [SETUP.md](SETUP.md).** New machine or new coding agent? Start with [HANDOFF.md](HANDOFF.md) — setup on Windows/Linux/macOS, the code map, project rules and how to extend it.
 
 > The working name lives in one place: `NEXT_PUBLIC_APP_NAME` (default `WorldView`, see `src/lib/config/app.ts`).
