@@ -22,7 +22,7 @@ WorldView is a local-first world-intelligence and markets terminal: an interacti
 </tr>
 </table>
 
-> **Just want to run it? See [SETUP.md](SETUP.md).** New machine or new coding agent? Start with [HANDOFF.md](HANDOFF.md) — setup on Windows/Linux/macOS, the code map, project rules and how to extend it.
+> **Just want to run it? See [SETUP.md](SETUP.md)** (Mac, Linux, or [Windows step by step](SETUP.md#windows-step-by-step)). New machine or new coding agent? Start with [HANDOFF.md](HANDOFF.md) — setup on Windows/Linux/macOS, the code map, project rules and how to extend it.
 
 > The working name lives in one place: `NEXT_PUBLIC_APP_NAME` (default `WorldView`, see `src/lib/config/app.ts`).
 
@@ -167,6 +167,8 @@ Details, terms and caveats: [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md).
 - Demo mode with clearly labelled simulated data
 
 ## Windows and Linux
+
+**Windows users: follow [SETUP.md → Windows: step by step](SETUP.md#windows-step-by-step)** (install, run, install as an app, keep it running, scheduled jobs).
 
 Everything except the macOS extras runs anywhere Node.js 22+ runs: `npm install`, then `npm run dev` (or `npm run build && npm start`). The always-on service, battery mode, Mac notifications and the native app are macOS-only. On Windows, `npm run windows:schedule` installs the morning briefing (daily 07:30, or `npm run windows:schedule -- 06:45`) and the after-close job (weekdays, hourly 13:00–18:00 local; the job checks New York time and runs once per trading day) in Task Scheduler for your user, no admin needed; add `-- --sentinel` for the 15-minute sentinel, `npm run windows:unschedule` removes them, and logs go to `.data\*.log`. The tasks run on battery and catch up after sleep. On Linux use cron. See [HANDOFF.md](HANDOFF.md#whats-macos-only-and-what-to-use-instead).
 
