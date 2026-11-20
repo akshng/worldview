@@ -6,11 +6,11 @@ import { CountryPanel } from "@/components/country-panel/CountryPanel";
 import { useData } from "@/lib/client/data-store";
 import { useUI } from "@/lib/store/ui";
 import { useNow } from "@/lib/client/use-now";
+import { countryActivity, rankCountries, type CountryListItem } from "@/lib/countries-rank";
 
-type C = { code: string; name: string; continent: string; subregion: string; population: number };
 
 export function CountriesPage() {
-  const [list, setList] = useState<C[]>([]);
+  const [list, setList] = useState<CountryListItem[]>([]);
   const [q, setQ] = useState("");
   const events = useData((s) => s.events);
   const selected = useUI((s) => s.selectedCountry);
@@ -27,32 +27,14 @@ export function CountriesPage() {
   }, []);
 
   // Activity in the last 24 h: event count and the most important event per country.
-  const activity = useMemo(() => {
-    const since = now - 86_400_000;
-    const m = new Map<string, { n: number; top: number }>();
-    for (const e of events) {
-      if (!e.country || Date.parse(e.timestamp) < since) continue;
-      const a = m.get(e.country) ?? { n: 0, top: 0 };
-      a.n++;
-      a.top = Math.max(a.top, e.importanceScore);
-      m.set(e.country, a);
-    }
-    return m;
-  }, [events, now]);
-
-  const rows = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    return list
-      .filter((c) => !needle || c.name.toLowerCase().includes(needle) || c.code.toLowerCase() === needle || c.subregion.toLowerCase().includes(needle))
-      .map((c) => ({ ...c, ...(activity.get(c.code) ?? { n: 0, top: 0 }) }))
-      .sort((a, b) => (needle ? a.name.localeCompare(b.name) : b.top - a.top || b.n - a.n || a.name.localeCompare(b.name)));
-  }, [list, q, activity]);
+  const activity = useMemo(() => countryActivity(events, now), [events, now]);
+  const rows = useMemo(() => rankCountries(list, activity, q), [list, q, activity]);
 
   return (
     <div className="flex h-full min-h-0">
       <aside className="flex w-[340px] shrink-0 flex-col border-r border-line">
         <div className="shrink-0 border-b border-line p-3">
-          <div className="meta mb-2 text-faint">Countries · most active first</div>
+          <div className="meta mb-2 text-faint">Countries · most events (24 h) first</div>
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
