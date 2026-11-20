@@ -171,3 +171,59 @@ describe("annual reports (10-K)", () => {
     expect(out[2].period).toBeNull();
   });
 });
+
+describe("SEC fundamentals pick the concept with the newest period (regression: NVDA revenue)", async () => {
+  const { fundamentalsFrom, newestBy } = await import("@/lib/finance/company");
+  const q = (start: string, end: string, val: number, frame: string, filed: string) => ({ start, end, val, frame, filed, form: "10-Q", fy: 2026, fp: "Q2" });
+  // The ASC 606 tag (listed first) stops being reported in 2020; the company moves to "Revenues".
+  const gaap = {
+    RevenueFromContractWithCustomerExcludingAssessedTax: { units: { USD: [q("2019-10-28", "2020-01-26", 3.105e9, "CY2019Q4", "2020-02-20")] } },
+    Revenues: {
+      units: {
+        USD: [
+          q("2025-04-28", "2025-07-27", 46.7e9, "CY2025Q2", "2025-08-27"),
+          q("2026-04-27", "2026-07-26", 96.2e9, "CY2026Q2", "2026-08-26"),
+        ],
+      },
+    },
+    NetIncomeLoss: { units: { USD: [q("2026-04-27", "2026-07-26", 59.69e9, "CY2026Q2", "2026-08-26")] } },
+  };
+  it("uses the newest concept, not the first listed one", () => {
+    const rev = fundamentalsFrom(gaap).find((f) => f.label === "Revenue")!;
+    expect(rev.value).toBe(96.2e9);
+    expect(rev.priorValue).toBe(46.7e9);
+    expect(rev.period).toBe("Calendar Q2 2026 (quarter ending 2026-07-26)");
+    expect(fundamentalsFrom(gaap).find((f) => f.label === "Net income")?.value).toBe(59.69e9);
+  });
+  it("still uses an older concept when it is the only one", () => {
+    const rev = fundamentalsFrom({ Revenues: gaap.RevenueFromContractWithCustomerExcludingAssessedTax }).find((f) => f.label === "Revenue")!;
+    expect(rev.value).toBe(3.105e9);
+  });
+  it("breaks period ties by the newest filing, then list order", () => {
+    const r = (end: string, filed: string) => ({ end, filed, val: 0, fy: 0, fp: "", form: "10-Q" });
+    const rows: Record<string, ReturnType<typeof r>> = { a: r("2026-06-30", "2026-08-01"), b: r("2026-06-30", "2026-08-02"), c: r("2026-06-30", "2026-08-02") };
+    expect(newestBy(["a", "b", "c"], (t) => rows[t], (x) => x)).toBe(rows.b);
+    expect(newestBy(["x"], () => null, (x: ReturnType<typeof r>) => x)).toBeNull();
+  });
+});
+
+describe("Yahoo previous close", async () => {
+  const { previousCloseOf } = await import("@/lib/finance/providers");
+  const ny = { gmtoffset: -18000, regularMarketTime: Date.parse("2026-11-19T21:00:01Z") / 1000 }; // 16:00 New York
+  // Daily bars start at 09:30 New York (14:30 UTC).
+  const days = ["2026-11-17", "2026-11-18", "2026-11-19"].map((d) => Date.parse(`${d}T14:30:00Z`) / 1000);
+  it("uses meta.previousClose when Yahoo sends it", () => {
+    expect(previousCloseOf({ ...ny, previousClose: 150.96, chartPreviousClose: 166.19, dataGranularity: "1h", range: "5d" }, days, [1, 2, 3])).toBe(150.96);
+  });
+  it("does not take chartPreviousClose (close before the first bar) as yesterday's close on 1mo", () => {
+    const meta = { ...ny, chartPreviousClose: 217.09, dataGranularity: "1d", range: "1mo" };
+    expect(previousCloseOf(meta, days, [155.46, 150.96, 145.98])).toBe(150.96);
+    expect(previousCloseOf(meta, days, [155.46, null, 145.98])).toBe(155.46);
+  });
+  it("uses chartPreviousClose on the 1d range", () => {
+    expect(previousCloseOf({ ...ny, chartPreviousClose: 150.96, dataGranularity: "5m", range: "1d" }, days.slice(2), [145.98])).toBe(150.96);
+  });
+  it("gives no daily previous close from weekly bars", () => {
+    expect(previousCloseOf({ ...ny, chartPreviousClose: 32.98, dataGranularity: "1wk", range: "5y" }, days, [1, 2, 3])).toBeNull();
+  });
+});

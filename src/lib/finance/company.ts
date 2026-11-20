@@ -141,7 +141,7 @@ const BALANCE: Array<{ label: string; tags: string[]; unit: BalanceItem["unit"];
   { label: "Shares outstanding", tags: ["EntityCommonStockSharesOutstanding"], unit: "shares", taxonomy: "dei" },
 ];
 
-type FactRow = { start?: string; end: string; val: number; fy: number; fp: string; form: string; filed: string; frame?: string };
+export type FactRow = { start?: string; end: string; val: number; fy: number; fp: string; form: string; filed: string; frame?: string };
 
 /** Latest single-quarter value (by calendar frame CYyyyyQn) and the same quarter a year earlier. */
 export function latestQuarter(rows: FactRow[]): { cur: FactRow; prior: FactRow | null } | null {
@@ -197,6 +197,47 @@ export function quarterlyHistory(rows: FactRow[], max = 12): QuarterValue[] {
     .map((x) => ({ end: x.row.end, value: x.row.val, derived: x.derived }));
 }
 
+/**
+ * Across alternative concepts for one metric, the result whose row has the newest period end
+ * (ties: newest filing, then earlier tag in the list).
+ */
+export function newestBy<T>(tags: string[], pick: (tag: string) => T | null, row: (x: T) => FactRow): T | null {
+  let best: T | null = null;
+  for (const tag of tags) {
+    const x = pick(tag);
+    if (!x) continue;
+    if (!best) { best = x; continue; }
+    const a = row(x), b = row(best);
+    if (a.end > b.end || (a.end === b.end && a.filed > b.filed)) best = x;
+  }
+  return best;
+}
+
+type GaapFacts = Record<string, { units?: Record<string, FactRow[] | undefined> } | undefined>;
+
+/** Latest-quarter income/cash-flow metrics from the us-gaap section of an XBRL company-facts file. */
+export function fundamentalsFrom(gaap: GaapFacts): Fundamental[] {
+  const fundamentals: Fundamental[] = [];
+  for (const f of FACTS) {
+    // Companies switch concepts over the years (NVDA: ASC 606 tag until 2022, then Revenues), so
+    // take the concept with the newest quarter rather than the first one that has any data.
+    const lq = newestBy(f.tags, (tag) => {
+      const rows = gaap[tag]?.units?.[f.unit] as FactRow[] | undefined;
+      return (rows && latestQuarter(rows)) || null;
+    }, (x) => x.cur);
+    if (!lq) continue;
+    fundamentals.push({
+      label: f.label,
+      value: lq.cur.val,
+      unit: f.unit,
+      period: `Calendar ${lq.cur.frame!.slice(6)} ${lq.cur.frame!.slice(2, 6)} (quarter ending ${lq.cur.end})`,
+      priorValue: lq.prior?.val ?? null,
+      filed: lq.cur.filed,
+    });
+  }
+  return fundamentals;
+}
+
 export async function companyProfile(ticker: string): Promise<CompanyProfile | null> {
   const cik = await cikForTicker(ticker);
   if (!cik) return null;
@@ -224,34 +265,16 @@ export async function companyProfile(ticker: string): Promise<CompanyProfile | n
       });
     }
   }
-  const fundamentals: Fundamental[] = [];
   const gaap = facts?.facts?.["us-gaap"] ?? {};
-  for (const f of FACTS) {
-    for (const tag of f.tags) {
-      const rows = gaap[tag]?.units?.[f.unit] as FactRow[] | undefined;
-      const lq = rows && latestQuarter(rows);
-      if (!lq) continue;
-      fundamentals.push({
-        label: f.label,
-        value: lq.cur.val,
-        unit: f.unit,
-        period: `Calendar ${lq.cur.frame!.slice(6)} ${lq.cur.frame!.slice(2, 6)} (quarter ending ${lq.cur.end})`,
-        priorValue: lq.prior?.val ?? null,
-        filed: lq.cur.filed,
-      });
-      break;
-    }
-  }
+  const fundamentals = fundamentalsFrom(gaap);
   const balanceSheet: BalanceItem[] = [];
   for (const item of BALANCE) {
     const tax = item.taxonomy === "dei" ? (facts?.facts?.dei ?? {}) : gaap;
-    for (const tag of item.tags) {
+    const r = newestBy(item.tags, (tag) => {
       const rows = tax[tag]?.units?.[item.unit] as FactRow[] | undefined;
-      const r = rows && latestInstant(rows);
-      if (!r) continue;
-      balanceSheet.push({ label: item.label, value: r.val, unit: item.unit, asOf: r.end, form: r.form });
-      break;
-    }
+      return (rows && latestInstant(rows)) || null;
+    }, (x) => x);
+    if (r) balanceSheet.push({ label: item.label, value: r.val, unit: item.unit, asOf: r.end, form: r.form });
   }
   // Revenue tags change over the years (e.g. SalesRevenueNet → the ASC 606 tag); merge them.
   const revenueHistory = quarterlyHistory(REVENUE_TAGS.flatMap((t) => (gaap[t]?.units?.USD as FactRow[] | undefined) ?? []));

@@ -17,14 +17,39 @@ async function getJson(url: string) {
   return res.json();
 }
 
+/**
+ * Previous session's close from a Yahoo chart response. `meta.previousClose` is only sent for
+ * some ranges; `meta.chartPreviousClose` is the close before the chart's FIRST bar, which is only
+ * yesterday's close on the 1d range (on 1mo it is a month old). Otherwise take the last bar from
+ * an earlier exchange-local day; weekly/monthly bars can't give a daily close, so null.
+ */
+export function previousCloseOf(meta: Record<string, unknown>, timestamps: number[], closes: Array<number | null | undefined>): number | null {
+  const num = (x: unknown) => (typeof x === "number" && Number.isFinite(x) ? x : null);
+  const prev = num(meta.previousClose);
+  if (prev !== null) return prev;
+  if (meta.range === "1d") return num(meta.chartPreviousClose);
+  if (typeof meta.dataGranularity === "string" && !/^(\d+[mh]|1d)$/.test(meta.dataGranularity)) return null;
+  const off = num(meta.gmtoffset) ?? 0;
+  const day = (t: number) => new Date((t + off) * 1000).toISOString().slice(0, 10);
+  const lastT = num(meta.regularMarketTime) ?? timestamps.at(-1);
+  if (lastT === undefined) return null;
+  const today = day(lastT);
+  for (let i = timestamps.length - 1; i >= 0; i--) {
+    const c = num(closes[i]);
+    if (c !== null && day(timestamps[i]) < today) return c;
+  }
+  return null;
+}
+
 export async function yahooQuote(symbol: string, name: string | null, group: InstrumentGroup): Promise<Quote> {
   const d = await getJson(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=5d&interval=1h&includePrePost=false`);
   const r = d?.chart?.result?.[0];
   if (!r) throw new Error(d?.chart?.error?.description ?? "No data");
   const m = r.meta ?? {};
-  const closes: number[] = (r.indicators?.quote?.[0]?.close ?? []).filter((x: unknown): x is number => typeof x === "number");
+  const rawCloses: Array<number | null> = r.indicators?.quote?.[0]?.close ?? [];
+  const closes: number[] = rawCloses.filter((x: unknown): x is number => typeof x === "number");
   const price = typeof m.regularMarketPrice === "number" ? m.regularMarketPrice : (closes[closes.length - 1] ?? null);
-  const prev = typeof m.previousClose === "number" ? m.previousClose : typeof m.chartPreviousClose === "number" ? m.chartPreviousClose : null;
+  const prev = previousCloseOf(m, r.timestamp ?? [], rawCloses);
   const change = price !== null && prev ? price - prev : null;
   return {
     symbol,
@@ -176,7 +201,7 @@ export async function yahooHistory(symbol: string, range: HistoryRange): Promise
     exchange: m.fullExchangeName ?? m.exchangeName ?? null,
     instrumentType: m.instrumentType ?? null,
     points,
-    previousClose: n(m.previousClose) ?? n(m.chartPreviousClose),
+    previousClose: previousCloseOf(m, ts, cl),
     dayHigh: n(m.regularMarketDayHigh),
     dayLow: n(m.regularMarketDayLow),
     fiftyTwoWeekHigh: n(m.fiftyTwoWeekHigh),
