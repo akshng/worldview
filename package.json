@@ -47,17 +47,17 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
-    "@electric-sql/pglite": "^0.5.8",
-    "@tanstack/react-virtual": "^3.14.13",
+    "@electric-sql/pglite": "^0.5.17",
+    "@tanstack/react-virtual": "^3.14.26",
     "clsx": "^2.1.1",
     "fflate": "^0.8.3",
-    "hls.js": "^1.7.3",
-    "maplibre-gl": "^6.12.0",
+    "hls.js": "^1.7.4",
+    "maplibre-gl": "^6.19.0",
     "next": "^16.4.6",
     "node-llama-cpp": "^3.22.2",
     "pg": "^8.23.1",
-    "react": "19.2.8",
-    "react-dom": "19.2.8",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
     "server-only": "^0.0.1",
     "zod": "^4.6.7",
     "zustand": "^5.0.15"
@@ -73,6 +73,6 @@
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
     "typescript": "^5",
-    "vitest": "^5.0.3"
+    "vitest": "^5.1.1"
   }
 }
